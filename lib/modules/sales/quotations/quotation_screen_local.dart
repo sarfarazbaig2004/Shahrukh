@@ -3438,18 +3438,39 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                     onTap: _isReadOnly
                                         ? null
                                         : () async {
-                                      final firstDate = DateTime(_inquiryDate.year, _inquiryDate.month, _inquiryDate.day);
-                                      DateTime initDate = _quoteDate.isBefore(firstDate) ? firstDate : _quoteDate;
+                                      final now = DateTime.now();
+                                      final fyStart = now.month >= 4
+                                          ? DateTime(now.year, 4, 1)
+                                          : DateTime(now.year - 1, 4, 1);
+                                      final fyEnd = now.month >= 4
+                                          ? DateTime(now.year + 1, 3, 31)
+                                          : DateTime(now.year, 3, 31);
+
+                                      DateTime initDate = DateTime(
+                                        _quoteDate.year,
+                                        _quoteDate.month,
+                                        _quoteDate.day,
+                                      );
+
+                                      if (initDate.isBefore(fyStart)) {
+                                        initDate = fyStart;
+                                      }
+                                      if (initDate.isAfter(fyEnd)) {
+                                        initDate = fyEnd;
+                                      }
 
                                       final d = await showDatePicker(
                                         context: context,
                                         initialDate: initDate,
-                                        firstDate: firstDate,
-                                        lastDate: DateTime(2100),
+                                        firstDate: fyStart,
+                                        lastDate: fyEnd,
+                                        helpText: 'Select Quote Date',
+                                        fieldLabelText: 'Enter Date',
+                                        fieldHintText: 'dd/mm/yyyy',
                                       );
                                       if (d != null) {
                                         setState(() {
-                                          _quoteDate = d;
+                                          _quoteDate = DateTime(d.year, d.month, d.day);
                                         });
                                       }
                                     },
@@ -3469,7 +3490,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                         fillColor: _isReadOnly ? Colors.grey.shade100 : const Color(0xFFF8FAFC),
                                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                                       ),
-                                      child: Text('${_quoteDate.day}/${_quoteDate.month}/${_quoteDate.year}',
+                                      child: Text(DateFormat('dd/MM/yyyy').format(_quoteDate),
                                           style: const TextStyle(fontSize: 15)),
                                     ),
                                   ),
@@ -3982,7 +4003,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                         isDense: true,
                                       ),
                                       child: Text(_nextFollowUpDate != null
-                                          ? '${_nextFollowUpDate!.day}/${_nextFollowUpDate!.month}/${_nextFollowUpDate!.year}'
+                                          ? DateFormat('dd/MM/yyyy').format(_nextFollowUpDate!)
                                           : 'Select Date'),
                                     ),
                                   ),
