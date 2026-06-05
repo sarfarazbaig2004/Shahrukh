@@ -28,6 +28,7 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   Timer? _searchDebounce;
+  final ValueNotifier<String> _searchNotifier = ValueNotifier<String>('');
 
   String? _companyId;
   String? _currentUserUid;
@@ -102,34 +103,27 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
   @override
   void dispose() {
     _searchDebounce?.cancel();
+    _searchNotifier.dispose();
     _searchFocusNode.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
   void _onSearchChanged(String value) {
-    _searchDebounce?.cancel();
-    _searchDebounce = Timer(const Duration(milliseconds: 250), () {
-      if (!mounted) return;
-      if (_searchText == value) return;
-      setState(() {
-        _searchText = value;
-      });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && !_searchFocusNode.hasFocus) {
-          _searchFocusNode.requestFocus();
-        }
-      });
-    });
+    // Do not call setState while typing. On Flutter Web, rebuilding the full
+    // quotation StreamBuilder on every keypress can remove focus from TextField.
+    // ValueNotifier refreshes only the quotation list/search UI and keeps
+    // controller + FocusNode alive.
+    if (_searchNotifier.value == value) return;
+    _searchText = value;
+    _searchNotifier.value = value;
   }
 
   void _clearSearch() {
     _searchDebounce?.cancel();
     _searchController.clear();
-    if (!mounted) return;
-    setState(() {
-      _searchText = '';
-    });
+    _searchText = '';
+    _searchNotifier.value = '';
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _searchFocusNode.requestFocus();
     });
@@ -251,6 +245,11 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
     if (val == null) return fallback;
     final str = val.toString().trim();
     return str.isEmpty ? fallback : str;
+  }
+
+  Timestamp? _safeTimestamp(dynamic value) {
+    if (value is Timestamp) return value;
+    return null;
   }
 
   String _formatCompactDate(DateTime? date) {
@@ -749,7 +748,7 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
   List<QueryDocumentSnapshot<Map<String, dynamic>>> _applyLocalFilters(
       List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
       ) {
-    final search = _searchText.trim().toLowerCase();
+    final search = _searchNotifier.value.trim().toLowerCase();
 
     var filtered = docs.where((doc) {
       final data = doc.data();
@@ -769,14 +768,40 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
         return false;
       }
 
-      final quoteNumber = data['quoteNumber'].toString().toLowerCase();
-      final customer = (data['clientName'] ?? '').toString().toLowerCase();
-      final status = (data['status'] ?? 'Draft').toString();
+      final quoteNumber = _safeString(data['quoteNumber']).toLowerCase();
+      final customer = _safeString(
+        data['clientName'] ?? data['customerName'] ?? data['companyName'],
+      ).toLowerCase();
+      final inquiry = _safeString(
+        data['inquiryRefNo'] ?? data['inquiryNumber'] ?? data['inquiryId'],
+      ).toLowerCase();
+      final createdByName = _safeString(data['createdByName']).toLowerCase();
+      final status = _safeString(data['status'], fallback: 'Draft');
+      final grandTotal = _safeString(data['grandTotal']).toLowerCase();
       final isDeleted = data['isDeleted'] == true;
+
+      final items = data['items'] is List ? data['items'] as List : const [];
+      final itemText = items.map((item) {
+        if (item is Map) {
+          return [
+            item['name'],
+            item['itemName'],
+            item['description'],
+            item['model'],
+            item['hsn'],
+          ].map(_safeString).join(' ');
+        }
+        return _safeString(item);
+      }).join(' ').toLowerCase();
 
       final matchesSearch = search.isEmpty ||
           quoteNumber.contains(search) ||
-          customer.contains(search);
+          customer.contains(search) ||
+          inquiry.contains(search) ||
+          createdByName.contains(search) ||
+          status.toLowerCase().contains(search) ||
+          grandTotal.contains(search) ||
+          itemText.contains(search);
       final matchesStatus = _statusFilter == 'All' ||
           status.toLowerCase() == _statusFilter.toLowerCase();
 
@@ -797,9 +822,9 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
             : amtA.compareTo(amtB);
       } else {
         final dateA =
-            (dataA['createdAt'] as Timestamp?)?.toDate() ?? DateTime(2000);
+            _safeTimestamp(dataA['createdAt'])?.toDate() ?? DateTime(2000);
         final dateB =
-            (dataB['createdAt'] as Timestamp?)?.toDate() ?? DateTime(2000);
+            _safeTimestamp(dataB['createdAt'])?.toDate() ?? DateTime(2000);
         return _sortOption.contains('Newest')
             ? dateB.compareTo(dateA)
             : dateA.compareTo(dateB);
@@ -980,9 +1005,13 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
           }
 
           final docs = snapshot.data?.docs ?? [];
-          final filteredDocs = _applyLocalFilters(docs);
 
-          int totalQuotes = filteredDocs.length;
+          return ValueListenableBuilder<String>(
+            valueListenable: _searchNotifier,
+            builder: (context, searchValue, _) {
+              final filteredDocs = _applyLocalFilters(docs);
+
+              int totalQuotes = filteredDocs.length;
           int approved = 0;
           int converted = 0;
           int sent = 0;
@@ -996,8 +1025,8 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
             if (status == 'converted') converted++;
           }
 
-          return Column(
-            children: [
+              return Column(
+                children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
                 child: Row(
@@ -1013,7 +1042,7 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
                           decoration: InputDecoration(
                             hintText: 'Search quotation, customer...',
                             prefixIcon: const Icon(Icons.search, size: 18),
-                            suffixIcon: _searchText.trim().isEmpty
+                            suffixIcon: searchValue.trim().isEmpty
                                 ? null
                                 : IconButton(
                               tooltip: 'Clear',
@@ -1129,7 +1158,7 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
                 child: filteredDocs.isEmpty
                     ? _EmptyQuotationsState(
                   hasSearch:
-                  _searchText.trim().isNotEmpty || _hasActiveFilters,
+                  searchValue.trim().isNotEmpty || _hasActiveFilters,
                   onReset: () {
                     _clearSearch();
                     _resetFilters();
@@ -1163,10 +1192,10 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
                     bool isConverting = _convertingDocs[doc.id] == true;
 
                     final String createdByUid = _parseSafeString(data['createdBy']);
-                    final String explicitlyStoredName = data['createdByName']?.toString().trim() ?? '';
+                    final String explicitlyStoredName = _safeString(data['createdByName']);
 
-                    final Timestamp? createdAtRaw = data['createdAt'] as Timestamp?;
-                    final Timestamp? nextFollowUpRaw = data['nextFollowUpDate'] as Timestamp?;
+                    final Timestamp? createdAtRaw = _safeTimestamp(data['createdAt']);
+                    final Timestamp? nextFollowUpRaw = _safeTimestamp(data['nextFollowUpDate']);
 
                     return Container(
                       decoration: BoxDecoration(
@@ -1389,7 +1418,9 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
                   },
                 ),
               ),
-            ],
+                ],
+              );
+            },
           );
         },
       ),
