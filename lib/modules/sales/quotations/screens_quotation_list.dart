@@ -26,6 +26,8 @@ class ScreensQuotationList extends StatefulWidget {
 
 class _ScreensQuotationListState extends State<ScreensQuotationList> {
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  Timer? _searchDebounce;
 
   String? _companyId;
   String? _currentUserUid;
@@ -99,8 +101,38 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
+    _searchFocusNode.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+      if (!mounted) return;
+      if (_searchText == value) return;
+      setState(() {
+        _searchText = value;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_searchFocusNode.hasFocus) {
+          _searchFocusNode.requestFocus();
+        }
+      });
+    });
+  }
+
+  void _clearSearch() {
+    _searchDebounce?.cancel();
+    _searchController.clear();
+    if (!mounted) return;
+    setState(() {
+      _searchText = '';
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _searchFocusNode.requestFocus();
+    });
   }
 
   Future<void> _loadUserContext() async {
@@ -975,11 +1007,9 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
                         height: 38,
                         child: TextField(
                           controller: _searchController,
-                          onChanged: (value) {
-                            setState(() {
-                              _searchText = value;
-                            });
-                          },
+                          focusNode: _searchFocusNode,
+                          textInputAction: TextInputAction.search,
+                          onChanged: _onSearchChanged,
                           decoration: InputDecoration(
                             hintText: 'Search quotation, customer...',
                             prefixIcon: const Icon(Icons.search, size: 18),
@@ -988,12 +1018,7 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
                                 : IconButton(
                               tooltip: 'Clear',
                               icon: const Icon(Icons.close, size: 17),
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() {
-                                  _searchText = '';
-                                });
-                              },
+                              onPressed: _clearSearch,
                             ),
                             isDense: true,
                             filled: true,
@@ -1106,10 +1131,7 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
                   hasSearch:
                   _searchText.trim().isNotEmpty || _hasActiveFilters,
                   onReset: () {
-                    _searchController.clear();
-                    setState(() {
-                      _searchText = '';
-                    });
+                    _clearSearch();
                     _resetFilters();
                   },
                 )
