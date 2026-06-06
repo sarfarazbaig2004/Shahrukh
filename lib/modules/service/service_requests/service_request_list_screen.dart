@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -78,18 +79,31 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
   String _searchQuery = '';
   String _selectedStatus = 'All';
   String _selectedPriority = 'All';
+  String _selectedNature = 'All';
+  String _selectedAssignee = 'All';
+  String _selectedCreator = 'All';
 
   final List<String> _statuses = ['All', 'New', 'In Progress', 'Resolved', 'Closed'];
   final List<String> _priorities = ['All', 'Low', 'Medium', 'High', 'Critical'];
+
+  // --- PAGINATION STATE ---
+  int _currentPage = 1;
+  final int _recordsPerPage = 20;
 
   // --- PREFERENCES & ENTERPRISE STATE ---
   bool _isTableView = false;
   final Set<String> _selectedRequestIds = {};
 
+  // --- PERMISSION STATE ---
+  bool _isFetchingRole = true;
+  bool _isAdmin = false;
+  String _currentUserRole = '';
+
   @override
   void initState() {
     super.initState();
     _loadPreferences();
+    _fetchUserRole();
   }
 
   @override
@@ -97,6 +111,30 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
     _debounceTimer?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  // --- ROLE FETCHING ---
+  Future<void> _fetchUserRole() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('companies')
+          .doc(widget.companyId)
+          .collection('users')
+          .doc(widget.currentUserUid)
+          .get();
+
+      if (doc.exists && mounted) {
+        setState(() {
+          _currentUserRole = (doc.data()?['role'] ?? '').toString().toLowerCase();
+          _isAdmin = ['admin', 'superadmin', 'manager', 'director', 'md'].contains(_currentUserRole);
+          _isFetchingRole = false;
+        });
+      } else if (mounted) {
+        setState(() => _isFetchingRole = false);
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isFetchingRole = false);
+    }
   }
 
   // --- PREFERENCES PERSISTENCE ---
@@ -134,20 +172,57 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
 
       if (data['isDeleted'] == true) return false;
 
-      final status = data['status'] ?? '';
-      final priority = data['priority'] ?? '';
+      // 🛡️ ROLE-BASED VISIBILITY (Customer Module Architecture)
+      if (!_isAdmin) {
+        final assignedUid = _safeString(data['assignedToUid']);
+        final createdBy = _safeString(data['createdBy']);
+        final salesPersonId = _safeString(data['salesPersonId']);
 
-      final matchesStatus = _selectedStatus == 'All' || status == _selectedStatus;
-      final matchesPriority = _selectedPriority == 'All' || priority == _selectedPriority;
-
-      bool matchesSearch = true;
-      if (_searchQuery.isNotEmpty) {
-        final keywords = List<String>.from(data['searchKeywords'] ?? []);
-        final searchTerms = _searchQuery.toLowerCase().trim().split(RegExp(r'\s+'));
-        matchesSearch = searchTerms.every((term) => keywords.any((k) => k.contains(term)));
+        if (assignedUid != widget.currentUserUid &&
+            createdBy != widget.currentUserUid &&
+            salesPersonId != widget.currentUserUid) {
+          return false;
+        }
       }
 
-      return matchesStatus && matchesPriority && matchesSearch;
+      final status = _safeString(data['status']);
+      final priority = _safeString(data['priority']);
+      final nature = _safeString(data['serviceItemNature'] ?? data['machineNature']);
+      final assigneeName = _safeString(data['assignedToName']);
+      final creatorName = _safeString(data['createdByName']);
+      final assigneeUid = _safeString(data['assignedToUid']);
+
+      // Exact Filters
+      if (_selectedStatus != 'All' && status != _selectedStatus) return false;
+      if (_selectedPriority != 'All' && priority != _selectedPriority) return false;
+      if (_selectedNature != 'All' && nature != _selectedNature) return false;
+      if (_selectedCreator != 'All' && creatorName != _selectedCreator) return false;
+
+      if (_selectedAssignee != 'All') {
+        if (_selectedAssignee == 'Unassigned' && assigneeUid.isNotEmpty) return false;
+        if (_selectedAssignee != 'Unassigned' && assigneeName != _selectedAssignee) return false;
+      }
+
+      // Dynamic Deep Search
+      if (_searchQuery.isNotEmpty) {
+        final q = _searchQuery.toLowerCase().trim();
+        final reqNo = _safeString(data['requestNumber']).toLowerCase();
+        final custName = _safeString(data['customerName']).toLowerCase();
+        final custCode = _safeString(data['customerCode']).toLowerCase();
+        final contact = _safeString(data['contactPerson']).toLowerCase();
+        final mobile = _safeString(data['mobileNumber']).toLowerCase();
+        final itemName = _safeString(data['serviceItemName'] ?? data['machineModel']).toLowerCase();
+        final serial = _safeString(data['serialNumber'] ?? data['machineSerialNumber']).toLowerCase();
+        final assignee = assigneeName.toLowerCase();
+
+        final matchesSearch = reqNo.contains(q) || custName.contains(q) || custCode.contains(q) ||
+            contact.contains(q) || mobile.contains(q) || itemName.contains(q) ||
+            serial.contains(q) || assignee.contains(q);
+
+        if (!matchesSearch) return false;
+      }
+
+      return true;
     }).toList();
 
     filtered.sort((a, b) {
@@ -160,29 +235,30 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
   }
 
   Map<String, int> _calculateStats(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
-    int total = 0;
-    int open = 0;
-    int highPriority = 0;
-    int resolved = 0;
+    int total = 0, newReq = 0, inProg = 0, resolved = 0, closed = 0, unassigned = 0;
 
     for (var doc in docs) {
       final data = doc.data();
       if (data['isDeleted'] == true) continue;
 
       total++;
-      final status = data['status'] ?? '';
-      final priority = data['priority'] ?? '';
+      final status = _safeString(data['status']);
+      final assignedUid = _safeString(data['assignedToUid']);
 
-      if (status != 'Resolved' && status != 'Closed') open++;
-      if (priority == 'High' || priority == 'Critical') highPriority++;
-      if (status == 'Resolved') resolved++;
+      if (status == 'New') newReq++;
+      if (status == 'In Progress') inProg++;
+      if (status == 'Resolved' || status == 'Completed') resolved++;
+      if (status == 'Closed') closed++;
+      if (assignedUid.isEmpty) unassigned++;
     }
 
     return {
       'Total': total,
-      'Open': open,
-      'High Priority': highPriority,
-      'Resolved': resolved,
+      'New': newReq,
+      'In Progress': inProg,
+      'Completed': resolved,
+      'Closed': closed,
+      'Unassigned': unassigned,
     };
   }
 
@@ -190,7 +266,10 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
     if (_debounceTimer?.isActive ?? false) _debounceTimer!.cancel();
     _debounceTimer = Timer(const Duration(milliseconds: 350), () {
       if (_searchQuery != query) {
-        setState(() => _searchQuery = query);
+        setState(() {
+          _searchQuery = query;
+          _currentPage = 1; // Reset pagination
+        });
       }
     });
   }
@@ -206,13 +285,21 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
   }
 
   bool get _hasActiveFilters {
-    return _selectedStatus != 'All' || _selectedPriority != 'All';
+    return _selectedStatus != 'All' ||
+        _selectedPriority != 'All' ||
+        _selectedNature != 'All' ||
+        _selectedAssignee != 'All' ||
+        _selectedCreator != 'All';
   }
 
   void _resetFilters() {
     setState(() {
       _selectedStatus = 'All';
       _selectedPriority = 'All';
+      _selectedNature = 'All';
+      _selectedAssignee = 'All';
+      _selectedCreator = 'All';
+      _currentPage = 1;
     });
   }
 
@@ -261,6 +348,8 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
   }
 
   void _showDetailsDialog(Map<String, dynamic> data) {
+    final requiredParts = data['requiredParts'] as List<dynamic>? ?? [];
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -280,30 +369,99 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
         ),
         content: SingleChildScrollView(
           child: SizedBox(
-            width: 600,
+            width: 700,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                _buildDetailSection('Customer Information', {
-                  'Contact Person': data['contactPerson'],
-                  'Mobile': data['mobileNumber'],
-                  'Email': data['email'],
-                }),
-                const Divider(height: 24),
-                _buildDetailSection('Machine Information', {
-                  'Model': data['machineModel'],
-                  'Serial': data['serialNumber'],
-                  'Warranty': (data['isWarranty'] ?? false) ? 'Yes' : 'No',
-                }),
-                const Divider(height: 24),
-                _buildDetailSection('Complaint Information', {
-                  'Category': data['complaintCategory'],
-                  'Priority': data['priority'],
-                  'Source': data['source'],
-                  'Description': data['complaintDescription'],
-                  'Remarks': data['remarks'],
-                }),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: _buildDetailSection('Customer Information', {
+                        'Contact Person': data['contactPerson'],
+                        'Mobile Number': data['mobileNumber'],
+                        'Email': data['email'],
+                        'Address': data['address'],
+                        'City/State': '${_safeString(data['city'])} ${_safeString(data['state'])}'.trim(),
+                      }),
+                    ),
+                    const SizedBox(width: 24),
+                    Expanded(
+                      child: _buildDetailSection('Service Item Information', {
+                        'Product Nature': data['serviceItemNature'] ?? data['machineNature'],
+                        'Product Name': data['serviceItemName'] ?? data['machineModel'],
+                        'Item Code': data['serviceItemCode'] ?? data['machineCode'],
+                        'Brand/Make': data['brand'] ?? data['machineBrand'],
+                        'Serial Number': data['serialNumber'] ?? data['machineSerialNumber'],
+                        'Category': data['serviceCategoryName'] ?? data['machineCategory'],
+                      }),
+                    ),
+                  ],
+                ),
+                const Divider(height: 32),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: _buildDetailSection('Complaint Information', {
+                        'Complaint Category': data['complaintCategory'],
+                        'Priority': data['priority'],
+                        'Source': data['source'],
+                        'Under Warranty': (data['isWarranty'] ?? false) ? 'Yes' : 'No',
+                        'Description': data['complaintDescription'],
+                        'Remarks': data['remarks'],
+                      }),
+                    ),
+                    const SizedBox(width: 24),
+                    Expanded(
+                      child: _buildDetailSection('Assignment Information', {
+                        'Assigned To': _safeString(data['assignedToName']).isEmpty ? 'Unassigned' : data['assignedToName'],
+                        'Assigned By': data['assignedByName'],
+                        'Assigned At': _formatAnyTimestamp(data['assignedAt']),
+                        'Created By': data['createdByName'],
+                        'Created At': _formatAnyTimestamp(data['createdAt']),
+                      }),
+                    ),
+                  ],
+                ),
+
+                if (requiredParts.isNotEmpty) ...[
+                  const Divider(height: 32),
+                  const Text('Required Parts & Accessories', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey)),
+                  const SizedBox(height: 12),
+                  Container(
+                    decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
+                    child: Table(
+                      columnWidths: const {
+                        0: FlexColumnWidth(3),
+                        1: FlexColumnWidth(2),
+                        2: FlexColumnWidth(1),
+                      },
+                      children: [
+                        TableRow(
+                          decoration: BoxDecoration(color: Colors.grey.shade100),
+                          children: const [
+                            Padding(padding: EdgeInsets.all(8), child: Text('Part Name', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12))),
+                            Padding(padding: EdgeInsets.all(8), child: Text('Nature', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12))),
+                            Padding(padding: EdgeInsets.all(8), child: Text('Qty', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12))),
+                          ],
+                        ),
+                        ...requiredParts.map((p) {
+                          final partMap = p as Map<String, dynamic>;
+                          return TableRow(
+                            decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.grey.shade200))),
+                            children: [
+                              Padding(padding: const EdgeInsets.all(8), child: Text(_safeString(partMap['partName']), style: const TextStyle(fontSize: 12))),
+                              Padding(padding: const EdgeInsets.all(8), child: Text(_safeString(partMap['partNature']), style: const TextStyle(fontSize: 12))),
+                              Padding(padding: const EdgeInsets.all(8), child: Text(partMap['quantity'].toString(), style: const TextStyle(fontSize: 12))),
+                            ],
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -327,7 +485,7 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(width: 140, child: Text('${e.key}:', style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontWeight: FontWeight.w500))),
+                  SizedBox(width: 130, child: Text('${e.key}:', style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontWeight: FontWeight.w500))),
                   Expanded(child: Text(e.value.toString(), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
                 ],
               ),
@@ -338,9 +496,34 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
   }
 
   // --- FILTERS SHEET ---
-  Future<void> _openFilterSheet() async {
+  Future<void> _openFilterSheet(List<QueryDocumentSnapshot<Map<String, dynamic>>> allDocs) async {
+    final naturesSet = <String>{'All'};
+    final assigneesSet = <String>{'All', 'Unassigned'};
+    final creatorsSet = <String>{'All'};
+
+    for (var doc in allDocs) {
+      final d = doc.data();
+      if (d['isDeleted'] == true) continue;
+
+      final nature = _safeString(d['serviceItemNature'] ?? d['machineNature']);
+      if (nature.isNotEmpty) naturesSet.add(nature);
+
+      final assignee = _safeString(d['assignedToName']);
+      if (assignee.isNotEmpty) assigneesSet.add(assignee);
+
+      final creator = _safeString(d['createdByName']);
+      if (creator.isNotEmpty) creatorsSet.add(creator);
+    }
+
+    final naturesList = naturesSet.toList()..sort();
+    final assigneesList = assigneesSet.toList()..sort();
+    final creatorsList = creatorsSet.toList()..sort();
+
     String tempStatus = _selectedStatus;
     String tempPriority = _selectedPriority;
+    String tempNature = _selectedNature;
+    String tempAssignee = _selectedAssignee;
+    String tempCreator = _selectedCreator;
 
     await showModalBottomSheet(
       context: context,
@@ -354,22 +537,51 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Filters', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                const Text('Advanced Filters', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 14),
-                DropdownButtonFormField<String>(
-                  initialValue: tempStatus,
-                  decoration: const InputDecoration(labelText: 'Status', isDense: true, border: OutlineInputBorder()),
-                  items: _statuses.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                  onChanged: (value) => tempStatus = value ?? 'All',
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        initialValue: tempStatus,
+                        decoration: const InputDecoration(labelText: 'Status', isDense: true, border: OutlineInputBorder()),
+                        items: _statuses.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                        onChanged: (value) => tempStatus = value ?? 'All',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        initialValue: tempPriority,
+                        decoration: const InputDecoration(labelText: 'Priority', isDense: true, border: OutlineInputBorder()),
+                        items: _priorities.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                        onChanged: (value) => tempPriority = value ?? 'All',
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  initialValue: tempPriority,
-                  decoration: const InputDecoration(labelText: 'Priority', isDense: true, border: OutlineInputBorder()),
-                  items: _priorities.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                  onChanged: (value) => tempPriority = value ?? 'All',
+                  initialValue: naturesSet.contains(tempNature) ? tempNature : 'All',
+                  decoration: const InputDecoration(labelText: 'Product Nature', isDense: true, border: OutlineInputBorder()),
+                  items: naturesList.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                  onChanged: (value) => tempNature = value ?? 'All',
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: assigneesSet.contains(tempAssignee) ? tempAssignee : 'All',
+                  decoration: const InputDecoration(labelText: 'Assigned User', isDense: true, border: OutlineInputBorder()),
+                  items: assigneesList.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                  onChanged: (value) => tempAssignee = value ?? 'All',
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: creatorsSet.contains(tempCreator) ? tempCreator : 'All',
+                  decoration: const InputDecoration(labelText: 'Created By', isDense: true, border: OutlineInputBorder()),
+                  items: creatorsList.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                  onChanged: (value) => tempCreator = value ?? 'All',
+                ),
+                const SizedBox(height: 20),
                 Row(
                   children: [
                     Expanded(
@@ -378,7 +590,7 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
                           _resetFilters();
                           Navigator.pop(context);
                         },
-                        child: const Text('Reset'),
+                        child: const Text('Reset All'),
                       ),
                     ),
                     Expanded(
@@ -387,10 +599,14 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
                           setState(() {
                             _selectedStatus = tempStatus;
                             _selectedPriority = tempPriority;
+                            _selectedNature = tempNature;
+                            _selectedAssignee = tempAssignee;
+                            _selectedCreator = tempCreator;
+                            _currentPage = 1; // Reset pagination on filter
                           });
                           Navigator.pop(context);
                         },
-                        child: const Text('Apply'),
+                        child: const Text('Apply Filters'),
                       ),
                     ),
                   ],
@@ -403,8 +619,116 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
     );
   }
 
+  // --- DYNAMIC PAGINATION RENDERER ---
+  Widget _buildPaginationBar(int totalRecords) {
+    int totalPages = (totalRecords / _recordsPerPage).ceil();
+    if (totalPages == 0) totalPages = 1;
+
+    int start = (_currentPage - 1) * _recordsPerPage + 1;
+    int end = math.min(_currentPage * _recordsPerPage, totalRecords);
+    if (totalRecords == 0) {
+      start = 0;
+      end = 0;
+    }
+
+    // 8-page sliding window logic
+    List<Widget> pageButtons = [];
+    int startPage = _currentPage;
+    int endPage = startPage + 7;
+
+    // Shift window back if we're near the final page bounds
+    if (endPage > totalPages) {
+      endPage = totalPages;
+      startPage = math.max(1, endPage - 7);
+    }
+
+    for (int i = startPage; i <= endPage; i++) {
+      pageButtons.add(
+        InkWell(
+          onTap: () {
+            if (_currentPage != i) setState(() => _currentPage = i);
+          },
+          borderRadius: BorderRadius.circular(6),
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: _currentPage == i ? Colors.blue.shade600 : Colors.transparent,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: _currentPage == i ? Colors.blue.shade600 : Colors.transparent),
+            ),
+            child: Text(
+              i.toString(),
+              style: TextStyle(
+                fontSize: 13,
+                color: _currentPage == i ? Colors.white : Colors.grey.shade800,
+                fontWeight: _currentPage == i ? FontWeight.bold : FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      // The 80px right padding ensures the FloatingActionButton never overlaps page controls
+      padding: const EdgeInsets.fromLTRB(16, 12, 80, 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Colors.grey.shade200)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), offset: const Offset(0, -4), blurRadius: 10)],
+      ),
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        runSpacing: 12,
+        children: [
+          Text(
+            'Showing $start–$end of $totalRecords records',
+            style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontWeight: FontWeight.w500),
+          ),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    minimumSize: const Size(0, 32),
+                    foregroundColor: Colors.grey.shade800,
+                    side: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  onPressed: _currentPage > 1 ? () => setState(() => _currentPage--) : null,
+                  child: const Text('Previous', style: TextStyle(fontSize: 12)),
+                ),
+                const SizedBox(width: 8),
+                ...pageButtons,
+                const SizedBox(width: 8),
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    minimumSize: const Size(0, 32),
+                    foregroundColor: Colors.grey.shade800,
+                    side: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  onPressed: _currentPage < totalPages ? () => setState(() => _currentPage++) : null,
+                  child: const Text('Next', style: TextStyle(fontSize: 12)),
+                ),
+              ],
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_isFetchingRole) {
+      return const Scaffold(backgroundColor: Colors.white, body: Center(child: CircularProgressIndicator()));
+    }
+
     return Scaffold(
       appBar: AppBar(
         elevation: 0,
@@ -432,6 +756,16 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
           final filteredDocs = _applyFilters(allDocs);
           final stats = _calculateStats(allDocs);
 
+          // Pagination Slicing
+          final totalRecords = filteredDocs.length;
+          int totalPages = (totalRecords / _recordsPerPage).ceil();
+          if (totalPages == 0) totalPages = 1;
+          if (_currentPage > totalPages) _currentPage = totalPages;
+
+          final startIndex = (_currentPage - 1) * _recordsPerPage;
+          final endIndex = math.min(startIndex + _recordsPerPage, totalRecords);
+          final pageDocs = totalRecords == 0 ? <QueryDocumentSnapshot<Map<String, dynamic>>>[] : filteredDocs.sublist(startIndex, endIndex);
+
           return Column(
             children: [
               // ENTERPRISE HEADER
@@ -448,7 +782,7 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
                           controller: _searchController,
                           onChanged: _onSearchChanged,
                           decoration: InputDecoration(
-                            hintText: 'Search request, customer, machine...',
+                            hintText: 'Search request, customer, item...',
                             prefixIcon: const Icon(Icons.search, size: 18),
                             suffixIcon: _searchQuery.trim().isEmpty ? null : IconButton(
                               tooltip: 'Clear',
@@ -478,7 +812,7 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
                         borderRadius: BorderRadius.circular(10),
                         child: InkWell(
                           borderRadius: BorderRadius.circular(10),
-                          onTap: _openFilterSheet,
+                          onTap: () => _openFilterSheet(allDocs),
                           child: Stack(
                             alignment: Alignment.center,
                             children: [
@@ -498,7 +832,7 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 12),
                     IconButton(
                       icon: Icon(_isTableView ? Icons.grid_view_rounded : Icons.table_rows_rounded, size: 20),
                       tooltip: _isTableView ? 'Switch to List View' : 'Switch to Table View',
@@ -509,9 +843,13 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
                     if (!isWaiting) ...[
                       _MiniStatText(label: 'Total', value: stats['Total'].toString()),
                       const SizedBox(width: 10),
-                      _MiniStatText(label: 'Open', value: stats['Open'].toString()),
+                      _MiniStatText(label: 'New', value: stats['New'].toString()),
                       const SizedBox(width: 10),
-                      _MiniStatText(label: 'Resolved', value: stats['Resolved'].toString()),
+                      _MiniStatText(label: 'In Progress', value: stats['In Progress'].toString()),
+                      const SizedBox(width: 10),
+                      _MiniStatText(label: 'Completed', value: stats['Completed'].toString()),
+                      const SizedBox(width: 10),
+                      _MiniStatText(label: 'Unassigned', value: stats['Unassigned'].toString(), highlight: stats['Unassigned']! > 0),
                     ],
                   ],
                 ),
@@ -533,23 +871,23 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
               Expanded(
                 child: isWaiting
                     ? _buildSkeletonLoader()
-                    : filteredDocs.isEmpty
+                    : pageDocs.isEmpty
                     ? _EmptyRequestsState(
                   hasSearch: _searchQuery.trim().isNotEmpty || _hasActiveFilters,
-                  onReset: () {
-                    _searchController.clear();
-                    _onSearchChanged('');
-                    _resetFilters();
-                  },
+                  onReset: _resetFilters,
                 )
                     : LayoutBuilder(
                   builder: (context, constraints) {
                     final forceCardView = constraints.maxWidth < 1100;
                     final effectiveTableView = forceCardView ? false : _isTableView;
-                    return effectiveTableView ? _buildTableView(filteredDocs) : _buildListView(filteredDocs);
+                    return effectiveTableView ? _buildTableView(pageDocs) : _buildListView(pageDocs);
                   },
                 ),
               ),
+
+              // PAGINATION FOOTER
+              if (!isWaiting && totalRecords > 0)
+                _buildPaginationBar(totalRecords),
             ],
           );
         },
@@ -559,50 +897,12 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
 
   Widget _buildSkeletonLoader() {
     return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
       itemCount: 5,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (ctx, i) => TweenAnimationBuilder<double>(
-        duration: const Duration(milliseconds: 1000),
-        curve: Curves.easeInOutSine,
-        tween: Tween(begin: 0.3, end: 0.7),
-        builder: (context, opacity, child) {
-          return Opacity(
-            opacity: opacity,
-            child: Container(
-              height: 140,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.grey.shade200),
-              ),
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(height: 40, width: 40, decoration: BoxDecoration(color: Colors.grey.shade200, shape: BoxShape.circle)),
-                      const SizedBox(width: 10),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(height: 16, width: 150, color: Colors.grey.shade200),
-                          const SizedBox(height: 6),
-                          Container(height: 12, width: 100, color: Colors.grey.shade200),
-                        ],
-                      )
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Container(height: 14, width: double.infinity, color: Colors.grey.shade200),
-                  const SizedBox(height: 8),
-                  Container(height: 14, width: 250, color: Colors.grey.shade200),
-                ],
-              ),
-            ),
-          );
-        },
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (ctx, i) => Container(
+        height: 100,
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.grey.shade200)),
       ),
     );
   }
@@ -610,9 +910,9 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
   Widget _buildListView(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
     return ListView.separated(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 90),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       itemCount: docs.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
         return _buildRequestCard(docs[index]);
       },
@@ -631,22 +931,24 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
             children: [
               Container(
                 color: Colors.grey.shade100,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 child: const Row(
                   children: [
                     SizedBox(width: 40),
-                    SizedBox(width: 250, child: Text('Request No / Customer', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
-                    SizedBox(width: 180, child: Text('Contact Details', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
-                    SizedBox(width: 160, child: Text('Category / Machine', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
-                    SizedBox(width: 130, child: Text('Priority & Status', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
-                    SizedBox(width: 130, child: Text('Assigned To', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
-                    SizedBox(width: 100, child: Text('Date', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
-                    SizedBox(width: 60, child: Text('Actions', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
+                    SizedBox(width: 200, child: Text('Request No / Customer', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                    SizedBox(width: 140, child: Text('Contact Details', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                    SizedBox(width: 160, child: Text('Product & Nature', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                    SizedBox(width: 140, child: Text('Complaint & Priority', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                    SizedBox(width: 100, child: Text('Status', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                    SizedBox(width: 120, child: Text('Assigned To', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                    SizedBox(width: 120, child: Text('Created By', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                    SizedBox(width: 100, child: Text('Date', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                    SizedBox(width: 50, child: Text('Actions', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
                   ],
                 ),
               ),
               ...docs.map((doc) => _buildRequestTableRow(doc)),
-              const SizedBox(height: 90),
+              const SizedBox(height: 16), // Adjusted inner bottom padding for external pagination bar
             ],
           ),
         ),
@@ -659,15 +961,15 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
 
     final requestNo = _safeString(data['requestNumber']);
     final customerName = _safeString(data['customerName']);
-    final machineModel = _safeString(data['machineModel']);
+    final itemName = _safeString(data['serviceItemName'] ?? data['machineModel']);
+    final itemNature = _safeString(data['serviceItemNature'] ?? data['machineNature']);
     final status = _safeString(data['status']);
     final priority = _safeString(data['priority']);
     final category = _safeString(data['complaintCategory']);
     final isWarranty = data['isWarranty'] == true;
 
-    final mobile = _safeString(data['mobileNumber']);
-    final email = _safeString(data['email']);
     final assignedToName = _safeString(data['assignedToName']);
+    final createdByName = _safeString(data['createdByName']);
     final createdAt = _extractDate(data['createdAt']);
 
     return InkWell(
@@ -681,121 +983,99 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
             color: _selectedRequestIds.contains(doc.id) ? Colors.blue.shade300 : Colors.grey.shade200,
             width: _selectedRequestIds.contains(doc.id) ? 1.5 : 0.8,
           ),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.015), blurRadius: 6, offset: const Offset(0, 2))],
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.015), blurRadius: 4, offset: const Offset(0, 2))],
         ),
         child: Padding(
           padding: const EdgeInsets.all(10),
-          child: Column(
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8, top: 4),
-                    child: SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: Checkbox(
-                        value: _selectedRequestIds.contains(doc.id),
-                        onChanged: (v) => _toggleSelection(doc.id),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                      ),
-                    ),
-                  ),
-                  CircleAvatar(
-                    radius: 20,
-                    backgroundColor: Colors.indigo.shade50,
-                    child: Text(
-                      customerName.isNotEmpty ? customerName[0].toUpperCase() : '?',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.indigo.shade800),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: Checkbox(
+                  value: _selectedRequestIds.contains(doc.id),
+                  onChanged: (v) => _toggleSelection(doc.id),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ROW 1: Identifier + Customer + Date
+                    Row(
                       children: [
-                        Row(
-                          children: [
-                            if (requestNo.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(right: 6),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.indigo.shade50,
-                                    borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(color: Colors.indigo.shade100),
-                                  ),
-                                  child: Text(
-                                    requestNo,
-                                    style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Colors.indigo.shade800, letterSpacing: 0.3),
-                                  ),
-                                ),
-                              ),
-                            Expanded(
-                              child: Text(
-                                customerName.isNotEmpty ? customerName : '(Unknown Customer)',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-                              ),
-                            ),
-                          ],
+                        if (requestNo.isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            margin: const EdgeInsets.only(right: 6),
+                            decoration: BoxDecoration(color: Colors.indigo.shade50, borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.indigo.shade100)),
+                            child: Text(requestNo, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.indigo.shade800)),
+                          ),
+                        Expanded(
+                          child: Text(
+                            customerName.isNotEmpty ? customerName : '(Unknown Customer)',
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
+                          ),
                         ),
-                        if (machineModel.isNotEmpty) ...[
-                          const SizedBox(height: 3),
-                          Text(machineModel, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: Colors.grey.shade700, fontWeight: FontWeight.w500)),
-                        ],
+                        Text(_timeAgo(createdAt), style: TextStyle(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
+                        const SizedBox(width: 4),
+                        SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: PopupMenuButton<String>(
+                            padding: EdgeInsets.zero,
+                            icon: Icon(Icons.more_vert, size: 16, color: Colors.grey.shade600),
+                            onSelected: (val) {
+                              if (val == 'view') _showDetailsDialog(data);
+                              if (val == 'edit') {
+                                Navigator.push(context, MaterialPageRoute(builder: (_) => AddServiceRequestScreen(companyId: widget.companyId, currentUserUid: widget.currentUserUid, currentUserName: widget.currentUserName, existingDocId: doc.id, existingData: data)));
+                              }
+                              if (val == 'delete') _deleteRequest(doc.id);
+                            },
+                            itemBuilder: (ctx) => [
+                              const PopupMenuItem(value: 'view', child: Text('View Details', style: TextStyle(fontSize: 13))),
+                              const PopupMenuItem(value: 'edit', child: Text('Edit Request', style: TextStyle(fontSize: 13))),
+                              const PopupMenuDivider(),
+                              const PopupMenuItem(value: 'delete', child: Text('Delete Request', style: TextStyle(color: Colors.red, fontSize: 13))),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
-                  ),
-                  PopupMenuButton<String>(
-                    tooltip: 'Actions',
-                    onSelected: (val) {
-                      if (val == 'view') _showDetailsDialog(data);
-                      if (val == 'edit') {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => AddServiceRequestScreen(
-                          companyId: widget.companyId,
-                          currentUserUid: widget.currentUserUid,
-                          currentUserName: widget.currentUserName,
-                          existingDocId: doc.id,
-                          existingData: data,
-                        )));
-                      }
-                      if (val == 'delete') _deleteRequest(doc.id);
-                    },
-                    itemBuilder: (ctx) => [
-                      const PopupMenuItem(value: 'view', child: Text('View Details')),
-                      const PopupMenuItem(value: 'edit', child: Text('Edit Request')),
-                      const PopupMenuDivider(),
-                      const PopupMenuItem(value: 'delete', child: Text('Delete Request', style: TextStyle(color: Colors.red))),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  if (status.isNotEmpty) _buildStatusChip(status),
-                  if (priority.isNotEmpty) _buildPriorityChip(priority),
-                  if (category.isNotEmpty) _InfoChip(label: category, backgroundColor: Colors.purple.shade50, textColor: Colors.purple.shade800),
-                  if (isWarranty) _InfoChip(label: 'Under Warranty', backgroundColor: Colors.teal.shade50, textColor: Colors.teal.shade800),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 12,
-                runSpacing: 6,
-                children: [
-                  _InlineInfo(icon: Icons.phone_outlined, text: mobile.isEmpty ? '-' : mobile),
-                  if (email.isNotEmpty) _InlineInfo(icon: Icons.email_outlined, text: email),
-                  _InlineInfo(icon: Icons.assignment_ind_outlined, text: assignedToName.isEmpty ? 'Unassigned' : assignedToName),
-                  _InlineInfo(icon: Icons.calendar_today_outlined, text: _formatAnyTimestamp(createdAt)),
-                ],
+                    const SizedBox(height: 6),
+
+                    // ROW 2: Product Info + Chips (Highly Condensed)
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        if (itemName.isNotEmpty)
+                          Text('$itemName ${itemNature.isNotEmpty ? '($itemNature)' : ''}', style: TextStyle(fontSize: 12, color: Colors.grey.shade800, fontWeight: FontWeight.w600)),
+                        if (category.isNotEmpty)
+                          _InfoChip(label: category, backgroundColor: Colors.purple.shade50, textColor: Colors.purple.shade800),
+                        if (status.isNotEmpty) _buildStatusChip(status),
+                        if (priority.isNotEmpty) _buildPriorityChip(priority),
+                        if (isWarranty) _InfoChip(label: 'Warranty', backgroundColor: Colors.teal.shade50, textColor: Colors.teal.shade800),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+
+                    // ROW 3: Assignments & Ownership
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 4,
+                      children: [
+                        _InlineInfo(icon: Icons.engineering_outlined, text: 'Assigned: ${assignedToName.isEmpty ? 'Unassigned' : assignedToName}'),
+                        _InlineInfo(icon: Icons.person_outline, text: 'Created By: ${createdByName.isEmpty ? 'System' : createdByName}'),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -812,17 +1092,19 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
     final contactPerson = _safeString(data['contactPerson']);
     final mobile = _safeString(data['mobileNumber']);
     final category = _safeString(data['complaintCategory']);
-    final machineModel = _safeString(data['machineModel']);
+    final itemName = _safeString(data['serviceItemName'] ?? data['machineModel']);
+    final itemNature = _safeString(data['serviceItemNature'] ?? data['machineNature']);
     final status = _safeString(data['status']);
     final priority = _safeString(data['priority']);
     final assignedToName = _safeString(data['assignedToName']);
+    final createdByName = _safeString(data['createdByName']);
     final createdAt = _extractDate(data['createdAt']);
 
     return InkWell(
       onTap: () => _showDetailsDialog(data),
       child: Container(
         decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade200))),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Row(
           children: [
             SizedBox(
@@ -830,21 +1112,21 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
               child: Checkbox(value: _selectedRequestIds.contains(doc.id), onChanged: (v) => _toggleSelection(doc.id)),
             ),
             SizedBox(
-              width: 250,
+              width: 200,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(customerName.isNotEmpty ? customerName : '(Unknown)', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  if (requestNo.isNotEmpty) Text(requestNo, style: TextStyle(fontSize: 11, color: Colors.indigo.shade700, fontWeight: FontWeight.w600)),
+                  Text(customerName.isNotEmpty ? customerName : '(Unknown)', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  if (requestNo.isNotEmpty) Text(requestNo, style: TextStyle(fontSize: 10, color: Colors.indigo.shade700, fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
             SizedBox(
-              width: 180,
+              width: 140,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(contactPerson.isNotEmpty ? contactPerson : '-', style: const TextStyle(fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(contactPerson.isNotEmpty ? contactPerson : '-', style: const TextStyle(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
                   Text(mobile, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
                 ],
               ),
@@ -854,28 +1136,46 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(category.isNotEmpty ? category : '-', style: const TextStyle(fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  Text(machineModel, style: TextStyle(fontSize: 11, color: Colors.grey.shade600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(itemName.isNotEmpty ? itemName : '-', style: const TextStyle(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(itemNature.isNotEmpty ? itemNature.toUpperCase() : 'UNKNOWN', style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
                 ],
               ),
             ),
             SizedBox(
-              width: 130,
+              width: 140,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildStatusChip(status),
-                  const SizedBox(height: 4),
+                  Text(category.isNotEmpty ? category : '-', style: const TextStyle(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 2),
                   _buildPriorityChip(priority),
                 ],
               ),
             ),
-            SizedBox(width: 130, child: Text(assignedToName.isNotEmpty ? assignedToName : 'Unassigned', style: const TextStyle(fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis)),
-            SizedBox(width: 100, child: Text(_timeAgo(createdAt), style: const TextStyle(fontSize: 13))),
             SizedBox(
-                width: 60,
+              width: 100,
+              child: Align(alignment: Alignment.centerLeft, child: _buildStatusChip(status)),
+            ),
+            SizedBox(
+                width: 120,
+                child: Text(assignedToName.isNotEmpty ? assignedToName : 'Unassigned', style: TextStyle(fontSize: 12, color: assignedToName.isEmpty ? Colors.red.shade700 : Colors.black87), maxLines: 1, overflow: TextOverflow.ellipsis)
+            ),
+            SizedBox(
+                width: 120,
+                child: Row(
+                  children: [
+                    Icon(Icons.person, size: 12, color: Colors.grey.shade400),
+                    const SizedBox(width: 4),
+                    Expanded(child: Text(createdByName.isNotEmpty ? createdByName : '-', style: const TextStyle(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                  ],
+                )
+            ),
+            SizedBox(width: 100, child: Text(_timeAgo(createdAt), style: const TextStyle(fontSize: 11))),
+            SizedBox(
+                width: 50,
                 child: PopupMenuButton<String>(
-                  icon: Icon(Icons.more_vert, color: Colors.grey.shade600),
+                  icon: Icon(Icons.more_vert, size: 18, color: Colors.grey.shade600),
+                  padding: EdgeInsets.zero,
                   tooltip: 'Actions',
                   onSelected: (val) {
                     if (val == 'view') _showDetailsDialog(data);
@@ -891,10 +1191,10 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
                     if (val == 'delete') _deleteRequest(doc.id);
                   },
                   itemBuilder: (ctx) => [
-                    const PopupMenuItem(value: 'view', child: Text('View Details')),
-                    const PopupMenuItem(value: 'edit', child: Text('Edit Request')),
+                    const PopupMenuItem(value: 'view', child: Text('View Details', style: TextStyle(fontSize: 13))),
+                    const PopupMenuItem(value: 'edit', child: Text('Edit Request', style: TextStyle(fontSize: 13))),
                     const PopupMenuDivider(),
-                    const PopupMenuItem(value: 'delete', child: Text('Delete Request', style: TextStyle(color: Colors.red))),
+                    const PopupMenuItem(value: 'delete', child: Text('Delete Request', style: TextStyle(color: Colors.red, fontSize: 13))),
                   ],
                 )
             ),
@@ -909,7 +1209,8 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
     switch (status) {
       case 'New': bg = Colors.blue.shade50; fg = Colors.blue.shade800; break;
       case 'In Progress': bg = Colors.orange.shade50; fg = Colors.orange.shade800; break;
-      case 'Resolved': bg = Colors.green.shade50; fg = Colors.green.shade800; break;
+      case 'Resolved':
+      case 'Completed': bg = Colors.green.shade50; fg = Colors.green.shade800; break;
       case 'Closed': bg = Colors.grey.shade200; fg = Colors.grey.shade800; break;
       default: bg = Colors.blueGrey.shade50; fg = Colors.blueGrey.shade800;
     }
@@ -936,11 +1237,12 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
 class _MiniStatText extends StatelessWidget {
   final String label;
   final String value;
-  const _MiniStatText({required this.label, required this.value});
+  final bool highlight;
+  const _MiniStatText({required this.label, required this.value, this.highlight = false});
 
   @override
   Widget build(BuildContext context) {
-    return Text('$label: $value', style: TextStyle(fontSize: 12, color: Colors.grey.shade700, fontWeight: FontWeight.w600));
+    return Text('$label: $value', style: TextStyle(fontSize: 12, color: highlight ? Colors.red.shade700 : Colors.grey.shade700, fontWeight: highlight ? FontWeight.w800 : FontWeight.w600));
   }
 }
 
@@ -956,13 +1258,13 @@ class _InlineInfo extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: Colors.grey.shade700),
-          const SizedBox(width: 5),
+          Icon(icon, size: 13, color: Colors.grey.shade700),
+          const SizedBox(width: 4),
           Flexible(
             child: Text(
               text,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade800, fontWeight: FontWeight.w500),
+              style: TextStyle(fontSize: 11, color: text.contains('Unassigned') ? Colors.red.shade700 : Colors.grey.shade800, fontWeight: text.contains('Unassigned') ? FontWeight.bold : FontWeight.w500),
             ),
           ),
         ],
@@ -980,9 +1282,9 @@ class _InfoChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: backgroundColor, borderRadius: BorderRadius.circular(6)),
-      child: Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: textColor)),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(color: backgroundColor, borderRadius: BorderRadius.circular(4)),
+      child: Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: textColor)),
     );
   }
 }
@@ -1006,23 +1308,23 @@ class _EmptyRequestsState extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     CircleAvatar(
-                      radius: 34,
+                      radius: 30,
                       backgroundColor: Colors.blue.shade50,
                       child: Icon(
                         hasSearch ? Icons.search_off : Icons.support_agent_outlined,
-                        size: 34,
+                        size: 28,
                         color: Colors.blue.shade700,
                       ),
                     ),
                     const SizedBox(height: 18),
                     Text(
                       hasSearch ? 'No matching service requests found' : 'No service requests found',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      hasSearch ? 'Try changing the search text or filter.' : 'Click the button below to create your first service request.',
+                      hasSearch ? 'Try changing the search text or filters.' : 'Click the button below to create your first service request.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
                     ),
