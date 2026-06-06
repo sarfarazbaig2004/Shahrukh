@@ -1,6 +1,9 @@
+// FILE PATH: lib/modules/service/screens/add_service_request_screen.dart
+
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class AddServiceRequestScreen extends StatefulWidget {
   final String companyId;
@@ -37,9 +40,29 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
   List<Map<String, dynamic>> _customerAddresses = [];
   List<Map<String, dynamic>> _customerContacts = [];
   List<Map<String, dynamic>> _suggestedCustomers = [];
-  Map<String, dynamic>? _selectedCustomerData; // Cache top-level data for fallback
+  Map<String, dynamic>? _selectedCustomerData;
 
   Timer? _debounceTimer;
+
+  // --- SERVICE ASSIGNMENT STATE ---
+  String? _assignedToUid;
+  String? _assignedToName;
+  String? _assignedToEmail;
+
+  // --- GENERIC SERVICE ITEM HIERARCHY STATE ---
+  String _serviceItemNature = 'Machine'; // Default to Machine
+  String? _serviceCategoryId;
+  String? _serviceCategoryName;
+  String? _serviceSubcategoryId;
+  String? _serviceSubcategoryName;
+  String? _serviceMachineType;
+
+  String? _serviceItemId;
+  String? _serviceItemCode;
+  String? _serviceItemName;
+  List<String> _availableSerialNumbers = [];
+
+  List<Map<String, dynamic>> _requiredParts = [];
 
   // --- CONTROLLERS ---
   final TextEditingController _customerNameCtrl = TextEditingController();
@@ -47,13 +70,14 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
   final TextEditingController _contactPersonCtrl = TextEditingController();
   final TextEditingController _mobileCtrl = TextEditingController();
   final TextEditingController _emailCtrl = TextEditingController();
+  final TextEditingController _gstCtrl = TextEditingController();
   final TextEditingController _addressCtrl = TextEditingController();
   final TextEditingController _cityCtrl = TextEditingController();
   final TextEditingController _stateCtrl = TextEditingController();
   final TextEditingController _pincodeCtrl = TextEditingController();
   final TextEditingController _salesPersonCtrl = TextEditingController();
 
-  final TextEditingController _machineModelCtrl = TextEditingController();
+  final TextEditingController _brandCtrl = TextEditingController();
   final TextEditingController _serialNumberCtrl = TextEditingController();
   final TextEditingController _complaintDescCtrl = TextEditingController();
   final TextEditingController _remarksCtrl = TextEditingController();
@@ -77,6 +101,23 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
     'WhatsApp', 'Website', 'AMC', 'Other'
   ];
 
+  // --- FIRESTORE GETTERS ---
+  CollectionReference<Map<String, dynamic>> get _categoriesRef =>
+      FirebaseFirestore.instance.collection('companies').doc(widget.companyId).collection('inventory_categories');
+
+  CollectionReference<Map<String, dynamic>> _subcategoriesRef(String catId) =>
+      _categoriesRef.doc(catId).collection('subcategories');
+
+  CollectionReference<Map<String, dynamic>> get _machineTypesRef =>
+      FirebaseFirestore.instance.collection('companies').doc(widget.companyId).collection('inventory_machine_types');
+
+  CollectionReference<Map<String, dynamic>> get _productsRef =>
+      FirebaseFirestore.instance.collection('companies').doc(widget.companyId).collection('products');
+
+  CollectionReference<Map<String, dynamic>> get _usersRef =>
+      FirebaseFirestore.instance.collection('companies').doc(widget.companyId).collection('users');
+
+
   @override
   void initState() {
     super.initState();
@@ -99,14 +140,37 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
       _contactPersonCtrl.text = d['contactPerson'] ?? '';
       _mobileCtrl.text = d['mobileNumber'] ?? '';
       _emailCtrl.text = d['email'] ?? '';
+      _gstCtrl.text = d['gst'] ?? '';
       _addressCtrl.text = d['address'] ?? '';
       _cityCtrl.text = d['city'] ?? '';
       _stateCtrl.text = d['state'] ?? '';
       _pincodeCtrl.text = d['pincode'] ?? '';
       _salesPersonCtrl.text = d['salesPersonName'] ?? '';
 
-      _machineModelCtrl.text = d['machineModel'] ?? '';
-      _serialNumberCtrl.text = d['serialNumber'] ?? '';
+      // --- Map Service Assignment ---
+      _assignedToUid = d['assignedToUid'];
+      _assignedToName = d['assignedToName'];
+      _assignedToEmail = d['assignedToEmail'];
+
+      // --- Map Service Item Hierarchy (Safely falling back to legacy machine fields) ---
+      _serviceItemNature = d['serviceItemNature'] ?? d['machineNature'] ?? 'Machine';
+      _serviceCategoryId = d['serviceCategoryId'] ?? d['machineCategoryId'];
+      _serviceCategoryName = d['serviceCategoryName'] ?? d['machineCategory'];
+      _serviceSubcategoryId = d['serviceSubcategoryId'] ?? d['machineSubcategoryId'];
+      _serviceSubcategoryName = d['serviceSubCategoryName'] ?? d['machineSubCategory'];
+      _serviceMachineType = d['serviceMachineType'] ?? d['machineType'];
+      _serviceItemId = d['serviceItemId'] ?? d['machineId'];
+      _serviceItemCode = d['serviceItemCode'] ?? d['machineCode'];
+      _serviceItemName = d['serviceItemName'] ?? d['machineModel'];
+      _brandCtrl.text = d['brand'] ?? d['machineBrand'] ?? '';
+      _serialNumberCtrl.text = d['serialNumber'] ?? d['machineSerialNumber'] ?? '';
+
+      if (d['requiredParts'] is List) {
+        _requiredParts = List<Map<String, dynamic>>.from(
+            (d['requiredParts'] as List).map((x) => Map<String, dynamic>.from(x))
+        );
+      }
+
       _complaintDescCtrl.text = d['complaintDescription'] ?? '';
       _remarksCtrl.text = d['remarks'] ?? '';
       _selectedCategory = d['complaintCategory'] ?? _categories.first;
@@ -133,12 +197,13 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
     _contactPersonCtrl.dispose();
     _mobileCtrl.dispose();
     _emailCtrl.dispose();
+    _gstCtrl.dispose();
     _addressCtrl.dispose();
     _cityCtrl.dispose();
     _stateCtrl.dispose();
     _pincodeCtrl.dispose();
     _salesPersonCtrl.dispose();
-    _machineModelCtrl.dispose();
+    _brandCtrl.dispose();
     _serialNumberCtrl.dispose();
     _complaintDescCtrl.dispose();
     _remarksCtrl.dispose();
@@ -150,13 +215,10 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
   // ==========================================
 
   void _onCustomerFieldChanged() {
-    // HARD RESET: If the customer field is completely cleared, wipe EVERYTHING.
     if (_customerNameCtrl.text.isEmpty && _selectedCustomerId != null) {
       _clearCustomerSelection();
       return;
     }
-
-    // Do not trigger background search if a customer is already formally mapped
     if (_selectedCustomerId != null) return;
 
     if (_debounceTimer?.isActive ?? false) _debounceTimer!.cancel();
@@ -175,52 +237,40 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
   }
 
   Future<bool> _performDeepEmailLookup(String email) async {
-    debugPrint("Email entered: $email");
     final db = FirebaseFirestore.instance;
 
     try {
-      // STEP 1: Search customer master (Sequential to bypass Filter.or index needs)
       var custSnap = await db.collection('companies').doc(widget.companyId)
           .collection('customers')
-          .where('isDeleted', isEqualTo: false)
           .where('businessEmail', isEqualTo: email)
-          .limit(1).get();
+          .limit(3).get();
 
       if (custSnap.docs.isEmpty) {
         custSnap = await db.collection('companies').doc(widget.companyId)
             .collection('customers')
-            .where('isDeleted', isEqualTo: false)
             .where('email', isEqualTo: email)
-            .limit(1).get();
+            .limit(3).get();
       }
 
-      if (custSnap.docs.isNotEmpty) {
-        debugPrint("Customer match found");
-        final custDoc = custSnap.docs.first;
-        debugPrint("Selected customer: ${custDoc.id}");
+      final activeCusts = custSnap.docs.where((d) => d.data()['isDeleted'] != true).toList();
+
+      if (activeCusts.isNotEmpty) {
+        final custDoc = activeCusts.first;
         _applyCustomer({'id': custDoc.id, ...custDoc.data()});
         return true;
       }
 
-      // STEP 2: Search customer contacts subcollection
-      // Using collectionGroup dynamically checks across all customers.
       final contactsSnap = await db.collectionGroup('contacts')
           .where('email', isEqualTo: email)
           .get();
 
       for (var doc in contactsSnap.docs) {
         final data = doc.data();
-        // Client-side filtering to bypass strict missing-field rules
         if (data['isDeleted'] == true) continue;
 
         final pathSegments = doc.reference.path.split('/');
-        // Format: companies/{companyId}/customers/{customerId}/contacts/{contactId}
         if (pathSegments.length >= 5 && pathSegments[1] == widget.companyId) {
           final matchedCustomerId = pathSegments[3];
-          debugPrint("Contact match found");
-          debugPrint("Selected contact: ${doc.id}");
-
-          // STEP 3: Load parent customer & auto-select matching contact
           final parentCustDoc = await db.collection('companies')
               .doc(widget.companyId)
               .collection('customers')
@@ -230,7 +280,6 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
           if (parentCustDoc.exists) {
             final custData = parentCustDoc.data()!;
             if (custData['isDeleted'] != true) {
-              debugPrint("Selected customer: $matchedCustomerId");
               _applyCustomer({'id': matchedCustomerId, ...custData}, preselectContactId: doc.id);
               return true;
             }
@@ -248,15 +297,13 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
     final mobile = _mobileCtrl.text.trim().replaceAll(RegExp(r'\D'), '');
     final email = _emailCtrl.text.trim().toLowerCase();
 
-    // Deep Email Lookup Integration
     if (email.length >= 5 && email.contains('@') && _selectedCustomerId == null) {
       bool foundViaEmail = await _performDeepEmailLookup(email);
-      if (foundViaEmail) return; // Exit if deep email lookup resolved the payload
+      if (foundViaEmail) return;
     }
 
     String queryStr = '';
 
-    // Priority Resolution: Mobile -> Email -> Name/Contact Name
     if (mobile.length >= 8) {
       queryStr = mobile;
     } else if (email.length >= 5) {
@@ -271,27 +318,27 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
     }
 
     try {
-      // Single powerful query resolving across your advanced searchKeywords array
       final snap = await FirebaseFirestore.instance
           .collection('companies')
           .doc(widget.companyId)
           .collection('customers')
-          .where('isDeleted', isEqualTo: false)
           .where('searchKeywords', arrayContains: queryStr)
-          .limit(5)
+          .limit(10)
           .get();
 
       if (mounted) {
         setState(() {
-          _suggestedCustomers = snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+          final validDocs = snap.docs.where((d) => d.data()['isDeleted'] != true).toList();
+          _suggestedCustomers = validDocs.map((d) => {'id': d.id, ...d.data()}).toList();
 
-          // INSTANT AUTO-LOOKUP: If exactly 1 highly-confident match is found via Phone or Email
           if (_suggestedCustomers.length == 1 && (mobile.length >= 10 || email.length >= 5) && _selectedCustomerId == null) {
             _applyCustomer(_suggestedCustomers.first);
           }
         });
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Search failed: $e');
+    }
   }
 
   void _clearCustomerSelection() {
@@ -308,6 +355,7 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
       _contactPersonCtrl.clear();
       _mobileCtrl.clear();
       _emailCtrl.clear();
+      _gstCtrl.clear();
       _addressCtrl.clear();
       _cityCtrl.clear();
       _stateCtrl.clear();
@@ -327,24 +375,21 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
       _selectedCustomerId = customer['id'];
       _selectedCustomerCode = customer['customerCode'];
 
-      // Map exact CRM base fields
       _customerNameCtrl.text = (customer['companyName'] ?? customer['name'] ?? '').toString();
       _customerCodeCtrl.text = _selectedCustomerCode ?? '';
       _salesPersonId = customer['assignedToUid'];
       _salesPersonName = customer['assignedToName'];
       _salesPersonCtrl.text = _salesPersonName ?? '';
+      _gstCtrl.text = (customer['gst'] ?? '').toString();
 
-      // Set fallback mobile & email from top-level customer data
-      if (_mobileCtrl.text.isEmpty) _mobileCtrl.text = (customer['phone'] ?? customer['companyPhone'] ?? '').toString();
+      if (_mobileCtrl.text.isEmpty) _mobileCtrl.text = (customer['phone'] ?? customer['alternatePhone'] ?? '').toString();
       if (_emailCtrl.text.isEmpty) _emailCtrl.text = (customer['businessEmail'] ?? customer['email'] ?? '').toString();
 
-      // Top-level Contact Fallback (In case contacts subcollection is empty)
       final topLevelContact = (customer['contactName'] ?? '').toString();
       if (topLevelContact.isNotEmpty && _contactPersonCtrl.text.isEmpty) {
         _contactPersonCtrl.text = topLevelContact;
       }
 
-      // Process Embedded Addresses Array safely
       final addresses = customer['addresses'] as List<dynamic>? ?? [];
       if (addresses.isNotEmpty) {
         _customerAddresses = addresses.map((e) => Map<String, dynamic>.from(e as Map)).toList();
@@ -353,7 +398,7 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
       } else {
         _customerAddresses.clear();
         _selectedAddressId = null;
-        _addressCtrl.text = (customer['address'] ?? customer['street'] ?? '').toString();
+        _addressCtrl.text = (customer['street'] ?? customer['address'] ?? '').toString();
         _cityCtrl.text = (customer['city'] ?? '').toString();
         _stateCtrl.text = (customer['state'] ?? '').toString();
         _pincodeCtrl.text = (customer['pincode'] ?? '').toString();
@@ -366,46 +411,26 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
   Future<void> _fetchCustomerRelatedData(String customerId, {String? preselectContactId}) async {
     try {
       final db = FirebaseFirestore.instance;
-
       final String contactsPath = 'companies/${widget.companyId}/customers/$customerId/contacts';
-      debugPrint("\n=== CRM CONTACT LOOKUP START ===");
-      debugPrint("Path: $contactsPath");
 
-      // IMPORTANT: Removing the .where('isDeleted', isEqualTo: false) constraint from the query.
-      // Older contact documents might NOT have an isDeleted field at all. If the field doesn't exist,
-      // Firestore completely ignores the document when using a strict .where() clause.
       final contactsSnap = await db.collection(contactsPath).get();
-
-      // Perform safe client-side filtering to avoid the missing-field trap
       final activeContacts = contactsSnap.docs
           .map((d) => {'id': d.id, ...d.data()})
           .where((c) => c['isDeleted'] != true)
           .toList();
 
-      debugPrint("Total Raw Contacts Fetched: ${contactsSnap.docs.length}");
-      debugPrint("Total Active Contacts Extracted: ${activeContacts.length}");
-
-      if (activeContacts.isNotEmpty) {
-        debugPrint("Contact IDs found: ${activeContacts.map((c) => c['id']).join(', ')}");
-      } else {
-        debugPrint("WARNING: Subcollection is empty. Proceeding to Top-Level Fallback.");
-      }
-
       if (mounted) {
         setState(() {
           _customerContacts = activeContacts;
 
-          // Validate current selection
           bool needsSelection = _selectedContactId == null ||
               _selectedContactId!.trim().isEmpty ||
               !_customerContacts.any((c) => c['id'] == _selectedContactId);
 
           if (_customerContacts.isNotEmpty && (needsSelection || preselectContactId != null)) {
             if (preselectContactId != null && _customerContacts.any((c) => c['id'] == preselectContactId)) {
-              debugPrint("Targeted Contact Preselection: Auto-selecting matched contact.");
               _applyContact(preselectContactId);
             } else {
-              debugPrint("Auto-selecting Primary or First contact.");
               final primary = _customerContacts.firstWhere(
                       (c) => c['isPrimary'] == true || c['isPrimary'] == 'true',
                   orElse: () => _customerContacts.first
@@ -413,24 +438,17 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
               _applyContact(primary['id']);
             }
           } else if (_customerContacts.isEmpty) {
-            // =====================================
-            // FALLBACK TO TOP-LEVEL CUSTOMER DATA
-            // =====================================
-            debugPrint("Executing Fallback to Top-Level Customer Data.");
             _selectedContactId = null;
-
             if (_selectedCustomerData != null) {
-              _contactPersonCtrl.text = (_selectedCustomerData!['contactName'] ?? _selectedCustomerData!['contactPerson'] ?? '').toString();
-              _mobileCtrl.text = (_selectedCustomerData!['phone'] ?? _selectedCustomerData!['companyPhone'] ?? _selectedCustomerData!['alternatePhone'] ?? '').toString();
+              _contactPersonCtrl.text = (_selectedCustomerData!['contactName'] ?? '').toString();
+              _mobileCtrl.text = (_selectedCustomerData!['phone'] ?? _selectedCustomerData!['alternatePhone'] ?? '').toString();
               _emailCtrl.text = (_selectedCustomerData!['businessEmail'] ?? _selectedCustomerData!['email'] ?? '').toString();
-              debugPrint("Fallback Data populated: ${_contactPersonCtrl.text} | ${_mobileCtrl.text} | ${_emailCtrl.text}");
             }
           }
-          debugPrint("=== CRM CONTACT LOOKUP END ===\n");
         });
       }
-    } catch (e, stackTrace) {
-      debugPrint("Error fetching contacts: $e\n$stackTrace");
+    } catch (e) {
+      debugPrint("Error fetching contacts: $e");
     }
   }
 
@@ -445,28 +463,218 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
       _cityCtrl.text = (addr['city'] ?? '').toString();
       _stateCtrl.text = (addr['state'] ?? '').toString();
       _pincodeCtrl.text = (addr['pincode'] ?? addr['zipCode'] ?? '').toString();
+
+      if ((addr['gst'] ?? '').toString().isNotEmpty) {
+        _gstCtrl.text = addr['gst'].toString().toUpperCase();
+      }
     });
   }
 
   void _applyContact(String? contactId) {
-    debugPrint("Applying contact ID: $contactId");
     if (contactId == null || contactId.trim().isEmpty) return;
-
     final contact = _customerContacts.firstWhere((c) => c['id'] == contactId, orElse: () => <String, dynamic>{});
-    if (contact.isEmpty) {
-      debugPrint("Contact ID '$contactId' not found in loaded contacts.");
-      return;
-    }
+    if (contact.isEmpty) return;
 
     setState(() {
       _selectedContactId = contactId;
-      // Strictly map exact schema fields from CRM Contact Subcollection
       _contactPersonCtrl.text = (contact['name'] ?? contact['contactName'] ?? '').toString();
       _mobileCtrl.text = (contact['phone'] ?? contact['mobile'] ?? '').toString();
       _emailCtrl.text = (contact['email'] ?? '').toString();
-      debugPrint("Contact Successfully Applied: ${_contactPersonCtrl.text} | ${_mobileCtrl.text} | ${_emailCtrl.text}");
     });
   }
+
+  // ==========================================
+  // INVENTORY HIERARCHY ENGINE
+  // ==========================================
+
+  void _resetHierarchy({bool resetCat = false, bool resetSub = false, bool resetType = false}) {
+    setState(() {
+      if (resetCat) {
+        _serviceCategoryId = null;
+        _serviceCategoryName = null;
+      }
+      if (resetSub) {
+        _serviceSubcategoryId = null;
+        _serviceSubcategoryName = null;
+      }
+      if (resetType) {
+        _serviceMachineType = null;
+      }
+      _serviceItemId = null;
+      _serviceItemName = null;
+      _serviceItemCode = null;
+      _brandCtrl.clear();
+      _serialNumberCtrl.clear();
+      _availableSerialNumbers.clear();
+      _isWarranty = false;
+    });
+  }
+
+  void _applyServiceItemProduct(Map<String, dynamic> product) {
+    setState(() {
+      _serviceItemId = product['id'];
+      _serviceItemName = (product['name'] ?? '').toString();
+      _serviceItemCode = (product['itemCode'] ?? product['sku'] ?? '').toString();
+      _brandCtrl.text = (product['make'] ?? product['brand'] ?? '').toString();
+
+      // Smart extraction for serial numbers (Array logic)
+      if (product['serialNumbers'] is List) {
+        _availableSerialNumbers = List<String>.from(product['serialNumbers']).where((s) => s.isNotEmpty).toList();
+      } else {
+        _availableSerialNumbers.clear();
+      }
+
+      // Auto-extract warranty bounds if tracked natively
+      if (product['warrantyMonths'] != null) {
+        _isWarranty = true;
+      }
+    });
+  }
+
+  // ==========================================
+  // SPARES & ACCESSORIES ENGINE
+  // ==========================================
+
+  Future<void> _showAddPartModal() async {
+    String? selectedPartId;
+    String? selectedPartName;
+    String? selectedPartCode;
+    String? selectedPartNature;
+    final qtyCtrl = TextEditingController(text: '1');
+    String searchQuery = '';
+
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              title: const Text('Add Required Part'),
+              content: SizedBox(
+                width: 500,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      decoration: InputDecoration(
+                        labelText: 'Search Spare or Accessory',
+                        prefixIcon: const Icon(Icons.search),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onChanged: (val) => setDialogState(() => searchQuery = val.toLowerCase()),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      height: 250,
+                      decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
+                      child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                        stream: _productsRef
+                            .where('isActive', isEqualTo: true)
+                            .where('productNatureLower', whereIn: ['spare', 'accessory'])
+                            .limit(50) // Progressive load
+                            .snapshots(),
+                        builder: (context, snap) {
+                          if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
+                            return const Center(child: CircularProgressIndicator());
+                          }
+                          if (snap.hasError) return const Center(child: Text('Error loading catalog'));
+
+                          var docs = snap.data?.docs ?? [];
+
+                          if (searchQuery.isNotEmpty) {
+                            docs = docs.where((d) {
+                              final name = (d.data()['name'] ?? '').toString().toLowerCase();
+                              final sku = (d.data()['sku'] ?? d.data()['itemCode'] ?? '').toString().toLowerCase();
+                              return name.contains(searchQuery) || sku.contains(searchQuery);
+                            }).toList();
+                          }
+
+                          // Prevent duplicates
+                          docs = docs.where((d) => !_requiredParts.any((ip) => ip['partId'] == d.id)).toList();
+
+                          if (docs.isEmpty) {
+                            return const Center(child: Text('No matching parts found', style: TextStyle(color: Colors.grey)));
+                          }
+
+                          return ListView.separated(
+                            itemCount: docs.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final doc = docs[index];
+                              final data = doc.data();
+                              final name = (data['name'] ?? '').toString();
+                              final sku = (data['sku'] ?? data['itemCode'] ?? '').toString();
+                              final nature = (data['productNature'] ?? 'Spare').toString();
+                              final isSelected = selectedPartId == doc.id;
+
+                              return ListTile(
+                                dense: true,
+                                selected: isSelected,
+                                selectedTileColor: Colors.blue.shade50,
+                                title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                                subtitle: Text('${nature.toUpperCase()} • Code: $sku'),
+                                onTap: () {
+                                  setDialogState(() {
+                                    selectedPartId = doc.id;
+                                    selectedPartName = name;
+                                    selectedPartCode = sku;
+                                    selectedPartNature = nature;
+                                  });
+                                },
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: qtyCtrl,
+                      decoration: InputDecoration(
+                        labelText: 'Quantity Required',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                FilledButton(
+                  onPressed: () {
+                    if (selectedPartId == null) {
+                      ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Please select a part')));
+                      return;
+                    }
+                    final qty = double.tryParse(qtyCtrl.text.trim()) ?? 0;
+                    if (qty <= 0) {
+                      ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Quantity must be > 0')));
+                      return;
+                    }
+                    Navigator.pop(ctx, {
+                      'partId': selectedPartId,
+                      'partName': selectedPartName,
+                      'partCode': selectedPartCode,
+                      'partNature': selectedPartNature,
+                      'quantity': qty,
+                    });
+                  },
+                  child: const Text('Add Part'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result != null) {
+      setState(() => _requiredParts.add(result));
+    }
+  }
+
 
   // ==========================================
   // SAVE LOGIC
@@ -481,6 +689,10 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
 
   Future<void> _saveRequest() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_serviceItemId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select the Target Item from Inventory.'), backgroundColor: Colors.red));
+      return;
+    }
 
     setState(() => _isLoading = true);
     final db = FirebaseFirestore.instance;
@@ -518,16 +730,12 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Service Request saved successfully.'), backgroundColor: Colors.green),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Service Request saved successfully.'), backgroundColor: Colors.green));
         Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -539,6 +747,8 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
       'id': docId,
       'companyId': widget.companyId,
       'requestNumber': reqNo,
+
+      // CRM Info
       'customerId': _selectedCustomerId ?? '',
       'customerCode': _selectedCustomerCode ?? '',
       'customerName': _customerNameCtrl.text.trim(),
@@ -551,10 +761,50 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
       'pincode': _pincodeCtrl.text.trim(),
       'mobileNumber': _mobileCtrl.text.trim(),
       'email': _emailCtrl.text.trim(),
+      'gst': _gstCtrl.text.trim(),
       'salesPersonId': _salesPersonId ?? '',
       'salesPersonName': _salesPersonName ?? '',
-      'machineModel': _machineModelCtrl.text.trim(),
+
+      // Assignment
+      'assignedToUid': _assignedToUid ?? '',
+      'assignedToName': _assignedToName ?? '',
+      'assignedToEmail': _assignedToEmail ?? '',
+      'assignedByUid': widget.currentUserUid,
+      'assignedByName': widget.currentUserName,
+      'assignedAt': (_assignedToUid != null && _assignedToUid!.isNotEmpty)
+          ? (widget.existingData != null && widget.existingData!['assignedToUid'] == _assignedToUid
+          ? widget.existingData!['assignedAt']
+          : FieldValue.serverTimestamp())
+          : null,
+
+      // Modern Generic Mapping
+      'serviceItemNature': _serviceItemNature,
+      'serviceCategoryId': _serviceCategoryId,
+      'serviceCategoryName': _serviceCategoryName,
+      'serviceSubcategoryId': _serviceSubcategoryId,
+      'serviceSubCategoryName': _serviceSubcategoryName,
+      'serviceMachineType': _serviceItemNature == 'Machine' ? _serviceMachineType : null,
+      'serviceItemId': _serviceItemId,
+      'serviceItemCode': _serviceItemCode,
+      'serviceItemName': _serviceItemName,
+      'brand': _brandCtrl.text.trim(),
       'serialNumber': _serialNumberCtrl.text.trim(),
+
+      // Legacy Mappings (Preserved for backwards compatibility with existing UI/reports)
+      'machineCategoryId': _serviceCategoryId,
+      'machineCategory': _serviceCategoryName,
+      'machineSubcategoryId': _serviceSubcategoryId,
+      'machineSubCategory': _serviceSubcategoryName,
+      'machineType': _serviceMachineType,
+      'machineId': _serviceItemId,
+      'machineCode': _serviceItemCode,
+      'machineModel': _serviceItemName,
+      'machineNature': _serviceItemNature,
+      'machineBrand': _brandCtrl.text.trim(),
+      'machineSerialNumber': _serialNumberCtrl.text.trim(),
+
+      'requiredParts': _requiredParts,
+
       'complaintCategory': _selectedCategory,
       'complaintDescription': _complaintDescCtrl.text.trim(),
       'priority': _selectedPriority,
@@ -570,7 +820,7 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
   }
 
   List<String> _generateSearchKeywords(String requestNo) {
-    final str = '$requestNo ${_customerNameCtrl.text} ${_contactPersonCtrl.text} ${_mobileCtrl.text} ${_machineModelCtrl.text} ${_selectedCustomerCode ?? ''}'.toLowerCase();
+    final str = '$requestNo ${_customerNameCtrl.text} ${_contactPersonCtrl.text} ${_mobileCtrl.text} ${_serviceItemName ?? ''} ${_serialNumberCtrl.text} ${_selectedCustomerCode ?? ''} ${_gstCtrl.text}'.toLowerCase();
     return str.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toSet().toList();
   }
 
@@ -603,26 +853,23 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
                       children: [
                         _buildCustomerInformationSection(),
                         const SizedBox(height: 16),
+                        _buildAssignmentSection(),
+                        const SizedBox(height: 16),
+                        _buildServiceItemSection(),
+                        const SizedBox(height: 16),
                         _SectionBlock(
-                          title: 'Machine & Complaint Details',
-                          subtitle: 'Provide technical details of the issue',
+                          title: 'Service Details',
+                          subtitle: 'Provide technical details of the issue or requirement',
                           child: Column(
                             children: [
                               _buildResponsiveRow(
                                 children: [
-                                  _buildTextField(label: 'Machine Model *', controller: _machineModelCtrl, icon: Icons.precision_manufacturing_outlined, required: true),
-                                  _buildTextField(label: 'Serial Number', controller: _serialNumberCtrl, icon: Icons.tag_outlined),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              _buildResponsiveRow(
-                                children: [
-                                  _buildDropdown(label: 'Complaint Category *', icon: Icons.category_outlined, value: _selectedCategory, items: _categories, onChanged: (v) => setState(() => _selectedCategory = v!)),
+                                  _buildDropdown(label: 'Service Category *', icon: Icons.category_outlined, value: _selectedCategory, items: _categories, onChanged: (v) => setState(() => _selectedCategory = v!)),
                                   _buildDropdown(label: 'Priority *', icon: Icons.flag_outlined, value: _selectedPriority, items: _priorities, onChanged: (v) => setState(() => _selectedPriority = v!)),
                                 ],
                               ),
                               const SizedBox(height: 12),
-                              _buildTextField(label: 'Complaint Description *', controller: _complaintDescCtrl, icon: Icons.description_outlined, required: true, maxLines: 3),
+                              _buildTextField(label: 'Problem Description / Requirement *', controller: _complaintDescCtrl, icon: Icons.description_outlined, required: true, maxLines: 3),
                               const SizedBox(height: 12),
                               _buildResponsiveRow(
                                 children: [
@@ -643,6 +890,8 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
+                        _buildRequiredPartsSection(),
+                        const SizedBox(height: 16),
                         _SectionBlock(
                           title: 'Additional Information',
                           subtitle: 'Internal remarks and attachments',
@@ -661,6 +910,331 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
     );
   }
 
+  // --- COMPONENT: ASSIGNMENT ---
+  Widget _buildAssignmentSection() {
+    return _SectionBlock(
+        title: 'Assignment',
+        subtitle: 'Assign this request to a service coordinator or engineer',
+        child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: _usersRef.where('isActive', isEqualTo: true).snapshots(),
+            builder: (context, snap) {
+              if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
+                return const LinearProgressIndicator();
+              }
+              if (snap.hasError) {
+                return Text('Error loading users: ${snap.error}', style: const TextStyle(color: Colors.red));
+              }
+
+              var docs = snap.data?.docs ?? [];
+
+              // ONLY Service Department users
+              docs = docs.where((doc) {
+                final dept = (doc.data()['department'] ?? '').toString().toLowerCase().trim();
+                return dept.contains('service');
+              }).toList();
+
+              List<DropdownMenuItem<String?>> items = [
+                const DropdownMenuItem(value: null, child: Text('Unassigned (Leave blank)')),
+              ];
+
+              for (var doc in docs) {
+                final data = doc.data();
+                final name = (data['name'] ?? data['fullName'] ?? 'Unknown').toString();
+                final designation = (data['designation'] ?? '').toString();
+                final label = designation.isNotEmpty ? '$name - $designation' : name;
+                items.add(DropdownMenuItem(value: doc.id, child: Text(label)));
+              }
+
+              // Handle case where existing assigned user is no longer active or moved out of service dept
+              if (_assignedToUid != null && _assignedToUid!.isNotEmpty && !docs.any((d) => d.id == _assignedToUid)) {
+                items.add(DropdownMenuItem(
+                  value: _assignedToUid,
+                  child: Text('${_assignedToName ?? 'Unknown User'} (Inactive/Moved)'),
+                ));
+              }
+
+              return DropdownButtonFormField<String?>(
+                value: _assignedToUid,
+                decoration: _inputDecoration(label: 'Assign To', icon: Icons.person_pin_circle_outlined),
+                items: items,
+                onChanged: (val) {
+                  setState(() {
+                    _assignedToUid = val;
+                    if (val != null && docs.any((d) => d.id == val)) {
+                      final selectedDoc = docs.firstWhere((d) => d.id == val);
+                      _assignedToName = (selectedDoc.data()['name'] ?? selectedDoc.data()['fullName'] ?? '').toString();
+                      _assignedToEmail = (selectedDoc.data()['email'] ?? '').toString();
+                    } else if (val == null) {
+                      _assignedToName = null;
+                      _assignedToEmail = null;
+                    }
+                  });
+                },
+              );
+            }
+        )
+    );
+  }
+
+  // --- COMPONENT: DYNAMIC SERVICE ITEM HIERARCHY ---
+  Widget _buildServiceItemSection() {
+    bool isMachine = _serviceItemNature == 'Machine';
+
+    return _SectionBlock(
+      title: 'Target Service Item',
+      subtitle: 'Select the nature of the product and locate it in inventory',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Row 1: Product Nature Dropdown
+          _buildDropdown(
+            label: 'Product Nature *',
+            icon: Icons.settings_applications_outlined,
+            value: _serviceItemNature,
+            items: ['Machine', 'Spare', 'Accessory', 'Consumable'],
+            onChanged: (val) {
+              if (val != null) {
+                _resetHierarchy(resetCat: true, resetSub: true, resetType: true);
+                setState(() => _serviceItemNature = val);
+              }
+            },
+          ),
+          const SizedBox(height: 12),
+
+          // Row 2: Category & Sub Category
+          _buildResponsiveRow(
+            children: [
+              StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                stream: _categoriesRef.orderBy('nameLower').snapshots(),
+                builder: (context, snap) {
+                  List<DropdownMenuItem<String>> items = [];
+                  if (snap.hasData) {
+                    items = snap.data!.docs.map((doc) => DropdownMenuItem(value: doc.id, child: Text(doc.data()['name'] ?? ''))).toList();
+                  }
+                  return DropdownButtonFormField<String>(
+                    value: _serviceCategoryId,
+                    decoration: _inputDecoration(label: 'Category *', icon: Icons.folder_outlined),
+                    items: items,
+                    onChanged: (val) {
+                      if (val != null) {
+                        _resetHierarchy(resetSub: true, resetType: true);
+                        _serviceCategoryId = val;
+                        _serviceCategoryName = snap.data!.docs.firstWhere((d) => d.id == val).data()['name'];
+                      }
+                    },
+                    validator: (v) => v == null ? 'Required' : null,
+                  );
+                },
+              ),
+              if (_serviceCategoryId != null)
+                StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: _subcategoriesRef(_serviceCategoryId!).orderBy('nameLower').snapshots(),
+                  builder: (context, snap) {
+                    List<DropdownMenuItem<String>> items = [];
+                    if (snap.hasData) {
+                      items = snap.data!.docs.map((doc) => DropdownMenuItem(value: doc.id, child: Text(doc.data()['name'] ?? ''))).toList();
+                    }
+                    return DropdownButtonFormField<String>(
+                      value: _serviceSubcategoryId,
+                      decoration: _inputDecoration(label: 'Sub Category', icon: Icons.folder_open_outlined),
+                      items: items,
+                      onChanged: (val) {
+                        if (val != null) {
+                          _resetHierarchy(resetType: true);
+                          _serviceSubcategoryId = val;
+                          _serviceSubcategoryName = snap.data!.docs.firstWhere((d) => d.id == val).data()['name'];
+                        }
+                      },
+                    );
+                  },
+                )
+              else
+                _buildDropdown(label: 'Sub Category', icon: Icons.folder_open_outlined, value: '', items: [''], onChanged: (_) {}),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Row 3: Machine Type (conditional) & Product Selection
+          _buildResponsiveRow(
+            children: [
+              if (isMachine)
+                StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: _machineTypesRef.orderBy('nameLower').snapshots(),
+                  builder: (context, snap) {
+                    List<DropdownMenuItem<String>> items = [];
+                    if (snap.hasData) {
+                      items = snap.data!.docs.map((doc) => DropdownMenuItem(value: doc.data()['name'] as String, child: Text(doc.data()['name'] ?? ''))).toList();
+                    }
+                    return DropdownButtonFormField<String>(
+                      value: _serviceMachineType,
+                      decoration: _inputDecoration(label: 'Machine Type', icon: Icons.precision_manufacturing_outlined),
+                      items: items,
+                      onChanged: (val) {
+                        if (val != null) {
+                          _resetHierarchy();
+                          _serviceMachineType = val;
+                        }
+                      },
+                    );
+                  },
+                ),
+
+              StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                stream: _productsRef
+                    .where('isActive', isEqualTo: true)
+                    .where('productNatureLower', isEqualTo: _serviceItemNature.toLowerCase())
+                    .snapshots(),
+                builder: (context, snap) {
+                  List<QueryDocumentSnapshot<Map<String, dynamic>>> docs = snap.data?.docs ?? [];
+
+                  // Cascading Filters
+                  if (_serviceCategoryId != null) docs = docs.where((d) => d.data()['categoryId'] == _serviceCategoryId).toList();
+                  if (_serviceSubcategoryId != null) docs = docs.where((d) => d.data()['subcategoryId'] == _serviceSubcategoryId).toList();
+                  if (isMachine && _serviceMachineType != null) docs = docs.where((d) => d.data()['machineType'] == _serviceMachineType).toList();
+
+                  // Customer Ownership Filter (If items are strictly mapped to customers in inventory)
+                  if (_selectedCustomerId != null) {
+                    docs = docs.where((d) {
+                      final cId = d.data()['customerId'];
+                      if (cId != null && cId.toString().isNotEmpty) {
+                        return cId == _selectedCustomerId; // Restrict if strictly owned
+                      }
+                      return true; // General catalog item
+                    }).toList();
+                  }
+
+                  List<DropdownMenuItem<String>> items = docs.map((doc) => DropdownMenuItem(value: doc.id, child: Text(doc.data()['name'] ?? ''))).toList();
+
+                  return DropdownButtonFormField<String>(
+                    value: _serviceItemId,
+                    decoration: _inputDecoration(label: 'Target Product Model *', icon: Icons.memory_outlined),
+                    items: items,
+                    onChanged: (val) {
+                      if (val != null) {
+                        final product = docs.firstWhere((d) => d.id == val).data();
+                        product['id'] = val; // Inject ID
+                        _applyServiceItemProduct(product);
+                      }
+                    },
+                    validator: (v) => v == null ? 'Required' : null,
+                  );
+                },
+              ),
+            ],
+          ),
+
+          // Row 4: Brand & Serial Number (Only for Machines, or Spares with Serial)
+          if (isMachine || _serviceItemNature == 'Spare') ...[
+            const SizedBox(height: 12),
+            _buildResponsiveRow(
+              children: [
+                _buildTextField(label: 'Brand / Make', controller: _brandCtrl, readOnly: true, icon: Icons.branding_watermark),
+                if (_availableSerialNumbers.isNotEmpty)
+                  DropdownButtonFormField<String>(
+                    value: _availableSerialNumbers.contains(_serialNumberCtrl.text) ? _serialNumberCtrl.text : null,
+                    decoration: _inputDecoration(label: 'Select Serial Number', icon: Icons.tag),
+                    items: _availableSerialNumbers.map((sn) => DropdownMenuItem(value: sn, child: Text(sn))).toList(),
+                    onChanged: (val) {
+                      if (val != null) setState(() => _serialNumberCtrl.text = val);
+                    },
+                  )
+                else
+                  _buildTextField(label: 'Serial Number', controller: _serialNumberCtrl, icon: Icons.tag_outlined),
+              ],
+            ),
+          ]
+        ],
+      ),
+    );
+  }
+
+  // --- COMPONENT: SPARES / ACCESSORIES REQUIREMENT ---
+  Widget _buildRequiredPartsSection() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE6EAF0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Required Parts & Accessories', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                  const SizedBox(height: 4),
+                  const Text('Log required replacement spares or accessories', style: TextStyle(fontSize: 12, color: Color(0xFF667085))),
+                ],
+              ),
+              OutlinedButton.icon(
+                onPressed: _showAddPartModal,
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('Add Part'),
+                style: OutlinedButton.styleFrom(foregroundColor: Colors.blue.shade700, side: BorderSide(color: Colors.blue.shade200)),
+              ),
+            ],
+          ),
+          if (_requiredParts.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Container(
+              decoration: BoxDecoration(border: Border.all(color: const Color(0xFFE4E7EC)), borderRadius: BorderRadius.circular(8)),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Table(
+                  columnWidths: const {
+                    0: FlexColumnWidth(3),
+                    1: FlexColumnWidth(2),
+                    2: FlexColumnWidth(1),
+                    3: IntrinsicColumnWidth(),
+                  },
+                  children: [
+                    const TableRow(
+                      decoration: BoxDecoration(color: Color(0xFFF9FAFB), border: Border(bottom: BorderSide(color: Color(0xFFE4E7EC)))),
+                      children: [
+                        Padding(padding: EdgeInsets.all(10), child: Text('Part Name', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
+                        Padding(padding: EdgeInsets.all(10), child: Text('Type', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
+                        Padding(padding: EdgeInsets.all(10), child: Text('Qty', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
+                        Padding(padding: EdgeInsets.all(10), child: Text('Action', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13), textAlign: TextAlign.center)),
+                      ],
+                    ),
+                    ..._requiredParts.asMap().entries.map((entry) {
+                      final idx = entry.key;
+                      final item = entry.value;
+                      return TableRow(
+                        decoration: BoxDecoration(border: idx != _requiredParts.length - 1 ? const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))) : null),
+                        children: [
+                          Padding(padding: const EdgeInsets.all(10), child: Text(item['partName'] ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
+                          Padding(padding: const EdgeInsets.all(10), child: Text((item['partNature'] ?? '').toUpperCase(), style: const TextStyle(fontSize: 12, color: Colors.blueGrey))),
+                          Padding(padding: const EdgeInsets.all(10), child: Text(item['quantity'].toString(), style: const TextStyle(fontSize: 13))),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            child: IconButton(
+                              icon: const Icon(Icons.remove_circle_outline, color: Colors.red, size: 20),
+                              onPressed: () => setState(() => _requiredParts.removeAt(idx)),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                            ),
+                          ),
+                        ],
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // --- CRM UI BLOCKS ---
   Widget _buildCustomerInformationSection() {
     return _SectionBlock(
       title: 'Customer Information',
@@ -723,7 +1297,7 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
                         title: Text(opt['companyName'] ?? opt['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
                         subtitle: Padding(
                           padding: const EdgeInsets.only(top: 4),
-                          child: Text([opt['customerCode'], opt['phone'] ?? opt['companyPhone'], opt['city']].where((e) => e != null && e.toString().isNotEmpty).join(' • '), style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                          child: Text([opt['customerCode'], opt['phone'] ?? opt['alternatePhone'] ?? opt['companyPhone'], opt['city']].where((e) => e != null && e.toString().isNotEmpty).join(' • '), style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
                         ),
                         trailing: ElevatedButton(
                           style: ElevatedButton.styleFrom(
@@ -768,7 +1342,14 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
           _buildResponsiveRow(
             children: [
               _buildTextField(label: 'Email', controller: _emailCtrl, isEmail: true, icon: Icons.email_outlined),
+              _buildTextField(label: 'GST Number', controller: _gstCtrl, icon: Icons.receipt_long_outlined),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildResponsiveRow(
+            children: [
               _buildTextField(label: 'Sales Person', controller: _salesPersonCtrl, readOnly: true, hintText: 'Auto-assigned', icon: Icons.assignment_ind_outlined),
+              const SizedBox.shrink(),
             ],
           ),
 
@@ -933,10 +1514,11 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
     required void Function(String?) onChanged,
     required IconData icon,
   }) {
+    if (!items.contains(value)) items.add(value);
     return DropdownButtonFormField<String>(
-      value: value,
+      value: value.isEmpty && items.length > 1 ? items.firstWhere((e) => e.isNotEmpty) : value,
       decoration: _inputDecoration(label: label, icon: icon),
-      items: items.map((e) => DropdownMenuItem<String>(value: e, child: Text(e))).toList(),
+      items: items.map((e) => DropdownMenuItem<String>(value: e, child: Text(e.isEmpty ? 'Select' : e))).toList(),
       onChanged: onChanged,
     );
   }
