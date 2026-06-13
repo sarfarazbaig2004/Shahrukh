@@ -1,3 +1,6 @@
+// lib/auth/login/login_screen.dart
+import 'dart:async';
+import 'dart:ui';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -20,6 +23,18 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscure = true;
   bool _loading = false;
   bool _rememberMe = true;
+
+  // Added ValueNotifier to sync background image index with marketing caption
+  final ValueNotifier<int> _currentSlideIndex = ValueNotifier<int>(0);
+
+  final List<String> _slideCaptions = [
+    "Intelligent CRM & Pipeline Workflows",
+    "Real-time Enterprise Inventory Tracking",
+    "Automated Financial & Invoice Reporting",
+    "Streamlined Field Service Management",
+    "Advanced Data Analytics & Dashboards",
+    "Secure & Scalable Cloud Infrastructure",
+  ];
 
   void _toast(String msg, {bool err = false, SnackBarAction? action}) {
     if (!mounted) return;
@@ -86,17 +101,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final msg = switch (e.code) {
         'user-not-found' =>
-          'Firebase Auth: user-not-found - No account found for this email.',
+        'Firebase Auth: user-not-found - No account found for this email.',
         'wrong-password' =>
-          'Firebase Auth: wrong-password - Incorrect password.',
+        'Firebase Auth: wrong-password - Incorrect password.',
         'invalid-email' =>
-          'Firebase Auth: invalid-email - Invalid email format.',
+        'Firebase Auth: invalid-email - Invalid email format.',
         'invalid-credential' =>
-          'Firebase Auth: invalid-credential - Invalid email or password.',
+        'Firebase Auth: invalid-credential - Invalid email or password.',
         'user-disabled' =>
-          'Firebase Auth: user-disabled - This account has been disabled.',
+        'Firebase Auth: user-disabled - This account has been disabled.',
         'too-many-requests' =>
-          'Firebase Auth: too-many-requests - Too many attempts. Please wait and try again.',
+        'Firebase Auth: too-many-requests - Too many attempts. Please wait and try again.',
         _ => 'Firebase Auth: ${e.code} - ${e.message ?? 'Sign in failed.'}',
       };
       _toast(
@@ -166,1151 +181,622 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     _email.dispose();
     _pass.dispose();
+    _currentSlideIndex.dispose();
     super.dispose();
   }
 
-  InputDecoration _input(String label, IconData icon) {
+  // Updated Minimalist Input
+  InputDecoration _input(String placeholder) {
     return InputDecoration(
-      labelText: label,
-      hintText: label,
-      prefixIcon: Icon(icon, color: zMuted, size: 20),
+      hintText: placeholder,
       filled: true,
-      fillColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+      fillColor: Colors.white.withOpacity(0.9),
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: zBorder),
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: zBorder),
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: zBlue, width: 1.2),
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: zBlue, width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(color: Colors.red),
       ),
       focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Colors.red, width: 1.2),
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Colors.red, width: 1.5),
       ),
-      labelStyle: const TextStyle(
-        color: zMuted,
-        fontSize: 13.5,
-        fontWeight: FontWeight.w600,
+      hintStyle: const TextStyle(
+        color: Color(0xFF94A3B8),
+        fontSize: 14,
+        fontWeight: FontWeight.w400,
       ),
-      hintStyle: const TextStyle(color: zMuted, fontSize: 13.5),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final media = MediaQuery.of(context);
-    final screen = media.size;
-    final isWide = screen.width > 1120;
-    final compactHeight = screen.height < 780;
-
-    return Scaffold(
-      backgroundColor: zLoginBg,
-      resizeToAvoidBottomInset: true,
-      body: Stack(
-        children: [
-          const Positioned(
-            top: -70,
-            left: -50,
-            child: _BgGlow(size: 280, color: Color(0x442563EB)),
-          ),
-          const Positioned(
-            bottom: -130,
-            right: -40,
-            child: _BgGlow(size: 340, color: Color(0x331D4ED8)),
-          ),
-          const Positioned(
-            top: 120,
-            right: 140,
-            child: _BgGlow(size: 170, color: Color(0x2216A34A)),
-          ),
-          SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  padding: EdgeInsets.only(
-                    left: isWide ? 28 : 18,
-                    right: isWide ? 28 : 18,
-                    top: compactHeight ? 14 : 22,
-                    bottom: media.viewInsets.bottom + 20,
-                  ),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight:
-                          constraints.maxHeight - (compactHeight ? 28 : 42),
-                    ),
-                    child: IntrinsicHeight(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          if (isWide) ...[
-                            const Expanded(
-                              flex: 6,
-                              child: _LoginSideBranding(),
-                            ),
-                            const SizedBox(width: 28),
-                          ],
-                          Expanded(
-                            flex: isWide ? 5 : 1,
-                            child: Center(
-                              child: ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  maxWidth: isWide ? 455 : 460,
-                                ),
-                                child: Container(
-                                  padding: EdgeInsets.all(
-                                    compactHeight ? 22 : 28,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(24),
-                                    border: Border.all(color: zBorder),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(alpha: 0.07),
-                                        blurRadius: 30,
-                                        offset: const Offset(0, 16),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Form(
-                                    key: _formKey,
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Container(
-                                              width: 54,
-                                              height: 54,
-                                              decoration: BoxDecoration(
-                                                borderRadius:
-                                                    BorderRadius.circular(16),
-                                                color: zBlueSoft,
-                                                border: Border.all(
-                                                  color: zBorder,
-                                                ),
-                                              ),
-                                              child: ClipRRect(
-                                                borderRadius:
-                                                    BorderRadius.circular(16),
-                                                child: Image.asset(
-                                                  'assets/images/logo.png',
-                                                  fit: BoxFit.contain,
-                                                  errorBuilder: (_, __, ___) =>
-                                                      const Icon(
-                                                        Icons.business,
-                                                        size: 28,
-                                                        color: zBlue,
-                                                      ),
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 14),
-                                            const Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    kAppName,
-                                                    style: TextStyle(
-                                                      fontSize: 20,
-                                                      fontWeight:
-                                                          FontWeight.w800,
-                                                      color: zText,
-                                                      letterSpacing: 0.2,
-                                                    ),
-                                                  ),
-                                                  SizedBox(height: 4),
-                                                  Text(
-                                                    'Sign in to your ERP workspace',
-                                                    style: TextStyle(
-                                                      color: zMuted,
-                                                      fontSize: 13,
-                                                      height: 1.35,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        SizedBox(
-                                          height: compactHeight ? 14 : 20,
-                                        ),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 14,
-                                            vertical: 12,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFF8FBFF),
-                                            borderRadius: BorderRadius.circular(
-                                              14,
-                                            ),
-                                            border: Border.all(color: zBorder),
-                                          ),
-                                          child: const Row(
-                                            children: [
-                                              Icon(
-                                                Icons.verified_user_outlined,
-                                                color: zSuccess,
-                                                size: 17,
-                                              ),
-                                              SizedBox(width: 8),
-                                              Expanded(
-                                                child: Text(
-                                                  'Secure access with company-level data protection and role-based control',
-                                                  style: TextStyle(
-                                                    color: zMuted,
-                                                    fontSize: 12.5,
-                                                    fontWeight: FontWeight.w600,
-                                                    height: 1.4,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        SizedBox(
-                                          height: compactHeight ? 14 : 20,
-                                        ),
-                                        TextFormField(
-                                          controller: _email,
-                                          textInputAction: TextInputAction.next,
-                                          keyboardType:
-                                              TextInputType.emailAddress,
-                                          autofillHints: const [
-                                            AutofillHints.username,
-                                            AutofillHints.email,
-                                          ],
-                                          validator: _validateEmail,
-                                          decoration: _input(
-                                            'Work email',
-                                            Icons.email_outlined,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 14),
-                                        TextFormField(
-                                          controller: _pass,
-                                          obscureText: _obscure,
-                                          textInputAction: TextInputAction.done,
-                                          autofillHints: const [
-                                            AutofillHints.password,
-                                          ],
-                                          validator: _validatePassword,
-                                          onFieldSubmitted: (_) => _login(),
-                                          decoration:
-                                              _input(
-                                                'Password',
-                                                Icons.lock_outline,
-                                              ).copyWith(
-                                                suffixIcon: IconButton(
-                                                  onPressed: () {
-                                                    setState(
-                                                      () =>
-                                                          _obscure = !_obscure,
-                                                    );
-                                                  },
-                                                  icon: Icon(
-                                                    _obscure
-                                                        ? Icons
-                                                              .visibility_off_outlined
-                                                        : Icons
-                                                              .visibility_outlined,
-                                                    color: zMuted,
-                                                  ),
-                                                ),
-                                              ),
-                                        ),
-                                        const SizedBox(height: 10),
-                                        Row(
-                                          children: [
-                                            Checkbox(
-                                              value: _rememberMe,
-                                              activeColor: zBlue,
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(4),
-                                              ),
-                                              visualDensity:
-                                                  VisualDensity.compact,
-                                              onChanged: (v) {
-                                                setState(() {
-                                                  _rememberMe = v ?? false;
-                                                });
-                                              },
-                                            ),
-                                            const Text(
-                                              'Remember me',
-                                              style: TextStyle(
-                                                fontSize: 13.5,
-                                                color: zText,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                            const Spacer(),
-                                            TextButton(
-                                              onPressed: _loading
-                                                  ? null
-                                                  : _forgot,
-                                              child: const Text(
-                                                'Forgot password?',
-                                                style: TextStyle(
-                                                  fontSize: 13.5,
-                                                  color: zBlue,
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 8),
-                                        SizedBox(
-                                          height: 48,
-                                          child: FilledButton(
-                                            style: FilledButton.styleFrom(
-                                              backgroundColor: zBlue,
-                                              foregroundColor: Colors.white,
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(14),
-                                              ),
-                                              elevation: 0,
-                                            ),
-                                            onPressed: _loading ? null : _login,
-                                            child: _loading
-                                                ? const SizedBox(
-                                                    width: 20,
-                                                    height: 20,
-                                                    child:
-                                                        CircularProgressIndicator(
-                                                          strokeWidth: 2,
-                                                          color: Colors.white,
-                                                        ),
-                                                  )
-                                                : const Text(
-                                                    'Sign In',
-                                                    style: TextStyle(
-                                                      fontSize: 15,
-                                                      fontWeight:
-                                                          FontWeight.w700,
-                                                    ),
-                                                  ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 12),
-                                        SizedBox(
-                                          height: 46,
-                                          child: OutlinedButton(
-                                            onPressed: _loading
-                                                ? null
-                                                : () {
-                                                    Navigator.push(
-                                                      context,
-                                                      MaterialPageRoute(
-                                                        builder: (_) =>
-                                                            const reg.RegisterScreenLocal(),
-                                                      ),
-                                                    );
-                                                  },
-                                            style: OutlinedButton.styleFrom(
-                                              backgroundColor: const Color(
-                                                0xFFF8FAFC,
-                                              ),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(14),
-                                              ),
-                                              side: const BorderSide(
-                                                color: zBorder,
-                                              ),
-                                            ),
-                                            child: const Text(
-                                              'Create New ERP Workspace',
-                                              style: TextStyle(
-                                                fontSize: 14.5,
-                                                fontWeight: FontWeight.w700,
-                                                color: zText,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                        SizedBox(
-                                          height: compactHeight ? 12 : 16,
-                                        ),
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child: Container(
-                                                height: 1,
-                                                color: zBorder,
-                                              ),
-                                            ),
-                                            const Padding(
-                                              padding: EdgeInsets.symmetric(
-                                                horizontal: 10,
-                                              ),
-                                              child: Text(
-                                                'or',
-                                                style: TextStyle(
-                                                  color: zMuted,
-                                                  fontWeight: FontWeight.w600,
-                                                  fontSize: 13,
-                                                ),
-                                              ),
-                                            ),
-                                            Expanded(
-                                              child: Container(
-                                                height: 1,
-                                                color: zBorder,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        SizedBox(
-                                          height: compactHeight ? 12 : 16,
-                                        ),
-                                        SizedBox(
-                                          height: 46,
-                                          child: OutlinedButton.icon(
-                                            onPressed: _loading
-                                                ? null
-                                                : () {
-                                                    Navigator.push(
-                                                      context,
-                                                      MaterialPageRoute(
-                                                        builder: (_) =>
-                                                            const ScreenJoinCompany(),
-                                                      ),
-                                                    );
-                                                  },
-                                            icon: const Icon(
-                                              Icons.group_add_outlined,
-                                              size: 18,
-                                              color: zBlue,
-                                            ),
-                                            style: OutlinedButton.styleFrom(
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(14),
-                                              ),
-                                              side: const BorderSide(
-                                                color: zBorder,
-                                              ),
-                                            ),
-                                            label: const Text(
-                                              'Join Existing Company Workspace',
-                                              style: TextStyle(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w700,
-                                                color: zText,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                        SizedBox(
-                                          height: compactHeight ? 12 : 18,
-                                        ),
-                                        const Text(
-                                          'QUIK ERP for operations, sales, customers, inventory, finance and team management',
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                            color: zMuted,
-                                            fontSize: 12,
-                                            height: 1.45,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
+  Widget _buildModuleBadge(String text) {
+    return Container(
+      margin: const EdgeInsets.only(right: 8, bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.2)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _BgGlow extends StatelessWidget {
-  final double size;
-  final Color color;
-
-  const _BgGlow({required this.size, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(colors: [color, color.withValues(alpha: 0.0)]),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.3,
         ),
       ),
     );
   }
-}
 
-class _LoginSideBranding extends StatelessWidget {
-  const _LoginSideBranding();
-
-  Widget _miniMetricCard({
-    required String title,
-    required String value,
-    required IconData icon,
-    required Color chipColor,
-    required Color chipTextColor,
-  }) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: chipColor,
-                borderRadius: BorderRadius.circular(10),
+  Widget _buildMarketingSection(bool isWide) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: isWide ? 60.0 : 24.0, vertical: 40.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Branding Header
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    )
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.asset(
+                    'assets/images/logo.png',
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Icon(
+                      Icons.business,
+                      size: 24,
+                      color: zBlue,
+                    ),
+                  ),
+                ),
               ),
-              child: Icon(icon, color: chipTextColor, size: 18),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
+              const SizedBox(width: 16),
+              const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    title,
+                    'QUIK ERP',
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.90),
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: -0.5,
                     ),
                   ),
-                  const SizedBox(height: 4),
                   Text(
-                    value,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
+                    'Modern Business Management Platform',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.2,
                     ),
                   ),
                 ],
               ),
+            ],
+          ),
+          SizedBox(height: isWide ? 80 : 40),
+
+          // Headline
+          const Text(
+            'Run Your Entire\nBusiness From\nOne Platform',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 48,
+              height: 1.1,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -1.5,
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 20),
+
+          // Subheadline
+          Text(
+            'CRM, Inventory, Finance, Service Management and Analytics in one connected workspace.',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.85),
+              fontSize: 18,
+              height: 1.5,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+          const SizedBox(height: 32),
+
+          // Module Badges
+          Wrap(
+            children: [
+              _buildModuleBadge('CRM'),
+              _buildModuleBadge('Inventory'),
+              _buildModuleBadge('Finance'),
+              _buildModuleBadge('Service'),
+              _buildModuleBadge('Analytics'),
+            ],
+          ),
+
+          if (isWide) const Spacer(),
+          if (!isWide) const SizedBox(height: 40),
+
+          // Slide-specific Dynamic Caption
+          ValueListenableBuilder<int>(
+            valueListenable: _currentSlideIndex,
+            builder: (context, index, child) {
+              return AnimatedSwitcher(
+                duration: const Duration(milliseconds: 500),
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, 0.2),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
+                  ),
+                ),
+                child: Row(
+                  key: ValueKey(index),
+                  children: [
+                    Container(
+                      width: 4,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: zBlue,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _slideCaptions[index % _slideCaptions.length],
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Colors.white, Color(0xFFF7FAFF)],
-        ),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: zBorder),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
+  Widget _buildLoginCard() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          width: 380,
+          padding: const EdgeInsets.all(40),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.80),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.5),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 30,
+                offset: const Offset(0, 10),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 38, vertical: 34),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: zBlueSoft,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: zBorder),
+                const Text(
+                  'Welcome back',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0F172A),
+                    letterSpacing: -0.5,
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(18),
-                    child: Image.asset(
-                      'assets/images/logo.png',
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => const Icon(
-                        Icons.business_center_outlined,
-                        size: 30,
-                        color: zBlue,
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Enter your credentials to access your workspace.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+                const SizedBox(height: 32),
+
+                // Email Field
+                TextFormField(
+                  controller: _email,
+                  textInputAction: TextInputAction.next,
+                  keyboardType: TextInputType.emailAddress,
+                  autofillHints: const [
+                    AutofillHints.username,
+                    AutofillHints.email,
+                  ],
+                  validator: _validateEmail,
+                  decoration: _input('name@company.com'),
+                ),
+                const SizedBox(height: 16),
+
+                // Password Field
+                TextFormField(
+                  controller: _pass,
+                  obscureText: _obscure,
+                  textInputAction: TextInputAction.done,
+                  autofillHints: const [AutofillHints.password],
+                  validator: _validatePassword,
+                  onFieldSubmitted: (_) => _login(),
+                  decoration: _input('Password').copyWith(
+                    suffixIcon: IconButton(
+                      onPressed: () {
+                        setState(() => _obscure = !_obscure);
+                      },
+                      icon: Icon(
+                        _obscure
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        color: const Color(0xFF94A3B8),
+                        size: 18,
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 14),
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(height: 16),
+
+                // Remember Me & Forgot Password
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      kAppName,
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                        color: zText,
-                        letterSpacing: 0.2,
+                    Row(
+                      children: [
+                        SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: Checkbox(
+                            value: _rememberMe,
+                            activeColor: zBlue,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            side: const BorderSide(color: Color(0xFFCBD5E1)),
+                            onChanged: (v) {
+                              setState(() {
+                                _rememberMe = v ?? false;
+                              });
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Remember me',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFF475569),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                    TextButton(
+                      onPressed: _loading ? null : _forgot,
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Text(
+                        'Forgot password?',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF64748B),
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                    SizedBox(height: 4),
-                    Text(
-                      'Unified business ERP platform',
+                  ],
+                ),
+                const SizedBox(height: 28),
+
+                // Sign In Action (Primary)
+                SizedBox(
+                  height: 48,
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF0F172A), // Premium Dark
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      elevation: 0,
+                    ),
+                    onPressed: _loading ? null : _login,
+                    child: _loading
+                        ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                        : const Text(
+                      'Sign In',
                       style: TextStyle(
-                        color: zMuted,
-                        fontSize: 13,
+                        fontSize: 15,
                         fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 28),
+
+                // Secondary Links
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    TextButton(
+                      onPressed: _loading
+                          ? null
+                          : () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const reg.RegisterScreenLocal(),
+                          ),
+                        );
+                      },
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Text(
+                        'Create Workspace',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: zBlue,
+                        ),
+                      ),
+                    ),
+                    const Text(
+                      '·',
+                      style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold),
+                    ),
+                    TextButton(
+                      onPressed: _loading
+                          ? null
+                          : () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ScreenJoinCompany(),
+                          ),
+                        );
+                      },
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Text(
+                        'Join Company',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: zBlue,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ],
             ),
-            const SizedBox(height: 30),
-            const Text(
-              'Run your business with one secure and connected ERP workspace.',
-              style: TextStyle(
-                fontSize: 34,
-                height: 1.16,
-                fontWeight: FontWeight.w900,
-                color: zText,
-              ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final isWide = media.size.width > 900;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF0F172A),
+      resizeToAvoidBottomInset: true,
+      body: Stack(
+        children: [
+          // 1. Full Screen Hero Carousel Background
+          Positioned.fill(
+            child: _LoginHeroCarousel(
+              onSlideChanged: (index) {
+                _currentSlideIndex.value = index;
+              },
             ),
-            const SizedBox(height: 14),
-            const Text(
-              'Manage sales, customers, quotations, inventory, users, approvals and day-to-day business operations from one professional SaaS platform.',
-              style: TextStyle(
-                fontSize: 15,
-                height: 1.65,
-                color: zMuted,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 24),
-            const Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                _StatPill(icon: Icons.groups_outlined, text: 'Customers'),
-                _StatPill(icon: Icons.inventory_2_outlined, text: 'Inventory'),
-                _StatPill(
-                  icon: Icons.request_quote_outlined,
-                  text: 'Quotations',
-                ),
-                _StatPill(
-                  icon: Icons.admin_panel_settings_outlined,
-                  text: 'Permissions',
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            Expanded(
-              child: Row(
+          ),
+
+          // 2. Main Content Layer
+          Positioned.fill(
+            child: SafeArea(
+              child: isWide
+                  ? Row(
                 children: [
                   Expanded(
-                    flex: 6,
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(26),
-                            gradient: const LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Color(0xFF3B82F6),
-                                Color(0xFF1D4ED8),
-                                Color(0xFF1E40AF),
-                              ],
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: zBlue.withValues(alpha: 0.28),
-                                blurRadius: 28,
-                                offset: const Offset(0, 16),
-                              ),
-                            ],
-                          ),
-                          child: Stack(
-                            children: [
-                              Positioned(
-                                top: -18,
-                                right: -10,
-                                child: Container(
-                                  width: 120,
-                                  height: 120,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.12),
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                              ),
-                              Positioned(
-                                bottom: -26,
-                                left: -18,
-                                child: Container(
-                                  width: 145,
-                                  height: 145,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.08),
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.all(22),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        _miniMetricCard(
-                                          title: 'Orders',
-                                          value: '128',
-                                          icon: Icons.shopping_bag_outlined,
-                                          chipColor: Colors.white,
-                                          chipTextColor: zBlue,
-                                        ),
-                                        const SizedBox(width: 12),
-                                        _miniMetricCard(
-                                          title: 'Approved',
-                                          value: '24',
-                                          icon: Icons.check_circle_outline,
-                                          chipColor: zSuccessSoft,
-                                          chipTextColor: zSuccess,
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 14),
-                                    Expanded(
-                                      child: Container(
-                                        padding: const EdgeInsets.all(18),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          borderRadius: BorderRadius.circular(
-                                            22,
-                                          ),
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            const Row(
-                                              children: [
-                                                Expanded(
-                                                  child: Text(
-                                                    'Business activity',
-                                                    style: TextStyle(
-                                                      color: zText,
-                                                      fontWeight:
-                                                          FontWeight.w800,
-                                                      fontSize: 15,
-                                                    ),
-                                                  ),
-                                                ),
-                                                _TagBadge(
-                                                  text: '+18%',
-                                                  bg: zSuccessSoft,
-                                                  fg: zSuccess,
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 16),
-                                            Expanded(
-                                              child: Row(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.end,
-                                                children: const [
-                                                  _Bar(h: 42, color: zPurple),
-                                                  SizedBox(width: 10),
-                                                  _Bar(h: 74, color: zBlue),
-                                                  SizedBox(width: 10),
-                                                  _Bar(h: 58, color: zOrange),
-                                                  SizedBox(width: 10),
-                                                  _Bar(h: 98, color: zSuccess),
-                                                  SizedBox(width: 10),
-                                                  _Bar(h: 70, color: zBlueDeep),
-                                                  SizedBox(width: 10),
-                                                  _Bar(h: 114, color: zBlue),
-                                                ],
-                                              ),
-                                            ),
-                                            const SizedBox(height: 14),
-                                            Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 12,
-                                                    vertical: 10,
-                                                  ),
-                                              decoration: BoxDecoration(
-                                                color: zBlueSoft,
-                                                borderRadius:
-                                                    BorderRadius.circular(14),
-                                              ),
-                                              child: const Row(
-                                                children: [
-                                                  Icon(
-                                                    Icons.auto_graph,
-                                                    color: zBlue,
-                                                    size: 18,
-                                                  ),
-                                                  SizedBox(width: 8),
-                                                  Expanded(
-                                                    child: Text(
-                                                      'Track operations, approvals, quotations and team activity in one place.',
-                                                      style: TextStyle(
-                                                        color: zText,
-                                                        fontSize: 12.5,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                        height: 1.4,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Positioned(
-                          top: 86,
-                          right: -20,
-                          child: _FloatingInfoCard(
-                            icon: Icons.domain_verification_outlined,
-                            title: '42 New Requests',
-                            subtitle: 'This week',
-                            bg: Colors.white,
-                            accent: zOrange,
-                          ),
-                        ),
-                        const Positioned(
-                          bottom: 26,
-                          left: -18,
-                          child: _FloatingInfoCard(
-                            icon: Icons.request_quote_outlined,
-                            title: '7 Pending Quotes',
-                            subtitle: 'Need action',
-                            bg: Colors.white,
-                            accent: zSuccess,
-                          ),
-                        ),
-                      ],
-                    ),
+                    flex: 5,
+                    child: _buildMarketingSection(true),
                   ),
-                  const SizedBox(width: 18),
-                  const Expanded(
+                  Expanded(
                     flex: 4,
-                    child: Column(
-                      children: [
-                        _BrandFeatureCard(
-                          icon: Icons.shield_outlined,
-                          title: 'Company isolation',
-                          subtitle:
-                              'Each company works inside its own protected data boundary.',
-                          tint: zBlueSoft,
-                          iconColor: zBlue,
-                        ),
-                        SizedBox(height: 14),
-                        _BrandFeatureCard(
-                          icon: Icons.manage_accounts_outlined,
-                          title: 'Role permissions',
-                          subtitle:
-                              'Control admin, manager and user access with clear visibility rules.',
-                          tint: zSuccessSoft,
-                          iconColor: zSuccess,
-                        ),
-                        SizedBox(height: 14),
-                        _BrandFeatureCard(
-                          icon: Icons.approval_outlined,
-                          title: 'Connected workflows',
-                          subtitle:
-                              'Run sales, operations and approvals with one unified ERP experience.',
-                          tint: zOrangeSoft,
-                          iconColor: zOrange,
-                        ),
-                      ],
+                    child: Center(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(40),
+                        child: _buildLoginCard(),
+                      ),
                     ),
                   ),
                 ],
+              )
+                  : SingleChildScrollView(
+                child: Container(
+                  constraints: BoxConstraints(
+                    minHeight: media.size.height - media.padding.top - media.padding.bottom,
+                  ),
+                  padding: EdgeInsets.only(
+                    bottom: media.viewInsets.bottom > 0
+                        ? media.viewInsets.bottom + 20
+                        : 40,
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildMarketingSection(false),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: _buildLoginCard(),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _FloatingInfoCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final Color bg;
-  final Color accent;
+class _LoginHeroCarousel extends StatefulWidget {
+  final ValueChanged<int> onSlideChanged;
 
-  const _FloatingInfoCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.bg,
-    required this.accent,
-  });
+  const _LoginHeroCarousel({required this.onSlideChanged});
+
+  @override
+  State<_LoginHeroCarousel> createState() => _LoginHeroCarouselState();
+}
+
+class _LoginHeroCarouselState extends State<_LoginHeroCarousel> {
+  final List<String> _images = [
+    'assets/images/login_hero_1.png',
+    'assets/images/login_hero_2.png',
+    'assets/images/login_hero_3.png',
+    'assets/images/login_hero_4.png',
+    'assets/images/login_hero_5.png',
+    'assets/images/login_hero_6.png',
+  ];
+
+  int _currentIndex = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _startAutoPlay();
+  }
+
+  void _startAutoPlay() {
+    _timer = Timer.periodic(const Duration(seconds: 6), (timer) {
+      if (mounted) {
+        setState(() {
+          _currentIndex = (_currentIndex + 1) % _images.length;
+        });
+        widget.onSlideChanged(_currentIndex);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 170,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: zBorder),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // Full screen fading images
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 1500),
+          transitionBuilder: (Widget child, Animation<double> animation) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+          child: Image.asset(
+            _images[_currentIndex],
+            key: ValueKey<int>(_currentIndex),
+            fit: BoxFit.cover,
+            width: double.infinity,
+            height: double.infinity,
+            errorBuilder: (context, error, stackTrace) {
+              return Container(color: const Color(0xFF0F172A)); // Dark fallback
+            },
           ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: accent, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: zText,
-                    fontSize: 12.8,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    color: zMuted,
-                    fontSize: 11.8,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+        ),
+        // Dark gradient scrim for optimal text & glassmorphism contrast
+        Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                Colors.black.withOpacity(0.85),
+                Colors.black.withOpacity(0.40),
+                Colors.black.withOpacity(0.20),
               ],
+              stops: const [0.0, 0.5, 1.0],
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TagBadge extends StatelessWidget {
-  final String text;
-  final Color bg;
-  final Color fg;
-
-  const _TagBadge({required this.text, required this.bg, required this.fg});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(color: fg, fontSize: 12, fontWeight: FontWeight.w800),
-      ),
-    );
-  }
-}
-
-class _StatPill extends StatelessWidget {
-  final IconData icon;
-  final String text;
-
-  const _StatPill({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: zBorder),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 17, color: zBlue),
-          const SizedBox(width: 8),
-          Text(
-            text,
-            style: const TextStyle(
-              color: zText,
-              fontWeight: FontWeight.w700,
-              fontSize: 13,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BrandFeatureCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final Color tint;
-  final Color iconColor;
-
-  const _BrandFeatureCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.tint,
-    required this.iconColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: zBorder),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 12,
-              offset: const Offset(0, 6),
-            ),
-          ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: tint,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: iconColor, size: 20),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              style: const TextStyle(
-                color: zText,
-                fontWeight: FontWeight.w800,
-                fontSize: 14.5,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              subtitle,
-              style: const TextStyle(
-                color: zMuted,
-                height: 1.45,
-                fontSize: 12.5,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Bar extends StatelessWidget {
-  final double h;
-  final Color color;
-
-  const _Bar({required this.h, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        height: h,
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(10),
-        ),
-      ),
+      ],
     );
   }
 }

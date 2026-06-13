@@ -15,8 +15,8 @@ import 'package:QUIK/modules/sales/sales_orders/screens_sales_order_list.dart';
 
 // Finance Sub-Modules
 import 'package:QUIK/modules/finance/invoice/screens/invoice_list_screen.dart';
-import 'package:QUIK/modules/finance/invoice/screens/export_invoice_screen.dart';
-import 'package:QUIK/modules/finance/invoice/screens/tax_invoice_screen.dart';
+import 'package:QUIK/modules/finance/invoice/export_invoice/screens/export_invoice_screen.dart';
+import 'package:QUIK/modules/finance/invoice/tax_invoice/tax_invoice_screen.dart';
 import 'package:QUIK/modules/finance/proforma_invoice/proforma_list_screen.dart';
 
 // Payments & Outstanding Sub-Modules

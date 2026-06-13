@@ -11,10 +11,10 @@ import 'package:flutter/material.dart';
 import '../models/export_invoice_item.dart';
 import '../models/export_invoice_model.dart';
 import '../widgets/export_totals_card.dart';
-import '../widgets/dialog_select_customer.dart';
+import '../../widgets/dialog_select_customer.dart';
 import '../widgets/dialog_add_export_item.dart';
 import '../widgets/export_invoice_document_view.dart';
-import '../../payments_received/screens/record_payment_screen.dart';
+import '../../../payments_received/screens/record_payment_screen.dart';
 
 const Color primaryColor = Color(0xFF1A3A52);
 const Color accentColor = Color(0xFF3B82F6);

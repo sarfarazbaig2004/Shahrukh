@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/payment_model.dart';
 import '../controllers/record_payment_controller.dart';
-import '../../invoice/screens/export_invoice_screen.dart';
+import '../../invoice/export_invoice/screens/export_invoice_screen.dart';
 
 // --- Premium SaaS Design System Colors ---
 const Color _kPrimary = Color(0xFF2563EB);

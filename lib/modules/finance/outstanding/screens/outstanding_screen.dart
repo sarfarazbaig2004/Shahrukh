@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../../payments_received/screens/record_payment_screen.dart';
-import '../../invoice/widgets/export_invoice_document_view.dart';
-import '../../invoice/models/export_invoice_model.dart';
+import '../../invoice/export_invoice/widgets/export_invoice_document_view.dart';
+import '../../invoice/export_invoice/models/export_invoice_model.dart';
 
 class OutstandingScreen extends StatefulWidget {
   final String companyId;

@@ -4,9 +4,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:QUIK/core/theme/app_theme.dart';
 import 'package:intl/intl.dart';
 
-import '../models/export_invoice_model.dart';
-import '../widgets/export_invoice_document_view.dart';
-import 'export_invoice_screen.dart';
+import '../export_invoice/models/export_invoice_model.dart';
+import '../export_invoice/widgets/export_invoice_document_view.dart';
+import '../export_invoice/screens/export_invoice_screen.dart';
 import '../../payments_received/screens/record_payment_screen.dart';
 
 String _formatCurrency(double amount) {
