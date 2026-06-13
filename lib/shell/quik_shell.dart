@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:QUIK/core/theme/app_theme.dart';
 import 'package:QUIK/modules/administration/users/screen_user_management.dart';
 import 'package:QUIK/modules/crm/customers/screens_customer_list.dart';
+import 'package:QUIK/modules/crm/contacts/screens_contact_list.dart';
 import 'package:QUIK/modules/crm/customer_visits/customer_visit_list_screen.dart';
 import 'package:QUIK/modules/dashboard/dashboard_screen.dart';
 import 'package:QUIK/modules/inventory/products/screens_product_list.dart';
@@ -12,6 +13,7 @@ import 'package:QUIK/modules/sales/inquiries/screens_inquiry_list.dart';
 import 'package:QUIK/modules/sales/quotations/screens_quotation_list.dart';
 import 'package:QUIK/modules/settings/screen_settings_home.dart';
 import 'package:QUIK/modules/sales/sales_orders/screens_sales_order_list.dart';
+import 'package:QUIK/modules/sales/Task/screen_tasks.dart';
 
 // Finance Sub-Modules
 import 'package:QUIK/modules/finance/invoice/screens/invoice_list_screen.dart';
@@ -795,7 +797,9 @@ class _ZohoShellState extends State<ZohoShell> {
       case ShellPage.salesInquiries:
       case ShellPage.salesQuotations:
       case ShellPage.salesOrders:
+      case ShellPage.salesTasks:
       case ShellPage.crmCustomers:
+      case ShellPage.crmContacts:
       case ShellPage.crmVisits: // ✅ NEW: Registered CRM Visits
       case ShellPage.inventoryProducts:
       case ShellPage.adminUsers:
@@ -1431,6 +1435,17 @@ class _ZohoShellState extends State<ZohoShell> {
           child: ScreensCustomerList(),
         );
 
+      case ShellPage.crmContacts:
+        return Padding(
+          padding: const EdgeInsets.all(10),
+          child: ScreensContactList(
+            companyRef: FirebaseFirestore.instance
+                .collection('companies')
+                .doc(widget.companyId),
+            companyName: widget.companyName,
+          ),
+        );
+
     // ✅ NEW: Connected Customer Visits
       case ShellPage.crmVisits:
         return Padding(
@@ -1460,6 +1475,17 @@ class _ZohoShellState extends State<ZohoShell> {
         return Padding(
           padding: const EdgeInsets.all(10),
           child: SalesOrderListScreen(companyId: widget.companyId),
+        );
+
+      case ShellPage.salesTasks:
+        return Padding(
+          padding: const EdgeInsets.all(10),
+          child: TaskScreen(
+            companyId: widget.companyId,
+            currentUserId: widget.userUid,
+            currentUserRole: _currentRole,
+            currentUserName: _resolvedEmployeeName(),
+          ),
         );
 
       case ShellPage.adminUsers:

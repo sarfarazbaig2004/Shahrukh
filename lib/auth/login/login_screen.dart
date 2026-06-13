@@ -39,12 +39,14 @@ class _LoginScreenState extends State<LoginScreen> {
   void _toast(String msg, {bool err = false, SnackBarAction? action}) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
       SnackBar(
         content: Text(msg),
         backgroundColor: err ? Colors.red : zSuccess,
         behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: err ? 3 : 2),
         action: action,
       ),
     );
@@ -71,6 +73,10 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _login() async {
     FocusScope.of(context).unfocus();
 
+    if (mounted) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+    }
+
     if (!_formKey.currentState!.validate()) {
       _toast('Please correct the highlighted fields', err: true);
       return;
@@ -90,6 +96,9 @@ class _LoginScreenState extends State<LoginScreen> {
         password: pass,
       );
 
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).clearSnackBars();
+
       // Company isolation must be enforced after login in:
       // 1) auth_wrapper.dart
       // 2) user/company profile fetch
@@ -100,32 +109,17 @@ class _LoginScreenState extends State<LoginScreen> {
       debugPrint('Firebase login error message: ${e.message}');
 
       final msg = switch (e.code) {
-        'user-not-found' =>
-        'Firebase Auth: user-not-found - No account found for this email.',
-        'wrong-password' =>
-        'Firebase Auth: wrong-password - Incorrect password.',
-        'invalid-email' =>
-        'Firebase Auth: invalid-email - Invalid email format.',
-        'invalid-credential' =>
-        'Firebase Auth: invalid-credential - Invalid email or password.',
-        'user-disabled' =>
-        'Firebase Auth: user-disabled - This account has been disabled.',
+        'invalid-email' => 'Wrong email address.',
         'too-many-requests' =>
-        'Firebase Auth: too-many-requests - Too many attempts. Please wait and try again.',
-        _ => 'Firebase Auth: ${e.code} - ${e.message ?? 'Sign in failed.'}',
+          'Too many wrong attempts. Please wait and try again.',
+        'user-disabled' => 'This account has been disabled.',
+        _ => 'Wrong email address or password.',
       };
-      _toast(
-        msg,
-        err: true,
-        action: SnackBarAction(
-          label: 'Reset password',
-          textColor: Colors.white,
-          onPressed: () => _sendPasswordReset(email),
-        ),
-      );
+
+      _toast(msg, err: true);
     } catch (e) {
       debugPrint('Login non-Firebase error: $e');
-      _toast('Sign in failed: $e', err: true);
+      _toast('Wrong email address or password.', err: true);
     } finally {
       if (mounted) {
         setState(() => _loading = false);

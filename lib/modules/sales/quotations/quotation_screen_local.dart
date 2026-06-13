@@ -81,6 +81,16 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     'super_admin',
   ].contains(_currentUserRole.toLowerCase());
 
+
+  bool get _hasLinkedInquiry =>
+      (_linkedInquiryId?.trim().isNotEmpty ?? false) ||
+      (_linkedInquiryNumber?.trim().isNotEmpty ?? false);
+
+  String? _cleanOptionalString(dynamic value) {
+    final text = value?.toString().trim() ?? '';
+    return text.isEmpty ? null : text;
+  }
+
   String _approvalStatus = 'Pending';
   String _quotationStatus = 'Sent';
   String _paymentStatus = 'Pending';
@@ -345,10 +355,17 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     _gstController.text = data['gstNo']?.toString() ?? '';
     _isInterState = data['isInterState'] as bool? ?? false;
 
-    _linkedInquiryId = data['inquiryId']?.toString();
-    _linkedInquiryNumber = data['inquiryNumber']?.toString();
+    _linkedInquiryId = _cleanOptionalString(data['inquiryId']);
+    _linkedInquiryNumber = _cleanOptionalString(data['inquiryNumber'] ?? data['inquiryRefNo']);
     _selectedInquirySource = data['inquirySource']?.toString() ?? 'Verbal';
-    _inquiryDate = (data['inquiryDate'] as Timestamp?)?.toDate().toUtc() ?? DateTime.now().toUtc();
+    final restoredInquiryDate = data['inquiryDate'];
+    if (_hasLinkedInquiry && restoredInquiryDate is Timestamp) {
+      _inquiryDate = restoredInquiryDate.toDate().toUtc();
+    } else {
+      _linkedInquiryId = null;
+      _linkedInquiryNumber = null;
+      _inquiryDate = _quoteDate;
+    }
     _inquiryRefNoteController.text = data['inquiryReference']?.toString() ?? '';
 
     _nextFollowUpDate = (data['nextFollowUpDate'] as Timestamp?)?.toDate().toUtc();
@@ -875,8 +892,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
     developer.log('Inquiry Loaded', name: 'QuotationScreen');
 
-    _linkedInquiryId = seed['id']?.toString() ?? seed['inquiryId']?.toString();
-    _linkedInquiryNumber = seed['inquiryNumber']?.toString() ?? seed['inquiryCode']?.toString();
+    _linkedInquiryId = _cleanOptionalString(seed['id'] ?? seed['inquiryId']);
+    _linkedInquiryNumber = _cleanOptionalString(seed['inquiryNumber'] ?? seed['inquiryCode']);
 
     if (seed['inquiryDate'] != null && seed['inquiryDate'] is Timestamp) {
       _inquiryDate = (seed['inquiryDate'] as Timestamp).toDate().toUtc();
@@ -1180,11 +1197,13 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       return;
     }
 
-    final iqDate = DateTime(_inquiryDate.year, _inquiryDate.month, _inquiryDate.day);
     final qDate = DateTime(_quoteDate.year, _quoteDate.month, _quoteDate.day);
-    if (qDate.isBefore(iqDate)) {
-      _setError('Quotation date (${DateFormat('dd/MM/yyyy').format(qDate)}) cannot be earlier than the Inquiry date (${DateFormat('dd/MM/yyyy').format(iqDate)}).');
-      return;
+    if (_hasLinkedInquiry) {
+      final iqDate = DateTime(_inquiryDate.year, _inquiryDate.month, _inquiryDate.day);
+      if (qDate.isBefore(iqDate)) {
+        _setError('Quotation date (${DateFormat('dd/MM/yyyy').format(qDate)}) cannot be earlier than the Inquiry date (${DateFormat('dd/MM/yyyy').format(iqDate)}).');
+        return;
+      }
     }
 
     if (_items.isEmpty) {
@@ -1304,11 +1323,11 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         'gstNo': _gstController.text.trim(),
         'isInterState': _isInterState,
         'customerState': _customerState,
-        'inquiryId': _linkedInquiryId ?? '',
-        'inquiryNumber': _linkedInquiryNumber ?? '',
-        'inquiryRefNo': _linkedInquiryNumber ?? '',
-        'inquirySource': _selectedInquirySource,
-        'inquiryDate': Timestamp.fromDate(_inquiryDate),
+        'inquiryId': _hasLinkedInquiry ? (_linkedInquiryId ?? '') : '',
+        'inquiryNumber': _hasLinkedInquiry ? (_linkedInquiryNumber ?? '') : '',
+        'inquiryRefNo': _hasLinkedInquiry ? (_linkedInquiryNumber ?? '') : '',
+        'inquirySource': _hasLinkedInquiry ? _selectedInquirySource : '',
+        'inquiryDate': _hasLinkedInquiry ? Timestamp.fromDate(_inquiryDate) : null,
         'inquiryReference': _inquiryRefNoteController.text.trim(),
         'nextFollowUpDate': _nextFollowUpDate != null ? Timestamp.fromDate(_nextFollowUpDate!) : null,
         'followUpNotes': _followUpNotesController.text.trim(),
@@ -1449,7 +1468,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
         tx.set(quoteRef, payloadWithNumber, SetOptions(merge: true));
 
-        if (_linkedInquiryId != null && _linkedInquiryId!.isNotEmpty) {
+        if (_linkedInquiryId != null && _linkedInquiryId!.trim().isNotEmpty) {
           final inqRef = FirebaseFirestore.instance
               .collection('companies')
               .doc(_companyId)
@@ -3147,7 +3166,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                             _buildSectionHeader(
                               'Customer Details',
                               Icons.business,
-                              trailing: (_isReadOnly || (_linkedInquiryId != null && _linkedInquiryId!.isNotEmpty))
+                              trailing: (_isReadOnly || _hasLinkedInquiry)
                                   ? null
                                   : OutlinedButton.icon(
                                 onPressed: () async {
@@ -3404,7 +3423,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             _buildSectionHeader('Quotation & Inquiry Link', Icons.link),
-                            if (_linkedInquiryId != null && _linkedInquiryId!.isNotEmpty)
+                            if (_hasLinkedInquiry)
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                 margin: const EdgeInsets.only(bottom: 12),
@@ -3413,7 +3432,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
-                                  'Linked Inquiry: $_linkedInquiryNumber. Status will auto-update to "Quoted".',
+                                  'Linked Inquiry: ${_linkedInquiryNumber ?? _linkedInquiryId ?? ''}. Status will auto-update to "Quoted".',
                                   style: TextStyle(
                                     color: Colors.blue.shade800,
                                     fontSize: 12,
@@ -3438,18 +3457,39 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                     onTap: _isReadOnly
                                         ? null
                                         : () async {
-                                      final firstDate = DateTime(_inquiryDate.year, _inquiryDate.month, _inquiryDate.day);
-                                      DateTime initDate = _quoteDate.isBefore(firstDate) ? firstDate : _quoteDate;
+                                      final now = DateTime.now();
+                                      final fyStart = now.month >= 4
+                                          ? DateTime(now.year, 4, 1)
+                                          : DateTime(now.year - 1, 4, 1);
+                                      final fyEnd = now.month >= 4
+                                          ? DateTime(now.year + 1, 3, 31)
+                                          : DateTime(now.year, 3, 31);
+
+                                      DateTime initDate = DateTime(
+                                        _quoteDate.year,
+                                        _quoteDate.month,
+                                        _quoteDate.day,
+                                      );
+
+                                      if (initDate.isBefore(fyStart)) {
+                                        initDate = fyStart;
+                                      }
+                                      if (initDate.isAfter(fyEnd)) {
+                                        initDate = fyEnd;
+                                      }
 
                                       final d = await showDatePicker(
                                         context: context,
                                         initialDate: initDate,
-                                        firstDate: firstDate,
-                                        lastDate: DateTime(2100),
+                                        firstDate: fyStart,
+                                        lastDate: fyEnd,
+                                        helpText: 'Select Quote Date',
+                                        fieldLabelText: 'Enter Date',
+                                        fieldHintText: 'dd/mm/yyyy',
                                       );
                                       if (d != null) {
                                         setState(() {
-                                          _quoteDate = d;
+                                          _quoteDate = DateTime(d.year, d.month, d.day);
                                         });
                                       }
                                     },
@@ -3469,7 +3509,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                         fillColor: _isReadOnly ? Colors.grey.shade100 : const Color(0xFFF8FAFC),
                                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                                       ),
-                                      child: Text('${_quoteDate.day}/${_quoteDate.month}/${_quoteDate.year}',
+                                      child: Text(DateFormat('dd/MM/yyyy').format(_quoteDate),
                                           style: const TextStyle(fontSize: 15)),
                                     ),
                                   ),
@@ -3982,7 +4022,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                         isDense: true,
                                       ),
                                       child: Text(_nextFollowUpDate != null
-                                          ? '${_nextFollowUpDate!.day}/${_nextFollowUpDate!.month}/${_nextFollowUpDate!.year}'
+                                          ? DateFormat('dd/MM/yyyy').format(_nextFollowUpDate!)
                                           : 'Select Date'),
                                     ),
                                   ),

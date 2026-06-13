@@ -13,7 +13,6 @@ import 'package:QUIK/modules/administration/users/helpers/user_management_format
 import 'package:QUIK/modules/administration/users/services/user_management_service.dart';
 import 'package:QUIK/modules/administration/users/widgets/desktop_user_table.dart';
 import 'package:QUIK/modules/administration/users/widgets/filter_dropdown.dart';
-import 'package:QUIK/modules/administration/users/widgets/invite_card.dart';
 import 'package:QUIK/modules/administration/users/widgets/user_card.dart';
 
 class ScreenUserManagement extends StatefulWidget {
@@ -46,6 +45,7 @@ class _ScreenUserManagementState extends State<ScreenUserManagement> {
   int? _sortColumnIndex;
   String? _resolvedIndustry;
   bool _isLoadingIndustry = true;
+  final Set<String> _cancellingInviteIds = <String>{};
 
   // 🔥 FIX 1: Cache streams to prevent reconnection and data loss on setState
   late final Stream<QuerySnapshot<Map<String, dynamic>>> _usersStream;
@@ -351,9 +351,11 @@ class _ScreenUserManagementState extends State<ScreenUserManagement> {
   }
 
   Future<void> _confirmCancelInvite(
-      BuildContext context,
-      QueryDocumentSnapshot<Map<String, dynamic>> doc,
-      ) async {
+    BuildContext context,
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) async {
+    if (_cancellingInviteIds.contains(doc.id)) return;
+
     final data = doc.data();
     final String email = (data['email'] ?? '').toString().trim();
     final String name = (data['name'] ?? '').toString().trim();
@@ -394,21 +396,50 @@ class _ScreenUserManagementState extends State<ScreenUserManagement> {
     );
 
     if (confirm != true) return;
-
-    await _userManagementService.cancelInvite(
-      companyId: widget.companyId,
-      inviteId: doc.id,
-      cancelledByUid: widget.currentUid,
-    );
-
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Invite cancelled successfully'),
-        backgroundColor: successColor,
-      ),
-    );
+    setState(() => _cancellingInviteIds.add(doc.id));
+
+    try {
+      await doc.reference.update({
+        'status': 'cancelled',
+        'isDeleted': true,
+        'cancelledAt': FieldValue.serverTimestamp(),
+        'cancelledBy': widget.currentUid,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      try {
+        await doc.reference.delete();
+      } catch (_) {
+        // Some Firestore rules allow update but block delete. The invite is
+        // already hidden because status is cancelled and isDeleted is true.
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Invite cancelled successfully'),
+          backgroundColor: successColor,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Unable to cancel invite. ${e.toString()}'),
+          backgroundColor: dangerColor,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _cancellingInviteIds.remove(doc.id));
+      }
+    }
   }
 
   void _onSearchChanged(String value) {
@@ -1066,12 +1097,14 @@ class _ScreenUserManagementState extends State<ScreenUserManagement> {
                       currentUid: widget.currentUid,
                       onView: () async => _handleViewUser(doc),
                       onEdit: () async => _handleEditUser(doc),
-                      onToggle: (isSelfUser || isDeleted)
-                          ? null
-                          : () async => _handleToggleUser(doc: doc),
-                      onDelete: (isSelfUser || isDeleted)
-                          ? null
-                          : () async => _confirmDeleteUser(context, doc),
+                      onToggle: () async {
+                        if (isSelfUser || isDeleted) return;
+                        await _handleToggleUser(doc: doc);
+                      },
+                      onDelete: () async {
+                        if (isSelfUser || isDeleted) return;
+                        await _confirmDeleteUser(context, doc);
+                      },
                     ),
                   );
                 }).toList(),
@@ -1098,6 +1131,152 @@ class _ScreenUserManagementState extends State<ScreenUserManagement> {
             ],
           ],
         ],
+      ),
+    );
+  }
+
+
+
+  String _formatInviteDateTime(DateTime dateTime) {
+    String two(int value) => value.toString().padLeft(2, '0');
+    final hour12 = dateTime.hour == 0
+        ? 12
+        : (dateTime.hour > 12 ? dateTime.hour - 12 : dateTime.hour);
+    final period = dateTime.hour >= 12 ? 'PM' : 'AM';
+    return '${two(dateTime.day)}/${two(dateTime.month)}/${dateTime.year} '
+        '${two(hour12)}:${two(dateTime.minute)} $period';
+  }
+
+  Widget _buildPendingInviteCard(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data();
+    final String name = (data['name'] ?? data['displayName'] ?? 'Pending Invite')
+        .toString()
+        .trim();
+    final String email = (data['email'] ?? '').toString().trim();
+    final String role = (data['role'] ?? data['userRole'] ?? '-').toString().trim();
+    final String designation = (data['designation'] ?? '').toString().trim();
+    final String department = (data['department'] ?? '').toString().trim();
+    final String branch = (data['branch'] ?? data['branchName'] ?? '').toString().trim();
+    final String inviteCode = (data['inviteCode'] ?? data['code'] ?? '').toString().trim();
+    final bool isCancelling = _cancellingInviteIds.contains(doc.id);
+
+    String createdText = '-';
+    final createdAt = data['createdAt'];
+    if (createdAt is Timestamp) {
+      createdText = _formatInviteDateTime(createdAt.toDate());
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: cardBorderColor),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: const Color(0xFFEFF6FF),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.mail_outline, color: primaryColor),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        name.isEmpty ? 'Pending Invite' : name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: primaryColor,
+                        ),
+                      ),
+                    ),
+                    if (role.isNotEmpty && role != '-') ...[
+                      const SizedBox(width: 8),
+                      _buildSmallPill(role, const Color(0xFFEDE9FE), const Color(0xFF6D28D9)),
+                    ],
+                  ],
+                ),
+                if (designation.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    designation,
+                    style: const TextStyle(fontSize: 12.5, color: mutedTextColor),
+                  ),
+                ],
+                if (email.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    email,
+                    style: const TextStyle(fontSize: 12.5, color: mutedTextColor),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _buildSmallPill('Pending', const Color(0xFFFFF7ED), const Color(0xFFC2410C)),
+                    if (department.isNotEmpty)
+                      _buildSmallPill(department, const Color(0xFFEFF6FF), const Color(0xFF2563EB)),
+                    if (branch.isNotEmpty)
+                      _buildSmallPill(branch, const Color(0xFFEFF6FF), const Color(0xFF2563EB)),
+                    if (inviteCode.isNotEmpty)
+                      _buildSmallPill('Code: $inviteCode', const Color(0xFFE0F2FE), const Color(0xFF075985)),
+                    _buildSmallPill(createdText, const Color(0xFFF8FAFC), mutedTextColor),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          IconButton(
+            tooltip: isCancelling ? 'Cancelling invite...' : 'Cancel invite',
+            onPressed: isCancelling
+                ? null
+                : () async => _confirmCancelInvite(context, doc),
+            icon: isCancelling
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.close),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSmallPill(String text, Color background, Color foreground) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: foreground,
+        ),
       ),
     );
   }
@@ -1135,10 +1314,7 @@ class _ScreenUserManagementState extends State<ScreenUserManagement> {
               children: pendingInvites.map((doc) {
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: InviteCard(
-                    doc: doc,
-                    onDelete: () => _confirmCancelInvite(context, doc),
-                  ),
+                  child: _buildPendingInviteCard(doc),
                 );
               }).toList(),
             ),
