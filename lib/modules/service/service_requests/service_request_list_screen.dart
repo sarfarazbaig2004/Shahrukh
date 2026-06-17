@@ -51,6 +51,68 @@ String _formatAnyTimestamp(dynamic value) {
 }
 
 // ==========================================
+// WORKFLOW TRACKING HELPERS
+// ==========================================
+
+String _getWorkflowStage(Map<String, dynamic> data) {
+  final stage = _safeString(data['currentWorkflowStage']);
+  if (stage.isNotEmpty) return stage;
+
+  // Safe Fallback for Legacy Records without migrating Firestore
+  final status = _safeString(data['status']);
+  switch (status) {
+    case 'New': return 'REQUEST_CREATED';
+    case 'Assigned': return 'ASSIGNED';
+    case 'In Progress': return 'VISIT_IN_PROGRESS';
+    case 'Resolved':
+    case 'Completed': return 'WORK_COMPLETED';
+    case 'Closed': return 'CLOSED';
+    default: return 'REQUEST_CREATED';
+  }
+}
+
+String _getWorkflowDisplayName(String stage) {
+  if (stage.isEmpty) return 'Unknown';
+  return stage.split('_').map((word) {
+    if (word.isEmpty) return '';
+    return word[0].toUpperCase() + word.substring(1).toLowerCase();
+  }).join(' ');
+}
+
+int _getWorkflowPhaseIndex(String stage) {
+  if (stage == 'REQUEST_CREATED') return 0;
+  if (stage == 'ASSIGNED') return 1;
+  if (stage == 'WORK_COMPLETED' || stage == 'CUSTOMER_SIGNOFF') return 3;
+  if (stage == 'CLOSED') return 4;
+  return 2; // All execution phases: VISITS, INSTALLATIONS, WAITING, TRAINING
+}
+
+String _getWorkflowPhase(String stage) {
+  const phases = ['Created', 'Assigned', 'Execution', 'Completion', 'Closed'];
+  return phases[_getWorkflowPhaseIndex(stage)];
+}
+
+Color _getWorkflowColor(String stage) {
+  if (stage.contains('SPARE')) return Colors.orange.shade600;
+  if (stage.contains('WAITING') || stage.contains('APPROVAL')) return Colors.amber.shade700;
+  if (stage.contains('COMPLETED') || stage.contains('SIGNOFF')) return Colors.green.shade700;
+  if (stage == 'CLOSED') return Colors.grey.shade700;
+  if (stage == 'ASSIGNED') return Colors.indigo.shade600;
+  if (stage == 'REQUEST_CREATED') return Colors.blue.shade700;
+  return Colors.teal.shade600; // Execution / Scheduled / In Progress
+}
+
+bool _isWorkflowDelayed(Map<String, dynamic> data, {int thresholdDays = 5}) {
+  final stage = _getWorkflowStage(data);
+  if (stage == 'CLOSED' || stage == 'WORK_COMPLETED' || stage == 'CUSTOMER_SIGNOFF') return false;
+
+  final updated = _extractDate(data['workflowUpdatedAt'] ?? data['updatedAt'] ?? data['createdAt']);
+  if (updated == null) return false;
+
+  return DateTime.now().difference(updated).inDays >= thresholdDays;
+}
+
+// ==========================================
 // MAIN SCREEN
 // ==========================================
 
@@ -83,7 +145,8 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
   String _selectedAssignee = 'All';
   String _selectedCreator = 'All';
 
-  final List<String> _statuses = ['All', 'New', 'In Progress', 'Resolved', 'Closed'];
+  // Standardized ERP Status Workflow (Preserving legacy "Completed" via mapping)
+  final List<String> _statuses = ['All', 'New', 'Assigned', 'In Progress', 'Resolved', 'Closed'];
   final List<String> _priorities = ['All', 'Low', 'Medium', 'High', 'Critical'];
 
   // --- PAGINATION STATE ---
@@ -193,7 +256,14 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
       final assigneeUid = _safeString(data['assignedToUid']);
 
       // Exact Filters
-      if (_selectedStatus != 'All' && status != _selectedStatus) return false;
+      if (_selectedStatus != 'All') {
+        if (_selectedStatus == 'Resolved' && status == 'Completed') {
+          // Allow legacy 'Completed' to map into 'Resolved'
+        } else if (status != _selectedStatus) {
+          return false;
+        }
+      }
+
       if (_selectedPriority != 'All' && priority != _selectedPriority) return false;
       if (_selectedNature != 'All' && nature != _selectedNature) return false;
       if (_selectedCreator != 'All' && creatorName != _selectedCreator) return false;
@@ -203,9 +273,13 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
         if (_selectedAssignee != 'Unassigned' && assigneeName != _selectedAssignee) return false;
       }
 
-      // Dynamic Deep Search
+      // Dynamic Deep Search (Supports backend searchKeywords + local fields)
       if (_searchQuery.isNotEmpty) {
         final q = _searchQuery.toLowerCase().trim();
+
+        final searchKeywords = data['searchKeywords'] as List<dynamic>? ?? [];
+        final keywordMatch = searchKeywords.any((k) => _safeString(k).toLowerCase().contains(q));
+
         final reqNo = _safeString(data['requestNumber']).toLowerCase();
         final custName = _safeString(data['customerName']).toLowerCase();
         final custCode = _safeString(data['customerCode']).toLowerCase();
@@ -215,7 +289,7 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
         final serial = _safeString(data['serialNumber'] ?? data['machineSerialNumber']).toLowerCase();
         final assignee = assigneeName.toLowerCase();
 
-        final matchesSearch = reqNo.contains(q) || custName.contains(q) || custCode.contains(q) ||
+        final matchesSearch = keywordMatch || reqNo.contains(q) || custName.contains(q) || custCode.contains(q) ||
             contact.contains(q) || mobile.contains(q) || itemName.contains(q) ||
             serial.contains(q) || assignee.contains(q);
 
@@ -235,7 +309,7 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
   }
 
   Map<String, int> _calculateStats(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
-    int total = 0, newReq = 0, inProg = 0, resolved = 0, closed = 0, unassigned = 0;
+    int total = 0, newReq = 0, assigned = 0, inProg = 0, resolved = 0, closed = 0, unassigned = 0;
 
     for (var doc in docs) {
       final data = doc.data();
@@ -246,6 +320,7 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
       final assignedUid = _safeString(data['assignedToUid']);
 
       if (status == 'New') newReq++;
+      if (status == 'Assigned') assigned++;
       if (status == 'In Progress') inProg++;
       if (status == 'Resolved' || status == 'Completed') resolved++;
       if (status == 'Closed') closed++;
@@ -255,8 +330,9 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
     return {
       'Total': total,
       'New': newReq,
+      'Assigned': assigned,
       'In Progress': inProg,
-      'Completed': resolved,
+      'Resolved': resolved,
       'Closed': closed,
       'Unassigned': unassigned,
     };
@@ -304,6 +380,44 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
   }
 
   // --- ACTIONS ---
+
+  // Fetches latest Firestore document safely before launching edit screen to prevent stale data mutations
+  Future<void> _editRequest(String docId) async {
+    try {
+      final freshDoc = await FirebaseFirestore.instance
+          .collection('companies')
+          .doc(widget.companyId)
+          .collection('service_requests')
+          .doc(docId)
+          .get();
+
+      if (!freshDoc.exists || freshDoc.data() == null || freshDoc.data()!['isDeleted'] == true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Error: Service request no longer exists or was deleted.'), backgroundColor: Colors.red),
+          );
+        }
+        return;
+      }
+
+      if (mounted) {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => AddServiceRequestScreen(
+          companyId: widget.companyId,
+          currentUserUid: widget.currentUserUid,
+          currentUserName: widget.currentUserName,
+          existingDocId: docId,
+          existingData: freshDoc.data()!,
+        )));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load latest data: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   Future<void> _deleteRequest(String docId) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -348,7 +462,10 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
   }
 
   void _showDetailsDialog(Map<String, dynamic> data) {
-    final requiredParts = data['requiredParts'] as List<dynamic>? ?? [];
+    final requiredPartsRaw = data['requiredParts'] as List<dynamic>? ?? [];
+    final workflowStage = _getWorkflowStage(data);
+    final visitCount = _safeInt(data['visitCount']);
+    final isDelayed = _isWorkflowDelayed(data);
 
     showDialog(
       context: context,
@@ -364,12 +481,17 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
                 Text(_safeString(data['customerName']), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
               ],
             ),
-            _buildStatusChip(data['status'] ?? 'Unknown'),
+            Row(
+              children: [
+                if (isDelayed) const Padding(padding: EdgeInsets.only(right: 8.0), child: _DelayBadge()),
+                _buildAttentionChip(workflowStage),
+              ],
+            ),
           ],
         ),
         content: SingleChildScrollView(
           child: SizedBox(
-            width: 700,
+            width: 750,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
@@ -404,21 +526,28 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: _buildDetailSection('Complaint Information', {
-                        'Complaint Category': data['complaintCategory'],
-                        'Priority': data['priority'],
-                        'Source': data['source'],
-                        'Under Warranty': (data['isWarranty'] ?? false) ? 'Yes' : 'No',
-                        'Description': data['complaintDescription'],
-                        'Remarks': data['remarks'],
+                      child: _buildDetailSection('Service Operations', {
+                        'Current Stage': _getWorkflowDisplayName(workflowStage),
+                        'Workflow Phase': _getWorkflowPhase(workflowStage),
+                        'Stage Updated': _formatAnyTimestamp(data['workflowUpdatedAt'] ?? data['updatedAt']),
+                        'Pending Reason': data['pendingReason'],
+                        'Next Action': data['nextAction'],
+                        'Total Visits': visitCount.toString(),
+                        'Last Visit Date': _formatAnyTimestamp(data['lastVisitDate']),
+                        'Last Engineer': _safeString(data['lastVisitEngineer']),
+                        'Last Remarks': _safeString(data['lastVisitRemarks']),
+                        'Last Activity': _safeString(data['lastActivity']),
+                        'Activity Time': _formatAnyTimestamp(data['lastActivityAt']),
                       }),
                     ),
                     const SizedBox(width: 24),
                     Expanded(
-                      child: _buildDetailSection('Assignment Information', {
+                      child: _buildDetailSection('Complaint & Assignment', {
+                        'Complaint Category': data['complaintCategory'],
+                        'Priority': data['priority'],
+                        'Under Warranty': (data['isWarranty'] ?? false) ? 'Yes' : 'No',
+                        'Description': data['complaintDescription'],
                         'Assigned To': _safeString(data['assignedToName']).isEmpty ? 'Unassigned' : data['assignedToName'],
-                        'Assigned By': data['assignedByName'],
-                        'Assigned At': _formatAnyTimestamp(data['assignedAt']),
                         'Created By': data['createdByName'],
                         'Created At': _formatAnyTimestamp(data['createdAt']),
                       }),
@@ -426,7 +555,7 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
                   ],
                 ),
 
-                if (requiredParts.isNotEmpty) ...[
+                if (requiredPartsRaw.isNotEmpty) ...[
                   const Divider(height: 32),
                   const Text('Required Parts & Accessories', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey)),
                   const SizedBox(height: 12),
@@ -447,14 +576,14 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
                             Padding(padding: EdgeInsets.all(8), child: Text('Qty', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12))),
                           ],
                         ),
-                        ...requiredParts.map((p) {
-                          final partMap = p as Map<String, dynamic>;
+                        ...requiredPartsRaw.where((p) => p is Map).map((p) {
+                          final partMap = p as Map<dynamic, dynamic>;
                           return TableRow(
                             decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.grey.shade200))),
                             children: [
                               Padding(padding: const EdgeInsets.all(8), child: Text(_safeString(partMap['partName']), style: const TextStyle(fontSize: 12))),
                               Padding(padding: const EdgeInsets.all(8), child: Text(_safeString(partMap['partNature']), style: const TextStyle(fontSize: 12))),
-                              Padding(padding: const EdgeInsets.all(8), child: Text(partMap['quantity'].toString(), style: const TextStyle(fontSize: 12))),
+                              Padding(padding: const EdgeInsets.all(8), child: Text(_safeString(partMap['quantity']), style: const TextStyle(fontSize: 12))),
                             ],
                           );
                         }),
@@ -485,7 +614,7 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(width: 130, child: Text('${e.key}:', style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontWeight: FontWeight.w500))),
+                  SizedBox(width: 140, child: Text('${e.key}:', style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontWeight: FontWeight.w500))),
                   Expanded(child: Text(e.value.toString(), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
                 ],
               ),
@@ -620,12 +749,9 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
   }
 
   // --- DYNAMIC PAGINATION RENDERER ---
-  Widget _buildPaginationBar(int totalRecords) {
-    int totalPages = (totalRecords / _recordsPerPage).ceil();
-    if (totalPages == 0) totalPages = 1;
-
-    int start = (_currentPage - 1) * _recordsPerPage + 1;
-    int end = math.min(_currentPage * _recordsPerPage, totalRecords);
+  Widget _buildPaginationBar(int totalRecords, int safeCurrentPage, int totalPages) {
+    int start = (safeCurrentPage - 1) * _recordsPerPage + 1;
+    int end = math.min(safeCurrentPage * _recordsPerPage, totalRecords);
     if (totalRecords == 0) {
       start = 0;
       end = 0;
@@ -633,7 +759,7 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
 
     // 8-page sliding window logic
     List<Widget> pageButtons = [];
-    int startPage = _currentPage;
+    int startPage = safeCurrentPage;
     int endPage = startPage + 7;
 
     // Shift window back if we're near the final page bounds
@@ -653,16 +779,16 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
             margin: const EdgeInsets.symmetric(horizontal: 2),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: _currentPage == i ? Colors.blue.shade600 : Colors.transparent,
+              color: safeCurrentPage == i ? Colors.blue.shade600 : Colors.transparent,
               borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: _currentPage == i ? Colors.blue.shade600 : Colors.transparent),
+              border: Border.all(color: safeCurrentPage == i ? Colors.blue.shade600 : Colors.transparent),
             ),
             child: Text(
               i.toString(),
               style: TextStyle(
                 fontSize: 13,
-                color: _currentPage == i ? Colors.white : Colors.grey.shade800,
-                fontWeight: _currentPage == i ? FontWeight.bold : FontWeight.w600,
+                color: safeCurrentPage == i ? Colors.white : Colors.grey.shade800,
+                fontWeight: safeCurrentPage == i ? FontWeight.bold : FontWeight.w600,
               ),
             ),
           ),
@@ -699,7 +825,7 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
                     foregroundColor: Colors.grey.shade800,
                     side: BorderSide(color: Colors.grey.shade300),
                   ),
-                  onPressed: _currentPage > 1 ? () => setState(() => _currentPage--) : null,
+                  onPressed: safeCurrentPage > 1 ? () => setState(() => _currentPage = safeCurrentPage - 1) : null,
                   child: const Text('Previous', style: TextStyle(fontSize: 12)),
                 ),
                 const SizedBox(width: 8),
@@ -712,7 +838,7 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
                     foregroundColor: Colors.grey.shade800,
                     side: BorderSide(color: Colors.grey.shade300),
                   ),
-                  onPressed: _currentPage < totalPages ? () => setState(() => _currentPage++) : null,
+                  onPressed: safeCurrentPage < totalPages ? () => setState(() => _currentPage = safeCurrentPage + 1) : null,
                   child: const Text('Next', style: TextStyle(fontSize: 12)),
                 ),
               ],
@@ -756,13 +882,15 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
           final filteredDocs = _applyFilters(allDocs);
           final stats = _calculateStats(allDocs);
 
-          // Pagination Slicing
+          // Safe Pagination Calculation
           final totalRecords = filteredDocs.length;
           int totalPages = (totalRecords / _recordsPerPage).ceil();
           if (totalPages == 0) totalPages = 1;
-          if (_currentPage > totalPages) _currentPage = totalPages;
 
-          final startIndex = (_currentPage - 1) * _recordsPerPage;
+          int safeCurrentPage = _currentPage;
+          if (safeCurrentPage > totalPages) safeCurrentPage = totalPages;
+
+          final startIndex = (safeCurrentPage - 1) * _recordsPerPage;
           final endIndex = math.min(startIndex + _recordsPerPage, totalRecords);
           final pageDocs = totalRecords == 0 ? <QueryDocumentSnapshot<Map<String, dynamic>>>[] : filteredDocs.sublist(startIndex, endIndex);
 
@@ -845,9 +973,11 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
                       const SizedBox(width: 10),
                       _MiniStatText(label: 'New', value: stats['New'].toString()),
                       const SizedBox(width: 10),
+                      _MiniStatText(label: 'Assigned', value: stats['Assigned'].toString()),
+                      const SizedBox(width: 10),
                       _MiniStatText(label: 'In Progress', value: stats['In Progress'].toString()),
                       const SizedBox(width: 10),
-                      _MiniStatText(label: 'Completed', value: stats['Completed'].toString()),
+                      _MiniStatText(label: 'Resolved', value: stats['Resolved'].toString()),
                       const SizedBox(width: 10),
                       _MiniStatText(label: 'Unassigned', value: stats['Unassigned'].toString(), highlight: stats['Unassigned']! > 0),
                     ],
@@ -887,7 +1017,7 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
 
               // PAGINATION FOOTER
               if (!isWaiting && totalRecords > 0)
-                _buildPaginationBar(totalRecords),
+                _buildPaginationBar(totalRecords, safeCurrentPage, totalPages),
             ],
           );
         },
@@ -939,7 +1069,7 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
                     SizedBox(width: 140, child: Text('Contact Details', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
                     SizedBox(width: 160, child: Text('Product & Nature', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
                     SizedBox(width: 140, child: Text('Complaint & Priority', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
-                    SizedBox(width: 100, child: Text('Status', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                    SizedBox(width: 130, child: Text('Workflow Stage', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
                     SizedBox(width: 120, child: Text('Assigned To', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
                     SizedBox(width: 120, child: Text('Created By', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
                     SizedBox(width: 100, child: Text('Date', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
@@ -948,10 +1078,72 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
                 ),
               ),
               ...docs.map((doc) => _buildRequestTableRow(doc)),
-              const SizedBox(height: 16), // Adjusted inner bottom padding for external pagination bar
+              const SizedBox(height: 16),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildWorkflowTracker(String currentStage) {
+    final int step = _getWorkflowPhaseIndex(currentStage);
+
+    Widget dot(int index, String label) {
+      bool active = index <= step;
+      bool current = index == step;
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: current ? 12 : 10,
+            height: current ? 12 : 10,
+            decoration: BoxDecoration(
+              color: active ? Colors.green.shade600 : Colors.grey.shade300,
+              shape: BoxShape.circle,
+              border: current ? Border.all(color: Colors.green.shade200, width: 3) : null,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              color: active ? Colors.black87 : Colors.grey.shade500,
+              fontWeight: current ? FontWeight.bold : FontWeight.w500,
+            ),
+          ),
+        ],
+      );
+    }
+
+    Widget line(int index) {
+      bool active = index < step;
+      return Expanded(
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 15), // Aligns perfectly with the center of the dots
+          height: 2,
+          color: active ? Colors.green.shade600 : Colors.grey.shade200,
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          dot(0, 'Created'), line(0),
+          dot(1, 'Assigned'), line(1),
+          dot(2, 'Execution'), line(2),
+          dot(3, 'Completed'), line(3),
+          dot(4, 'Closed'),
+        ],
       ),
     );
   }
@@ -963,7 +1155,14 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
     final customerName = _safeString(data['customerName']);
     final itemName = _safeString(data['serviceItemName'] ?? data['machineModel']);
     final itemNature = _safeString(data['serviceItemNature'] ?? data['machineNature']);
-    final status = _safeString(data['status']);
+
+    // Enterprise Extensions
+    final workflowStage = _getWorkflowStage(data);
+    final visitCount = _safeInt(data['visitCount']);
+    final lastVisitDate = _formatAnyTimestamp(data['lastVisitDate']);
+    final isDelayed = _isWorkflowDelayed(data);
+    final pendingReason = _safeString(data['pendingReason']);
+
     final priority = _safeString(data['priority']);
     final category = _safeString(data['complaintCategory']);
     final isWarranty = data['isWarranty'] == true;
@@ -1031,9 +1230,7 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
                             icon: Icon(Icons.more_vert, size: 16, color: Colors.grey.shade600),
                             onSelected: (val) {
                               if (val == 'view') _showDetailsDialog(data);
-                              if (val == 'edit') {
-                                Navigator.push(context, MaterialPageRoute(builder: (_) => AddServiceRequestScreen(companyId: widget.companyId, currentUserUid: widget.currentUserUid, currentUserName: widget.currentUserName, existingDocId: doc.id, existingData: data)));
-                              }
+                              if (val == 'edit') _editRequest(doc.id);
                               if (val == 'delete') _deleteRequest(doc.id);
                             },
                             itemBuilder: (ctx) => [
@@ -1058,19 +1255,44 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
                           Text('$itemName ${itemNature.isNotEmpty ? '($itemNature)' : ''}', style: TextStyle(fontSize: 12, color: Colors.grey.shade800, fontWeight: FontWeight.w600)),
                         if (category.isNotEmpty)
                           _InfoChip(label: category, backgroundColor: Colors.purple.shade50, textColor: Colors.purple.shade800),
-                        if (status.isNotEmpty) _buildStatusChip(status),
+
+                        _buildAttentionChip(workflowStage),
+                        if (isDelayed) const _DelayBadge(),
+
                         if (priority.isNotEmpty) _buildPriorityChip(priority),
                         if (isWarranty) _InfoChip(label: 'Warranty', backgroundColor: Colors.teal.shade50, textColor: Colors.teal.shade800),
                       ],
                     ),
-                    const SizedBox(height: 8),
 
-                    // ROW 3: Assignments & Ownership
+                    // ROW 3: Pending Reason (If any)
+                    if (pendingReason.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.red.shade100)),
+                        child: Row(
+                          children: [
+                            Icon(Icons.info_outline, size: 14, color: Colors.red.shade700),
+                            const SizedBox(width: 6),
+                            Expanded(child: Text('Pending: $pendingReason', style: TextStyle(fontSize: 11, color: Colors.red.shade900, fontWeight: FontWeight.w600))),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 12),
+
+                    // ROW 4: Service Progress Tracker
+                    _buildWorkflowTracker(workflowStage),
+                    const SizedBox(height: 12),
+
+                    // ROW 5: Assignments, Visits & Ownership
                     Wrap(
                       spacing: 12,
                       runSpacing: 4,
                       children: [
                         _InlineInfo(icon: Icons.engineering_outlined, text: 'Assigned: ${assignedToName.isEmpty ? 'Unassigned' : assignedToName}'),
+                        _InlineInfo(icon: Icons.pin_drop_outlined, text: 'Visits: $visitCount${lastVisitDate != '-' ? ' (Last: $lastVisitDate)' : ''}'),
                         _InlineInfo(icon: Icons.person_outline, text: 'Created By: ${createdByName.isEmpty ? 'System' : createdByName}'),
                       ],
                     ),
@@ -1094,7 +1316,12 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
     final category = _safeString(data['complaintCategory']);
     final itemName = _safeString(data['serviceItemName'] ?? data['machineModel']);
     final itemNature = _safeString(data['serviceItemNature'] ?? data['machineNature']);
-    final status = _safeString(data['status']);
+
+    // Enterprise Extensions
+    final workflowStage = _getWorkflowStage(data);
+    final isDelayed = _isWorkflowDelayed(data);
+    final pendingReason = _safeString(data['pendingReason']);
+
     final priority = _safeString(data['priority']);
     final assignedToName = _safeString(data['assignedToName']);
     final createdByName = _safeString(data['createdByName']);
@@ -1153,8 +1380,27 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
               ),
             ),
             SizedBox(
-              width: 100,
-              child: Align(alignment: Alignment.centerLeft, child: _buildStatusChip(status)),
+                width: 130,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 4,
+                      runSpacing: 4,
+                      children: [
+                        _buildAttentionChip(workflowStage),
+                        if (isDelayed) const _DelayBadge(),
+                      ],
+                    ),
+                    if (pendingReason.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4.0),
+                        child: Text('Pending: $pendingReason', style: TextStyle(fontSize: 10, color: Colors.red.shade700, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ),
+                  ],
+                )
             ),
             SizedBox(
                 width: 120,
@@ -1179,15 +1425,7 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
                   tooltip: 'Actions',
                   onSelected: (val) {
                     if (val == 'view') _showDetailsDialog(data);
-                    if (val == 'edit') {
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => AddServiceRequestScreen(
-                        companyId: widget.companyId,
-                        currentUserUid: widget.currentUserUid,
-                        currentUserName: widget.currentUserName,
-                        existingDocId: doc.id,
-                        existingData: data,
-                      )));
-                    }
+                    if (val == 'edit') _editRequest(doc.id);
                     if (val == 'delete') _deleteRequest(doc.id);
                   },
                   itemBuilder: (ctx) => [
@@ -1204,17 +1442,15 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
     );
   }
 
-  Widget _buildStatusChip(String status) {
-    Color bg; Color fg;
-    switch (status) {
-      case 'New': bg = Colors.blue.shade50; fg = Colors.blue.shade800; break;
-      case 'In Progress': bg = Colors.orange.shade50; fg = Colors.orange.shade800; break;
-      case 'Resolved':
-      case 'Completed': bg = Colors.green.shade50; fg = Colors.green.shade800; break;
-      case 'Closed': bg = Colors.grey.shade200; fg = Colors.grey.shade800; break;
-      default: bg = Colors.blueGrey.shade50; fg = Colors.blueGrey.shade800;
-    }
-    return _InfoChip(label: status, backgroundColor: bg, textColor: fg);
+  Widget _buildAttentionChip(String stage) {
+    final name = _getWorkflowDisplayName(stage);
+    final color = _getWorkflowColor(stage);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(4), border: Border.all(color: color.withOpacity(0.3))),
+      child: Text(name, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color)),
+    );
   }
 
   Widget _buildPriorityChip(String priority) {
@@ -1233,6 +1469,25 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
 // ==========================================
 // SHARED ENTERPRISE UI COMPONENTS
 // ==========================================
+
+class _DelayBadge extends StatelessWidget {
+  const _DelayBadge();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      decoration: BoxDecoration(color: Colors.red.shade600, borderRadius: BorderRadius.circular(4)),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.warning_amber_rounded, size: 10, color: Colors.white),
+          SizedBox(width: 2),
+          Text('Delayed', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white)),
+        ],
+      ),
+    );
+  }
+}
 
 class _MiniStatText extends StatelessWidget {
   final String label;

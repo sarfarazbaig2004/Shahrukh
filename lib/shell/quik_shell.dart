@@ -28,6 +28,8 @@ import 'package:QUIK/modules/reports/sales_report/sales_report_screen.dart';
 
 // Service Sub-Modules
 import 'package:QUIK/modules/service/service_requests/service_request_list_screen.dart';
+import 'package:QUIK/modules/service/service_visits/service_visit_list_screen.dart';
+import 'package:QUIK/modules/service/service_technicians/service_technician_list_screen.dart';
 
 enum ShellPage {
   dashboard,
@@ -808,6 +810,8 @@ class _ZohoShellState extends State<ZohoShell> {
       case ShellPage.financeOutstanding:
       case ShellPage.reportsSales:
       case ShellPage.serviceRequests: // ✅ Connected Service Requests
+      case ShellPage.serviceVisits: // ✅ Connected Service Visits
+      case ShellPage.serviceTechnicians: // ✅ Connected Service Technicians
         return true;
       default:
       // Service modules removed to trigger placeholder correctly
@@ -1411,12 +1415,28 @@ class _ZohoShellState extends State<ZohoShell> {
           ),
         );
 
+      case ShellPage.serviceVisits:
+        return Padding(
+          padding: const EdgeInsets.all(10),
+          child: ServiceVisitListScreen(
+            companyId: widget.companyId,
+            currentUserUid: widget.userUid,
+            currentUserName: _resolvedEmployeeName(),
+          ),
+        );
+
+      case ShellPage.serviceTechnicians:
+        return Padding(
+          padding: const EdgeInsets.all(10),
+          child: ServiceTechnicianListScreen(
+            companyId: widget.companyId,
+          ),
+        );
+
     // Industrial Service Submodules Routing (Now using placeholder fallback)
       case ShellPage.serviceWorkOrders:
       case ShellPage.serviceQuotations:
-      case ShellPage.serviceVisits:
       case ShellPage.serviceInstallationCommissioning:
-      case ShellPage.serviceTechnicians:
       case ShellPage.serviceReports:
       case ShellPage.serviceEquipmentHistory:
       case ShellPage.serviceClosedWorkOrders:

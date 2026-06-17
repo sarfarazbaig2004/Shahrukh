@@ -117,6 +117,12 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
   CollectionReference<Map<String, dynamic>> get _usersRef =>
       FirebaseFirestore.instance.collection('companies').doc(widget.companyId).collection('users');
 
+  // SAFE ID NORMALIZER - Converts "" to null to prevent dropdown assertions
+  String? _normalizeId(dynamic val) {
+    if (val == null) return null;
+    final str = val.toString().trim();
+    return str.isEmpty ? null : str;
+  }
 
   @override
   void initState() {
@@ -128,11 +134,11 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
     if (widget.existingData != null) {
       final d = widget.existingData!;
 
-      _selectedCustomerId = d['customerId'];
+      _selectedCustomerId = _normalizeId(d['customerId']);
       _selectedCustomerCode = d['customerCode'];
-      _selectedContactId = d['contactId'];
-      _selectedAddressId = d['selectedAddressId'];
-      _salesPersonId = d['salesPersonId'];
+      _selectedContactId = _normalizeId(d['contactId']);
+      _selectedAddressId = _normalizeId(d['selectedAddressId']);
+      _salesPersonId = _normalizeId(d['salesPersonId']);
       _salesPersonName = d['salesPersonName'];
 
       _customerNameCtrl.text = d['customerName'] ?? '';
@@ -147,19 +153,19 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
       _pincodeCtrl.text = d['pincode'] ?? '';
       _salesPersonCtrl.text = d['salesPersonName'] ?? '';
 
-      // --- Map Service Assignment ---
-      _assignedToUid = d['assignedToUid'];
-      _assignedToName = d['assignedToName'];
-      _assignedToEmail = d['assignedToEmail'];
+      // --- Map Service Assignment safely ---
+      _assignedToUid = _normalizeId(d['assignedToUid']);
+      _assignedToName = _normalizeId(d['assignedToName']);
+      _assignedToEmail = _normalizeId(d['assignedToEmail']);
 
-      // --- Map Service Item Hierarchy (Safely falling back to legacy machine fields) ---
+      // --- Map Service Item Hierarchy safely ---
       _serviceItemNature = d['serviceItemNature'] ?? d['machineNature'] ?? 'Machine';
-      _serviceCategoryId = d['serviceCategoryId'] ?? d['machineCategoryId'];
+      _serviceCategoryId = _normalizeId(d['serviceCategoryId'] ?? d['machineCategoryId']);
       _serviceCategoryName = d['serviceCategoryName'] ?? d['machineCategory'];
-      _serviceSubcategoryId = d['serviceSubcategoryId'] ?? d['machineSubcategoryId'];
+      _serviceSubcategoryId = _normalizeId(d['serviceSubcategoryId'] ?? d['machineSubcategoryId']);
       _serviceSubcategoryName = d['serviceSubCategoryName'] ?? d['machineSubCategory'];
-      _serviceMachineType = d['serviceMachineType'] ?? d['machineType'];
-      _serviceItemId = d['serviceItemId'] ?? d['machineId'];
+      _serviceMachineType = _normalizeId(d['serviceMachineType'] ?? d['machineType']);
+      _serviceItemId = _normalizeId(d['serviceItemId'] ?? d['machineId']);
       _serviceItemCode = d['serviceItemCode'] ?? d['machineCode'];
       _serviceItemName = d['serviceItemName'] ?? d['machineModel'];
       _brandCtrl.text = d['brand'] ?? d['machineBrand'] ?? '';
@@ -179,7 +185,7 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
       _isWarranty = d['isWarranty'] ?? false;
       _status = d['status'] ?? 'New';
 
-      if (_selectedCustomerId != null && _selectedCustomerId!.isNotEmpty) {
+      if (_selectedCustomerId != null) {
         _fetchCustomerRelatedData(_selectedCustomerId!);
       }
     }
@@ -765,13 +771,13 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
       'salesPersonId': _salesPersonId ?? '',
       'salesPersonName': _salesPersonName ?? '',
 
-      // Assignment
-      'assignedToUid': _assignedToUid ?? '',
-      'assignedToName': _assignedToName ?? '',
-      'assignedToEmail': _assignedToEmail ?? '',
+      // Assignment: Safely save null instead of empty strings
+      'assignedToUid': _assignedToUid,
+      'assignedToName': _assignedToName,
+      'assignedToEmail': _assignedToEmail,
       'assignedByUid': widget.currentUserUid,
       'assignedByName': widget.currentUserName,
-      'assignedAt': (_assignedToUid != null && _assignedToUid!.isNotEmpty)
+      'assignedAt': _assignedToUid != null
           ? (widget.existingData != null && widget.existingData!['assignedToUid'] == _assignedToUid
           ? widget.existingData!['assignedAt']
           : FieldValue.serverTimestamp())
@@ -790,7 +796,7 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
       'brand': _brandCtrl.text.trim(),
       'serialNumber': _serialNumberCtrl.text.trim(),
 
-      // Legacy Mappings (Preserved for backwards compatibility with existing UI/reports)
+      // Legacy Mappings
       'machineCategoryId': _serviceCategoryId,
       'machineCategory': _serviceCategoryName,
       'machineSubcategoryId': _serviceSubcategoryId,
@@ -825,8 +831,53 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
   }
 
   // ==========================================
-  // UI BUILDERS
+  // UI BUILDERS & SAFE DROPDOWN FACTORY
   // ==========================================
+
+  // ✨ CRITICAL FIX: Safe Stream Dropdown Factory prevents ALL duplicates and guarantees selected value exists
+  Widget _buildSafeStreamDropdown({
+    required String label,
+    required IconData icon,
+    required String? currentValue,
+    required String? legacyName,
+    required List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+    required String valueField, // Usually 'id' or 'name'
+    required String displayField,
+    required void Function(String?) onChanged,
+    String? Function(String?)? validator,
+  }) {
+    Set<String> validValues = {};
+    List<DropdownMenuItem<String>> items = [];
+
+    for (var doc in docs) {
+      final val = valueField == 'id' ? doc.id : doc.data()[valueField]?.toString();
+      final display = doc.data()[displayField]?.toString() ?? 'Unknown';
+
+      if (val != null && val.isNotEmpty && !validValues.contains(val)) {
+        validValues.add(val);
+        items.add(DropdownMenuItem(value: val, child: Text(display)));
+      }
+    }
+
+    // Recover legacy or deleted item safely without duplicate crashes
+    if (currentValue != null && currentValue.isNotEmpty && !validValues.contains(currentValue)) {
+      items.add(DropdownMenuItem(
+        value: currentValue,
+        child: Text('${legacyName ?? 'Unknown'} (Legacy/Deleted)'),
+      ));
+      validValues.add(currentValue);
+    }
+
+    final safeValue = validValues.contains(currentValue) ? currentValue : null;
+
+    return DropdownButtonFormField<String>(
+      value: safeValue,
+      decoration: _inputDecoration(label: label, icon: icon),
+      items: items,
+      onChanged: onChanged,
+      validator: validator,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -937,7 +988,12 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
                 const DropdownMenuItem(value: null, child: Text('Unassigned (Leave blank)')),
               ];
 
+              Set<String> addedIds = {}; // Prevent duplicates
+
               for (var doc in docs) {
+                if (addedIds.contains(doc.id)) continue;
+                addedIds.add(doc.id);
+
                 final data = doc.data();
                 final name = (data['name'] ?? data['fullName'] ?? 'Unknown').toString();
                 final designation = (data['designation'] ?? '').toString();
@@ -946,15 +1002,18 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
               }
 
               // Handle case where existing assigned user is no longer active or moved out of service dept
-              if (_assignedToUid != null && _assignedToUid!.isNotEmpty && !docs.any((d) => d.id == _assignedToUid)) {
+              if (_assignedToUid != null && !addedIds.contains(_assignedToUid)) {
                 items.add(DropdownMenuItem(
                   value: _assignedToUid,
                   child: Text('${_assignedToName ?? 'Unknown User'} (Inactive/Moved)'),
                 ));
+                addedIds.add(_assignedToUid!); // Mark as added to maintain Dropdown safety
               }
 
+              final safeAssignedToUid = addedIds.contains(_assignedToUid) ? _assignedToUid : null;
+
               return DropdownButtonFormField<String?>(
-                value: _assignedToUid,
+                value: safeAssignedToUid,
                 decoration: _inputDecoration(label: 'Assign To', icon: Icons.person_pin_circle_outlined),
                 items: items,
                 onChanged: (val) {
@@ -980,6 +1039,10 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
   Widget _buildServiceItemSection() {
     bool isMachine = _serviceItemNature == 'Machine';
 
+    // Normalize nature array to prevent duplicates and static list crashes
+    final natureOptions = ['Machine', 'Spare', 'Accessory', 'Consumable'];
+    final safeNature = natureOptions.contains(_serviceItemNature) ? _serviceItemNature : 'Machine';
+
     return _SectionBlock(
       title: 'Target Service Item',
       subtitle: 'Select the nature of the product and locate it in inventory',
@@ -987,11 +1050,10 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Row 1: Product Nature Dropdown
-          _buildDropdown(
-            label: 'Product Nature *',
-            icon: Icons.settings_applications_outlined,
-            value: _serviceItemNature,
-            items: ['Machine', 'Spare', 'Accessory', 'Consumable'],
+          DropdownButtonFormField<String>(
+            value: safeNature,
+            decoration: _inputDecoration(label: 'Product Nature *', icon: Icons.settings_applications_outlined),
+            items: natureOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
             onChanged: (val) {
               if (val != null) {
                 _resetHierarchy(resetCat: true, resetSub: true, resetType: true);
@@ -1007,22 +1069,25 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
               StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                 stream: _categoriesRef.orderBy('nameLower').snapshots(),
                 builder: (context, snap) {
-                  List<DropdownMenuItem<String>> items = [];
-                  if (snap.hasData) {
-                    items = snap.data!.docs.map((doc) => DropdownMenuItem(value: doc.id, child: Text(doc.data()['name'] ?? ''))).toList();
-                  }
-                  return DropdownButtonFormField<String>(
-                    value: _serviceCategoryId,
-                    decoration: _inputDecoration(label: 'Category *', icon: Icons.folder_outlined),
-                    items: items,
+                  return _buildSafeStreamDropdown(
+                    label: 'Category *',
+                    icon: Icons.folder_outlined,
+                    currentValue: _serviceCategoryId,
+                    legacyName: _serviceCategoryName,
+                    docs: snap.data?.docs ?? [],
+                    valueField: 'id',
+                    displayField: 'name',
+                    validator: (v) => v == null ? 'Required' : null,
                     onChanged: (val) {
                       if (val != null) {
                         _resetHierarchy(resetSub: true, resetType: true);
                         _serviceCategoryId = val;
-                        _serviceCategoryName = snap.data!.docs.firstWhere((d) => d.id == val).data()['name'];
+                        final docs = snap.data?.docs ?? [];
+                        if (docs.any((d) => d.id == val)) {
+                          _serviceCategoryName = docs.firstWhere((d) => d.id == val).data()['name'];
+                        }
                       }
                     },
-                    validator: (v) => v == null ? 'Required' : null,
                   );
                 },
               ),
@@ -1030,26 +1095,34 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
                 StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                   stream: _subcategoriesRef(_serviceCategoryId!).orderBy('nameLower').snapshots(),
                   builder: (context, snap) {
-                    List<DropdownMenuItem<String>> items = [];
-                    if (snap.hasData) {
-                      items = snap.data!.docs.map((doc) => DropdownMenuItem(value: doc.id, child: Text(doc.data()['name'] ?? ''))).toList();
-                    }
-                    return DropdownButtonFormField<String>(
-                      value: _serviceSubcategoryId,
-                      decoration: _inputDecoration(label: 'Sub Category', icon: Icons.folder_open_outlined),
-                      items: items,
+                    return _buildSafeStreamDropdown(
+                      label: 'Sub Category',
+                      icon: Icons.folder_open_outlined,
+                      currentValue: _serviceSubcategoryId,
+                      legacyName: _serviceSubcategoryName,
+                      docs: snap.data?.docs ?? [],
+                      valueField: 'id',
+                      displayField: 'name',
                       onChanged: (val) {
                         if (val != null) {
                           _resetHierarchy(resetType: true);
                           _serviceSubcategoryId = val;
-                          _serviceSubcategoryName = snap.data!.docs.firstWhere((d) => d.id == val).data()['name'];
+                          final docs = snap.data?.docs ?? [];
+                          if (docs.any((d) => d.id == val)) {
+                            _serviceSubcategoryName = docs.firstWhere((d) => d.id == val).data()['name'];
+                          }
                         }
                       },
                     );
                   },
                 )
               else
-                _buildDropdown(label: 'Sub Category', icon: Icons.folder_open_outlined, value: '', items: [''], onChanged: (_) {}),
+                DropdownButtonFormField<String?>(
+                  value: null,
+                  decoration: _inputDecoration(label: 'Sub Category', icon: Icons.folder_open_outlined),
+                  items: const [],
+                  onChanged: null,
+                )
             ],
           ),
           const SizedBox(height: 12),
@@ -1061,18 +1134,18 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
                 StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                   stream: _machineTypesRef.orderBy('nameLower').snapshots(),
                   builder: (context, snap) {
-                    List<DropdownMenuItem<String>> items = [];
-                    if (snap.hasData) {
-                      items = snap.data!.docs.map((doc) => DropdownMenuItem(value: doc.data()['name'] as String, child: Text(doc.data()['name'] ?? ''))).toList();
-                    }
-                    return DropdownButtonFormField<String>(
-                      value: _serviceMachineType,
-                      decoration: _inputDecoration(label: 'Machine Type', icon: Icons.precision_manufacturing_outlined),
-                      items: items,
+                    return _buildSafeStreamDropdown(
+                      label: 'Machine Type',
+                      icon: Icons.precision_manufacturing_outlined,
+                      currentValue: _serviceMachineType,
+                      legacyName: _serviceMachineType,
+                      docs: snap.data?.docs ?? [],
+                      valueField: 'name', // Using Name instead of ID for this specific dropdown
+                      displayField: 'name',
                       onChanged: (val) {
                         if (val != null) {
                           _resetHierarchy();
-                          _serviceMachineType = val;
+                          setState(() => _serviceMachineType = val);
                         }
                       },
                     );
@@ -1092,31 +1165,33 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
                   if (_serviceSubcategoryId != null) docs = docs.where((d) => d.data()['subcategoryId'] == _serviceSubcategoryId).toList();
                   if (isMachine && _serviceMachineType != null) docs = docs.where((d) => d.data()['machineType'] == _serviceMachineType).toList();
 
-                  // Customer Ownership Filter (If items are strictly mapped to customers in inventory)
+                  // Customer Ownership Filter
                   if (_selectedCustomerId != null) {
                     docs = docs.where((d) {
                       final cId = d.data()['customerId'];
                       if (cId != null && cId.toString().isNotEmpty) {
-                        return cId == _selectedCustomerId; // Restrict if strictly owned
+                        return cId == _selectedCustomerId;
                       }
                       return true; // General catalog item
                     }).toList();
                   }
 
-                  List<DropdownMenuItem<String>> items = docs.map((doc) => DropdownMenuItem(value: doc.id, child: Text(doc.data()['name'] ?? ''))).toList();
-
-                  return DropdownButtonFormField<String>(
-                    value: _serviceItemId,
-                    decoration: _inputDecoration(label: 'Target Product Model *', icon: Icons.memory_outlined),
-                    items: items,
+                  return _buildSafeStreamDropdown(
+                    label: 'Target Product Model *',
+                    icon: Icons.memory_outlined,
+                    currentValue: _serviceItemId,
+                    legacyName: _serviceItemName,
+                    docs: docs,
+                    valueField: 'id',
+                    displayField: 'name',
+                    validator: (v) => v == null ? 'Required' : null,
                     onChanged: (val) {
-                      if (val != null) {
+                      if (val != null && docs.any((d) => d.id == val)) {
                         final product = docs.firstWhere((d) => d.id == val).data();
-                        product['id'] = val; // Inject ID
+                        product['id'] = val;
                         _applyServiceItemProduct(product);
                       }
                     },
-                    validator: (v) => v == null ? 'Required' : null,
                   );
                 },
               ),
@@ -1130,12 +1205,19 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
               children: [
                 _buildTextField(label: 'Brand / Make', controller: _brandCtrl, readOnly: true, icon: Icons.branding_watermark),
                 if (_availableSerialNumbers.isNotEmpty)
-                  DropdownButtonFormField<String>(
-                    value: _availableSerialNumbers.contains(_serialNumberCtrl.text) ? _serialNumberCtrl.text : null,
-                    decoration: _inputDecoration(label: 'Select Serial Number', icon: Icons.tag),
-                    items: _availableSerialNumbers.map((sn) => DropdownMenuItem(value: sn, child: Text(sn))).toList(),
-                    onChanged: (val) {
-                      if (val != null) setState(() => _serialNumberCtrl.text = val);
+                  Builder(
+                    builder: (context) {
+                      final validSerials = _availableSerialNumbers.where((s) => s.isNotEmpty).toSet().toList();
+                      final safeSerial = validSerials.contains(_serialNumberCtrl.text) ? _serialNumberCtrl.text : null;
+
+                      return DropdownButtonFormField<String>(
+                        value: safeSerial,
+                        decoration: _inputDecoration(label: 'Select Serial Number', icon: Icons.tag),
+                        items: validSerials.map((sn) => DropdownMenuItem(value: sn, child: Text(sn))).toList(),
+                        onChanged: (val) {
+                          if (val != null) setState(() => _serialNumberCtrl.text = val);
+                        },
+                      );
                     },
                   )
                 else
@@ -1320,15 +1402,34 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
           const SizedBox(height: 12),
 
           if (_customerContacts.isNotEmpty) ...[
-            DropdownButtonFormField<String>(
-              value: _selectedContactId,
-              decoration: _inputDecoration(label: 'Select Contact Person', icon: Icons.contacts_outlined),
-              items: _customerContacts.map((c) {
-                final text = '${c['name'] ?? ''} - ${c['designation'] ?? ''} - ${c['phone'] ?? c['mobile'] ?? ''}';
-                return DropdownMenuItem<String>(value: c['id'], child: Text(text, overflow: TextOverflow.ellipsis));
-              }).toList(),
-              onChanged: _applyContact,
-            ),
+            Builder(builder: (context) {
+              // Deduplicate and fallback safely
+              List<DropdownMenuItem<String>> contactItems = [];
+              Set<String> addedContacts = {};
+
+              for (var c in _customerContacts) {
+                final id = c['id']?.toString();
+                if (id != null && !addedContacts.contains(id)) {
+                  addedContacts.add(id);
+                  final text = '${c['name'] ?? ''} - ${c['designation'] ?? ''} - ${c['phone'] ?? c['mobile'] ?? ''}';
+                  contactItems.add(DropdownMenuItem<String>(value: id, child: Text(text, overflow: TextOverflow.ellipsis)));
+                }
+              }
+
+              if (_selectedContactId != null && !addedContacts.contains(_selectedContactId)) {
+                contactItems.add(DropdownMenuItem(value: _selectedContactId, child: Text('${_contactPersonCtrl.text} (Legacy)', overflow: TextOverflow.ellipsis)));
+                addedContacts.add(_selectedContactId!);
+              }
+
+              final safeContactId = addedContacts.contains(_selectedContactId) ? _selectedContactId : null;
+
+              return DropdownButtonFormField<String>(
+                value: safeContactId,
+                decoration: _inputDecoration(label: 'Select Contact Person', icon: Icons.contacts_outlined),
+                items: contactItems,
+                onChanged: _applyContact,
+              );
+            }),
             const SizedBox(height: 12),
           ],
 
@@ -1355,15 +1456,34 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
 
           if (_customerAddresses.isNotEmpty) ...[
             const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Divider(height: 1)),
-            DropdownButtonFormField<String>(
-              value: _selectedAddressId,
-              decoration: _inputDecoration(label: 'Select Address', icon: Icons.location_on_outlined),
-              items: _customerAddresses.map((addr) {
-                final text = '${addr['type'] ?? 'Address'} - ${addr['city'] ?? ''} - ${addr['state'] ?? ''}';
-                return DropdownMenuItem<String>(value: addr['id'] ?? addr['erpAddressCode'], child: Text(text, overflow: TextOverflow.ellipsis));
-              }).toList(),
-              onChanged: _applyAddress,
-            ),
+            Builder(builder: (context) {
+              // Deduplicate and fallback safely
+              List<DropdownMenuItem<String>> addressItems = [];
+              Set<String> addedAddresses = {};
+
+              for (var addr in _customerAddresses) {
+                final id = (addr['id'] ?? addr['erpAddressCode'])?.toString();
+                if (id != null && !addedAddresses.contains(id)) {
+                  addedAddresses.add(id);
+                  final text = '${addr['type'] ?? 'Address'} - ${addr['city'] ?? ''} - ${addr['state'] ?? ''}';
+                  addressItems.add(DropdownMenuItem<String>(value: id, child: Text(text, overflow: TextOverflow.ellipsis)));
+                }
+              }
+
+              if (_selectedAddressId != null && !addedAddresses.contains(_selectedAddressId)) {
+                addressItems.add(DropdownMenuItem(value: _selectedAddressId, child: const Text('Legacy Address', overflow: TextOverflow.ellipsis)));
+                addedAddresses.add(_selectedAddressId!);
+              }
+
+              final safeAddressId = addedAddresses.contains(_selectedAddressId) ? _selectedAddressId : null;
+
+              return DropdownButtonFormField<String>(
+                value: safeAddressId,
+                decoration: _inputDecoration(label: 'Select Address', icon: Icons.location_on_outlined),
+                items: addressItems,
+                onChanged: _applyAddress,
+              );
+            }),
             const SizedBox(height: 12),
           ] else ...[
             const SizedBox(height: 12),
@@ -1514,11 +1634,19 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
     required void Function(String?) onChanged,
     required IconData icon,
   }) {
-    if (!items.contains(value)) items.add(value);
+    // 🛡️ Ensure original list isn't mutated and remove any trailing duplicates
+    List<String> safeItems = items.where((e) => e.isNotEmpty).toSet().toList();
+
+    if (value.isNotEmpty && !safeItems.contains(value)) {
+      safeItems.add(value);
+    }
+
+    final safeValue = safeItems.contains(value) ? value : (safeItems.isNotEmpty ? safeItems.first : null);
+
     return DropdownButtonFormField<String>(
-      value: value.isEmpty && items.length > 1 ? items.firstWhere((e) => e.isNotEmpty) : value,
+      value: safeValue,
       decoration: _inputDecoration(label: label, icon: icon),
-      items: items.map((e) => DropdownMenuItem<String>(value: e, child: Text(e.isEmpty ? 'Select' : e))).toList(),
+      items: safeItems.map((e) => DropdownMenuItem<String>(value: e, child: Text(e))).toList(),
       onChanged: onChanged,
     );
   }
