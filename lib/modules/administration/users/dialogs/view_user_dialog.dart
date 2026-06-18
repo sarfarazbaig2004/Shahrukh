@@ -584,7 +584,6 @@ String _submoduleLabel(String key) {
     'inquiries': 'Inquiries',
     'quotations': 'Quotations',
     'salesOrder': 'Sales Order',
-    'followUps': 'Follow-ups',
     'tasks': 'Tasks',
     'meetings': 'Meetings',
     'customers': 'Customers',

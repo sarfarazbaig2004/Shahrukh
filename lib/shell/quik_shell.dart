@@ -526,7 +526,7 @@ class _ZohoShellState extends State<ZohoShell> {
       case ShellPage.salesOrders:
         return _hasPermission('sales', 'salesOrder');
       case ShellPage.salesFollowUps:
-        return _hasPermission('sales', 'followUps');
+        return false;
       case ShellPage.salesTasks:
         return _hasPermission('sales', 'tasks');
       case ShellPage.salesMeetings:
@@ -646,7 +646,6 @@ class _ZohoShellState extends State<ZohoShell> {
           ShellPage.salesInquiries,
           ShellPage.salesQuotations,
           ShellPage.salesOrders,
-          ShellPage.salesFollowUps,
           ShellPage.salesTasks,
           ShellPage.salesMeetings,
         ],
@@ -1752,7 +1751,7 @@ class _ZohoShellState extends State<ZohoShell> {
   List<String> _moduleTags(ShellPage page) {
     switch (page) {
       case ShellPage.salesInquiries:
-        return ['Leads', 'Assignments', 'Follow-ups', 'Pipeline'];
+        return ['Leads', 'Assignments', 'Tasks', 'Pipeline'];
       case ShellPage.salesQuotations:
         return ['Price', 'Proposal', 'Customer', 'Approval'];
       case ShellPage.crmCustomers:
@@ -2150,7 +2149,7 @@ class _ZohoShellState extends State<ZohoShell> {
                   child: _Panel(
                     title: 'Next Build Suggestion',
                     emptyText:
-                    'Start with Follow-ups, Stock Summary and Vendors',
+                    'Start with Tasks, Meetings, Stock Summary and Vendors',
                     emptyIcon: Icons.rocket_launch_outlined,
                   ),
                 ),

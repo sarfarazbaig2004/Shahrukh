@@ -179,8 +179,6 @@ String permissionLabel(String key) {
       return 'Quotations';
     case 'salesOrder':
       return 'Sales Orders';
-    case 'followUps':
-      return 'Follow Ups';
     case 'tasks':
       return 'Tasks';
     case 'meetings':

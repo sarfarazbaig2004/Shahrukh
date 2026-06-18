@@ -127,13 +127,6 @@ extension _CreateInvitePermissionHelpers on _ScreenCreateInviteState {
         sales['salesOrder'] = sales['salesOrders'];
       }
 
-      if (sales.containsKey('followUps') && !sales.containsKey('followUp')) {
-        sales['followUp'] = sales['followUps'];
-      } else if (sales.containsKey('followUp') &&
-          !sales.containsKey('followUps')) {
-        sales['followUps'] = sales['followUp'];
-      }
-
       payload['sales'] = sales;
     }
 
