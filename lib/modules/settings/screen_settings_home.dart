@@ -7,14 +7,9 @@ import 'package:intl/intl.dart';
 
 import 'package:QUIK/auth/register/register_screen_local.dart';
 import 'package:QUIK/core/theme/app_theme.dart';
+import 'package:QUIK/modules/notifications/screen_notification_center.dart';
 
-enum _SettingsSection {
-  personal,
-  workspace,
-  access,
-  system,
-  danger,
-}
+enum _SettingsSection { personal, workspace, access, system, danger }
 
 class ScreenSettingsHome extends StatefulWidget {
   final String companyId;
@@ -117,7 +112,10 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message, style: const TextStyle(fontWeight: FontWeight.w600)),
+        content: Text(
+          message,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
         backgroundColor: isError ? Colors.red.shade700 : zSuccess,
         behavior: SnackBarBehavior.floating,
       ),
@@ -140,7 +138,10 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
       }
 
       if (!isAdminOrManager) {
-        _showSnack('Only Admins or Managers can update the logo.', isError: true);
+        _showSnack(
+          'Only Admins or Managers can update the logo.',
+          isError: true,
+        );
         return;
       }
 
@@ -156,12 +157,18 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
       final file = result.files.first;
 
       if (file.size > 2 * 1024 * 1024) {
-        _showSnack('Image size exceeds 2MB limit. Please compress it.', isError: true);
+        _showSnack(
+          'Image size exceeds 2MB limit. Please compress it.',
+          isError: true,
+        );
         return;
       }
 
       if (file.bytes == null || file.bytes!.isEmpty) {
-        _showSnack('Failed to read image data. Please try another file.', isError: true);
+        _showSnack(
+          'Failed to read image data. Please try another file.',
+          isError: true,
+        );
         return;
       }
 
@@ -172,13 +179,18 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
 
       if (currentLogoUrl != null && currentLogoUrl.trim().startsWith('http')) {
         try {
-          await FirebaseStorage.instance.refFromURL(currentLogoUrl.trim()).delete();
+          await FirebaseStorage.instance
+              .refFromURL(currentLogoUrl.trim())
+              .delete();
         } catch (e) {
           debugPrint('Notice: Failed to delete old logo (might not exist): $e');
         }
       }
 
-      final cleanCompanyId = widget.companyId.trim().replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '');
+      final cleanCompanyId = widget.companyId.trim().replaceAll(
+        RegExp(r'[^a-zA-Z0-9_-]'),
+        '',
+      );
       final fileExt = file.extension?.toLowerCase() ?? 'png';
 
       final uniqueId = DateTime.now().millisecondsSinceEpoch;
@@ -205,11 +217,11 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
           .collection('companies')
           .doc(widget.companyId)
           .update({
-        'companyLogoUrl': downloadUrl,
-        'logoUrl': downloadUrl,
-        'updatedAt': FieldValue.serverTimestamp(),
-        'updatedBy': user.uid,
-      });
+            'companyLogoUrl': downloadUrl,
+            'logoUrl': downloadUrl,
+            'updatedAt': FieldValue.serverTimestamp(),
+            'updatedBy': user.uid,
+          });
 
       if (mounted) {
         setState(() {
@@ -218,18 +230,25 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
         });
         _showSnack('Company logo updated successfully.');
       }
-
     } on FirebaseException catch (e) {
-      if (mounted) setState(() { _isUploadingLogo = false; _uploadProgress = null; });
+      if (mounted)
+        setState(() {
+          _isUploadingLogo = false;
+          _uploadProgress = null;
+        });
       debugPrint('Firebase Storage Exception: ${e.code} - ${e.message}');
       _showSnack(
-          e.code == 'unauthorized'
-              ? 'Access Denied: Check Firebase Storage Rules or user permissions.'
-              : 'Storage Error: ${e.message}',
-          isError: true
+        e.code == 'unauthorized'
+            ? 'Access Denied: Check Firebase Storage Rules or user permissions.'
+            : 'Storage Error: ${e.message}',
+        isError: true,
       );
     } catch (e) {
-      if (mounted) setState(() { _isUploadingLogo = false; _uploadProgress = null; });
+      if (mounted)
+        setState(() {
+          _isUploadingLogo = false;
+          _uploadProgress = null;
+        });
       debugPrint('Unknown Upload Error: $e');
       _showSnack('Failed to upload logo: $e', isError: true);
     }
@@ -244,8 +263,13 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
     final bool? confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Remove Logo?', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: const Text('Are you sure you want to delete the company logo? This action cannot be undone.'),
+        title: const Text(
+          'Remove Logo?',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'Are you sure you want to delete the company logo? This action cannot be undone.',
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         actions: [
           TextButton(
@@ -274,9 +298,13 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
 
       if (currentLogoUrl.trim().startsWith('http')) {
         try {
-          await FirebaseStorage.instance.refFromURL(currentLogoUrl.trim()).delete();
+          await FirebaseStorage.instance
+              .refFromURL(currentLogoUrl.trim())
+              .delete();
         } catch (e) {
-          debugPrint('Notice: Storage delete failed (URL might be invalid): $e');
+          debugPrint(
+            'Notice: Storage delete failed (URL might be invalid): $e',
+          );
         }
       }
 
@@ -284,11 +312,11 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
           .collection('companies')
           .doc(widget.companyId)
           .update({
-        'companyLogoUrl': FieldValue.delete(),
-        'logoUrl': FieldValue.delete(),
-        'updatedAt': FieldValue.serverTimestamp(),
-        'updatedBy': user?.uid,
-      });
+            'companyLogoUrl': FieldValue.delete(),
+            'logoUrl': FieldValue.delete(),
+            'updatedAt': FieldValue.serverTimestamp(),
+            'updatedBy': user?.uid,
+          });
 
       if (mounted) {
         setState(() => _isUploadingLogo = false);
@@ -310,7 +338,8 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
     int totalFields = 6;
 
     if ((data['companyName'] ?? '').toString().isNotEmpty) score++;
-    if ((data['companyLogoUrl'] ?? data['logoUrl'] ?? '').toString().isNotEmpty) score++;
+    if ((data['companyLogoUrl'] ?? data['logoUrl'] ?? '').toString().isNotEmpty)
+      score++;
     if ((data['gstNo'] ?? '').toString().isNotEmpty) score++;
     if ((data['panNo'] ?? '').toString().isNotEmpty) score++;
     if ((data['industry'] ?? '').toString().isNotEmpty) score++;
@@ -329,14 +358,9 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(
-                width: 250,
-                child: _buildLeftNav(),
-              ),
+              SizedBox(width: 250, child: _buildLeftNav()),
               const SizedBox(width: 10),
-              Expanded(
-                child: _buildRightPanel(),
-              ),
+              Expanded(child: _buildRightPanel()),
             ],
           ),
         ),
@@ -409,24 +433,23 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
                   color: selected ? zBlueSoft : Colors.transparent,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: selected ? zBlue.withValues(alpha: 0.15) : Colors.transparent,
+                    color: selected
+                        ? zBlue.withValues(alpha: 0.15)
+                        : Colors.transparent,
                   ),
                 ),
                 child: Row(
                   children: [
-                    Icon(
-                      item.icon,
-                      size: 18,
-                      color: selected ? zBlue : zMuted,
-                    ),
+                    Icon(item.icon, size: 18, color: selected ? zBlue : zMuted),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         item.title,
                         style: TextStyle(
                           color: selected ? zBlue : zText,
-                          fontWeight:
-                          selected ? FontWeight.w800 : FontWeight.w600,
+                          fontWeight: selected
+                              ? FontWeight.w800
+                              : FontWeight.w600,
                           fontSize: 13.5,
                         ),
                       ),
@@ -464,17 +487,18 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
         _ActionTile(
           title: 'My Profile',
           subtitle:
-          'View and update the same company and registration details already saved in your workspace.',
+              'View and update the same company and registration details already saved in your workspace.',
           icon: Icons.person_outline,
           onTap: () async {
             await Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const RegisterScreenLocal(),
-              ),
+              MaterialPageRoute(builder: (_) => const RegisterScreenLocal()),
             );
 
             if (!mounted) return;
-            _showSnack('Profile screen closed. Any saved changes are now updated.', isError: false);
+            _showSnack(
+              'Profile screen closed. Any saved changes are now updated.',
+              isError: false,
+            );
           },
         ),
         _ActionTile(
@@ -484,10 +508,18 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
           onTap: () => _showChangePasswordDialog(context),
         ),
         _ActionTile(
-          title: 'Notification Preferences',
-          subtitle: 'Control reminders and alerts for your account.',
+          title: 'Notification Center',
+          subtitle:
+              'View alerts, reminders, task updates, and meeting invitations.',
           icon: Icons.notifications_active_outlined,
-          onTap: () => _showComingSoon('Notification Preferences'),
+          onTap: () async {
+            await Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) =>
+                    ScreenNotificationCenter(companyId: widget.companyId),
+              ),
+            );
+          },
         ),
       ],
     );
@@ -506,8 +538,12 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
 
         final data = snapshot.data?.data() as Map<String, dynamic>? ?? {};
 
-        final String? rawLogoUrl = data['companyLogoUrl'] as String? ?? data['logoUrl'] as String?;
-        final String? logoUrl = (rawLogoUrl != null && rawLogoUrl.trim().isNotEmpty) ? rawLogoUrl.trim() : null;
+        final String? rawLogoUrl =
+            data['companyLogoUrl'] as String? ?? data['logoUrl'] as String?;
+        final String? logoUrl =
+            (rawLogoUrl != null && rawLogoUrl.trim().isNotEmpty)
+            ? rawLogoUrl.trim()
+            : null;
 
         final createdAt = data['createdAt'] as Timestamp?;
         final updatedAt = data['updatedAt'] as Timestamp?;
@@ -515,7 +551,8 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
 
         return _SectionPanel(
           title: 'Workspace Overview',
-          subtitle: 'Company-level settings, identity, and workspace information.',
+          subtitle:
+              'Company-level settings, identity, and workspace information.',
           children: [
             Container(
               padding: const EdgeInsets.all(16),
@@ -528,7 +565,7 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
                     color: Colors.black.withValues(alpha: 0.02),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
-                  )
+                  ),
                 ],
               ),
               child: Column(
@@ -552,21 +589,21 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
                             ),
                             child: logoUrl != null
                                 ? Image.network(
-                              logoUrl, // ❌ NO Cache Buster Strings
-                              fit: BoxFit.contain,
-                              errorBuilder: (context, error, stackTrace) {
-                                return const Icon(
-                                  Icons.business_outlined,
-                                  size: 40,
-                                  color: zMuted,
-                                );
-                              },
-                            )
+                                    logoUrl, // ❌ NO Cache Buster Strings
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return const Icon(
+                                        Icons.business_outlined,
+                                        size: 40,
+                                        color: zMuted,
+                                      );
+                                    },
+                                  )
                                 : const Icon(
-                              Icons.business_outlined,
-                              size: 40,
-                              color: zMuted,
-                            ),
+                                    Icons.business_outlined,
+                                    size: 40,
+                                    color: zMuted,
+                                  ),
                           ),
                           if (_isUploadingLogo)
                             Container(
@@ -605,7 +642,11 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
                             Row(
                               children: [
                                 _StatusBadge(
-                                  text: data['industry']?.toString().toUpperCase() ?? 'INDUSTRY NOT SET',
+                                  text:
+                                      data['industry']
+                                          ?.toString()
+                                          .toUpperCase() ??
+                                      'INDUSTRY NOT SET',
                                   color: zPurple,
                                   bgColor: zPurpleSoft,
                                 ),
@@ -622,14 +663,26 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
                               children: [
                                 if (canOpenCompanyProfile) ...[
                                   ElevatedButton.icon(
-                                    onPressed: _isUploadingLogo ? null : () => _pickAndUploadLogo(logoUrl),
-                                    icon: const Icon(Icons.upload_file, size: 16),
-                                    label: Text(logoUrl != null ? 'Change Logo' : 'Upload Logo'),
+                                    onPressed: _isUploadingLogo
+                                        ? null
+                                        : () => _pickAndUploadLogo(logoUrl),
+                                    icon: const Icon(
+                                      Icons.upload_file,
+                                      size: 16,
+                                    ),
+                                    label: Text(
+                                      logoUrl != null
+                                          ? 'Change Logo'
+                                          : 'Upload Logo',
+                                    ),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: zBlue,
                                       foregroundColor: Colors.white,
                                       elevation: 0,
-                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 12,
+                                      ),
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(8),
                                       ),
@@ -638,21 +691,33 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
                                   const SizedBox(width: 10),
                                   if (logoUrl != null)
                                     OutlinedButton.icon(
-                                      onPressed: _isUploadingLogo ? null : () => _removeLogo(logoUrl),
-                                      icon: const Icon(Icons.delete_outline, size: 16),
+                                      onPressed: _isUploadingLogo
+                                          ? null
+                                          : () => _removeLogo(logoUrl),
+                                      icon: const Icon(
+                                        Icons.delete_outline,
+                                        size: 16,
+                                      ),
                                       label: const Text('Remove'),
                                       style: OutlinedButton.styleFrom(
                                         foregroundColor: Colors.red,
-                                        side: BorderSide(color: Colors.red.shade200),
-                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                        side: BorderSide(
+                                          color: Colors.red.shade200,
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 12,
+                                        ),
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
                                         ),
                                       ),
                                     ),
-                                ]
+                                ],
                               ],
-                            )
+                            ),
                           ],
                         ),
                       ),
@@ -663,15 +728,23 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
                         children: [
                           Text(
                             'Created: ${_formatDate(createdAt)}',
-                            style: const TextStyle(fontSize: 11, color: zMuted, fontWeight: FontWeight.w600),
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: zMuted,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             'Last Updated: ${_formatDate(updatedAt)}',
-                            style: const TextStyle(fontSize: 11, color: zMuted, fontWeight: FontWeight.w600),
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: zMuted,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ],
-                      )
+                      ),
                     ],
                   ),
 
@@ -683,11 +756,19 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
                   // Profile Completion Health Bar
                   Row(
                     children: [
-                      const Icon(Icons.health_and_safety_outlined, size: 18, color: zSuccess),
+                      const Icon(
+                        Icons.health_and_safety_outlined,
+                        size: 18,
+                        color: zSuccess,
+                      ),
                       const SizedBox(width: 8),
                       const Text(
                         'Profile Completion',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: zText),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: zText,
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -721,7 +802,8 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
             if (canOpenCompanyProfile)
               _ActionTile(
                 title: 'Company Profile & Settings',
-                subtitle: 'Manage company identity, GST, PAN, address, and billing information.',
+                subtitle:
+                    'Manage company identity, GST, PAN, address, and billing information.',
                 icon: Icons.apartment_outlined,
                 enabled: canOpenCompanyProfile,
                 onTap: widget.onOpenCompanyProfile,
@@ -729,19 +811,21 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
             if (!isExportImport) ...[
               _ActionTile(
                 title: 'Branches & Locations',
-                subtitle: 'Manage branch structure, warehouses, and branch-level setup.',
+                subtitle:
+                    'Manage branch structure, warehouses, and branch-level setup.',
                 icon: Icons.account_tree_outlined,
                 enabled: isAdminOrManager,
                 onTap: () => _showComingSoon('Branches'),
               ),
               _ActionTile(
                 title: 'Document Numbering',
-                subtitle: 'Control quotation, invoice, and sales order numbering formats.',
+                subtitle:
+                    'Control quotation, invoice, and sales order numbering formats.',
                 icon: Icons.numbers_outlined,
                 enabled: isAdminOrManager,
                 onTap: () => _showComingSoon('Document Numbering'),
               ),
-            ]
+            ],
           ],
         );
       },
@@ -802,12 +886,13 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
           ),
           _ActionTile(
             title: 'Security Policies',
-            subtitle: 'Future controls for session rules and account protection.',
+            subtitle:
+                'Future controls for session rules and account protection.',
             icon: Icons.security_outlined,
             enabled: isAdminOrManager,
             onTap: () => _showComingSoon('Security Policies'),
           ),
-        ]
+        ],
       ],
     );
   }
@@ -820,7 +905,7 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
         _ActionTile(
           title: 'Delete Account',
           subtitle:
-          'Permanently delete your login and remove your root user profile.',
+              'Permanently delete your login and remove your root user profile.',
           icon: Icons.delete_forever_outlined,
           isDanger: true,
           onTap: () => _showDeleteDialog(context),
@@ -978,10 +1063,13 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
                   onPressed: saving ? null : submit,
                   child: saving
                       ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
                       : const Text('Update Password'),
                 ),
               ],
@@ -1093,9 +1181,7 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
                     TextField(
                       controller: passwordController,
                       obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Password',
-                      ),
+                      decoration: const InputDecoration(labelText: 'Password'),
                     ),
                     if (errorText != null) ...[
                       const SizedBox(height: 12),
@@ -1122,16 +1208,17 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
                   child: const Text('Cancel'),
                 ),
                 FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.red,
-                  ),
+                  style: FilledButton.styleFrom(backgroundColor: Colors.red),
                   onPressed: deleting ? null : submitDelete,
                   child: deleting
                       ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
                       : const Text('Delete Permanently'),
                 ),
               ],
@@ -1285,9 +1372,7 @@ class _ActionTile extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: Colors.white,
-          border: Border.all(
-            color: isDanger ? Colors.red.shade100 : zBorder,
-          ),
+          border: Border.all(color: isDanger ? Colors.red.shade100 : zBorder),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
@@ -1299,11 +1384,7 @@ class _ActionTile extends StatelessWidget {
                 color: isDanger ? const Color(0xFFFFF1F2) : zBlueSoft,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(
-                icon,
-                size: 20,
-                color: accent,
-              ),
+              child: Icon(icon, size: 20, color: accent),
             ),
             const SizedBox(width: 14),
             Expanded(
