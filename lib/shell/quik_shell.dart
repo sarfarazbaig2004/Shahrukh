@@ -13,6 +13,7 @@ import 'package:QUIK/modules/sales/quotations/screens_quotation_list.dart';
 import 'package:QUIK/modules/settings/screen_settings_home.dart';
 import 'package:QUIK/modules/sales/sales_orders/screens_sales_order_list.dart';
 import 'package:QUIK/modules/sales/tasks/screens_task_list.dart';
+import 'package:QUIK/modules/sales/meetings/screens_meeting_list.dart';
 
 // Finance Sub-Modules
 import 'package:QUIK/modules/finance/invoice/screens/invoice_list_screen.dart';
@@ -1847,6 +1848,17 @@ class _ZohoShellState extends State<ZohoShell> {
             companyId: widget.companyId,
             currentUserUid: widget.userUid,
             currentUserName: _resolvedEmployeeName(),
+          ),
+        );
+
+      case ShellPage.salesMeetings:
+        return Padding(
+          padding: const EdgeInsets.all(10),
+          child: MeetingListScreen(
+            companyId: widget.companyId,
+            currentUserUid: widget.userUid,
+            currentUserName: _resolvedEmployeeName(),
+            currentUserEmail: widget.userEmail,
           ),
         );
 
