@@ -870,6 +870,351 @@ class _ZohoShellState extends State<ZohoShell> {
     return 'Welcome ${_resolvedEmployeeName()}';
   }
 
+  CollectionReference<Map<String, dynamic>> get _notificationsRef =>
+      FirebaseFirestore.instance
+          .collection('companies')
+          .doc(widget.companyId)
+          .collection('notifications');
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> _notificationsStream() {
+    return _notificationsRef
+        .where('recipientUid', isEqualTo: widget.userUid)
+        .limit(50)
+        .snapshots();
+  }
+
+  DateTime? _notificationDate(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value);
+    return null;
+  }
+
+  String _notificationTimeText(dynamic value) {
+    final date = _notificationDate(value);
+    if (date == null) return '';
+    final now = DateTime.now();
+    final diff = now.difference(date);
+
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
+    if (diff.inHours < 24) return '${diff.inHours} hr ago';
+    if (diff.inDays < 7) return '${diff.inDays} day ago';
+
+    final day = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    return '$day/$month/${date.year}';
+  }
+
+  IconData _notificationIcon(String type) {
+    switch (type.toLowerCase()) {
+      case 'task_assignment':
+      case 'task':
+        return Icons.task_alt_outlined;
+      case 'task_status':
+        return Icons.sync_alt_outlined;
+      case 'meeting':
+      case 'meeting_invitation':
+        return Icons.groups_outlined;
+      case 'inquiry':
+      case 'inquiry_update':
+        return Icons.campaign_outlined;
+      case 'system':
+      case 'announcement':
+        return Icons.campaign_outlined;
+      default:
+        return Icons.notifications_none_outlined;
+    }
+  }
+
+  Color _notificationColor(String type) {
+    switch (type.toLowerCase()) {
+      case 'task_assignment':
+      case 'task':
+        return const Color(0xFF2563EB);
+      case 'task_status':
+        return const Color(0xFF7C3AED);
+      case 'meeting':
+      case 'meeting_invitation':
+        return const Color(0xFF0891B2);
+      case 'inquiry':
+      case 'inquiry_update':
+        return const Color(0xFFF59E0B);
+      case 'system':
+      case 'announcement':
+        return const Color(0xFF0F172A);
+      default:
+        return const Color(0xFF64748B);
+    }
+  }
+
+  Future<void> _markNotificationRead(String id, bool isRead) async {
+    await _notificationsRef.doc(id).update({
+      'isRead': isRead,
+      'readAt': isRead ? FieldValue.serverTimestamp() : null,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> _markAllNotificationsRead(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) async {
+    final unreadDocs = docs
+        .where((doc) => doc.data()['isRead'] != true)
+        .toList();
+    if (unreadDocs.isEmpty) return;
+
+    final batch = FirebaseFirestore.instance.batch();
+    for (final doc in unreadDocs) {
+      batch.update(doc.reference, {
+        'isRead': true,
+        'readAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+  }
+
+  Widget _notificationBell() {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _notificationsStream(),
+      builder: (context, snap) {
+        final docs =
+            snap.data?.docs ?? <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+        final unreadCount = docs
+            .where((doc) => doc.data()['isRead'] != true)
+            .length;
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            IconButton(
+              tooltip: 'Notifications',
+              onPressed: () => _openNotificationsDialog(docs),
+              icon: const Icon(
+                Icons.notifications_none_outlined,
+                color: zMuted,
+              ),
+            ),
+            if (unreadCount > 0)
+              Positioned(
+                right: 6,
+                top: 5,
+                child: Container(
+                  constraints: const BoxConstraints(
+                    minWidth: 18,
+                    minHeight: 18,
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDC2626),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                  child: Center(
+                    child: Text(
+                      unreadCount > 99 ? '99+' : '$unreadCount',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _openNotificationsDialog(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> initialDocs,
+  ) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 24,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520, maxHeight: 680),
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: _notificationsStream(),
+              builder: (context, snap) {
+                final docs = (snap.data?.docs ?? initialDocs).toList();
+
+                docs.sort((a, b) {
+                  final aDate =
+                      _notificationDate(a.data()['createdAt']) ??
+                      DateTime.fromMillisecondsSinceEpoch(0);
+                  final bDate =
+                      _notificationDate(b.data()['createdAt']) ??
+                      DateTime.fromMillisecondsSinceEpoch(0);
+                  return bDate.compareTo(aDate);
+                });
+
+                final unreadCount = docs
+                    .where((doc) => doc.data()['isRead'] != true)
+                    .length;
+
+                return Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(18, 16, 12, 12),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Notifications',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                                color: zText,
+                              ),
+                            ),
+                          ),
+                          if (unreadCount > 0)
+                            TextButton(
+                              onPressed: () => _markAllNotificationsRead(docs),
+                              child: const Text('Mark all read'),
+                            ),
+                          IconButton(
+                            tooltip: 'Close',
+                            onPressed: () => Navigator.pop(dialogContext),
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    if (snap.hasError)
+                      Expanded(
+                        child: Center(
+                          child: Text(
+                            'Notification error: ${snap.error}',
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      )
+                    else if (!snap.hasData && initialDocs.isEmpty)
+                      const Expanded(
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (docs.isEmpty)
+                      const Expanded(
+                        child: Center(
+                          child: Text(
+                            'No notifications yet.',
+                            style: TextStyle(color: zMuted),
+                          ),
+                        ),
+                      )
+                    else
+                      Expanded(
+                        child: ListView.separated(
+                          padding: const EdgeInsets.all(10),
+                          itemCount: docs.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 8),
+                          itemBuilder: (context, index) {
+                            final doc = docs[index];
+                            final data = doc.data();
+                            final type = (data['type'] ?? '').toString();
+                            final title = (data['title'] ?? 'Notification')
+                                .toString();
+                            final message = (data['message'] ?? '').toString();
+                            final isRead = data['isRead'] == true;
+                            final color = _notificationColor(type);
+
+                            return Container(
+                              decoration: BoxDecoration(
+                                color: isRead
+                                    ? Colors.white
+                                    : const Color(0xFFEFF6FF),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: isRead
+                                      ? const Color(0xFFE2E8F0)
+                                      : const Color(0xFFBFDBFE),
+                                ),
+                              ),
+                              child: ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: color.withValues(
+                                    alpha: 0.12,
+                                  ),
+                                  child: Icon(
+                                    _notificationIcon(type),
+                                    color: color,
+                                    size: 20,
+                                  ),
+                                ),
+                                title: Text(
+                                  title,
+                                  style: TextStyle(
+                                    fontWeight: isRead
+                                        ? FontWeight.w700
+                                        : FontWeight.w900,
+                                    color: zText,
+                                  ),
+                                ),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (message.trim().isNotEmpty) ...[
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        message,
+                                        style: const TextStyle(
+                                          color: zMuted,
+                                          fontSize: 12,
+                                          height: 1.35,
+                                        ),
+                                      ),
+                                    ],
+                                    const SizedBox(height: 5),
+                                    Text(
+                                      _notificationTimeText(data['createdAt']),
+                                      style: const TextStyle(
+                                        color: Color(0xFF94A3B8),
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                trailing: IconButton(
+                                  tooltip: isRead ? 'Mark unread' : 'Mark read',
+                                  onPressed: () =>
+                                      _markNotificationRead(doc.id, !isRead),
+                                  icon: Icon(
+                                    isRead
+                                        ? Icons.mark_email_unread_outlined
+                                        : Icons.mark_email_read_outlined,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildTopHeader() {
     return Container(
       constraints: const BoxConstraints(minHeight: 48),
@@ -892,6 +1237,8 @@ class _ZohoShellState extends State<ZohoShell> {
               ),
             ),
           ),
+          const SizedBox(width: 8),
+          _notificationBell(),
         ],
       ),
     );
