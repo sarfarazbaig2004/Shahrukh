@@ -21,6 +21,8 @@ class MeetingListScreen extends StatefulWidget {
 }
 
 class _MeetingListScreenState extends State<MeetingListScreen> {
+  String _meetingSearchText = '';
+
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   CollectionReference<Map<String, dynamic>> get _meetingsRef =>
@@ -147,6 +149,59 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
     });
 
     return records;
+  }
+
+  List<_MeetingRecord> _filterMeetings(List<_MeetingRecord> meetings) {
+    final query = _meetingSearchText.trim().toLowerCase();
+    if (query.isEmpty) return meetings;
+
+    return meetings.where((meeting) {
+      return meeting.title.toLowerCase().contains(query) ||
+          meeting.meetingNumber.toLowerCase().contains(query) ||
+          meeting.meetingType.toLowerCase().contains(query) ||
+          meeting.status.toLowerCase().contains(query) ||
+          meeting.participants.any(
+            (participant) =>
+                participant.name.toLowerCase().contains(query) ||
+                participant.email.toLowerCase().contains(query),
+          );
+    }).toList();
+  }
+
+  Widget _buildMeetingToolbar() {
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            onChanged: (value) {
+              setState(() => _meetingSearchText = value);
+            },
+            decoration: InputDecoration(
+              hintText: 'Search meeting, participant...',
+              prefixIcon: const Icon(Icons.search),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(vertical: 14),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Container(
+          width: 50,
+          height: 50,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: const Icon(Icons.tune_outlined, color: Color(0xFF475569)),
+        ),
+      ],
+    );
   }
 
   Future<void> _openCreateMeetingDialog() async {
@@ -697,6 +752,24 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
     );
   }
 
+  Widget _meetingMeta(IconData icon, String text) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: const Color(0xFF64748B)),
+        const SizedBox(width: 5),
+        Text(
+          text.trim().isEmpty ? '-' : text,
+          style: const TextStyle(
+            fontSize: 12,
+            color: Color(0xFF475569),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _meetingCard(_MeetingRecord meeting) {
     final link = meeting.teamsLink.isNotEmpty
         ? meeting.teamsLink
@@ -704,224 +777,156 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
         ? meeting.zoomLink
         : '';
 
+    final initial = meeting.title.trim().isEmpty
+        ? 'M'
+        : meeting.title.trim().characters.first.toUpperCase();
+
     return Card(
       elevation: 0,
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 10),
+      color: Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: const BorderSide(color: Color(0xFFE2E8F0)),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final compact = constraints.maxWidth < 780;
-
-            final content = Column(
+        padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _chip(
-                      meeting.meetingNumber.isEmpty
-                          ? 'MEETING'
-                          : meeting.meetingNumber,
-                      const Color(0xFF0F172A),
-                      Icons.confirmation_number_outlined,
-                    ),
-                    _chip(
-                      meeting.status,
-                      _statusColor(meeting.status),
-                      Icons.event_available_outlined,
-                    ),
-                    _chip(
-                      meeting.meetingType.isEmpty
-                          ? 'Meeting'
-                          : meeting.meetingType,
-                      const Color(0xFF7C3AED),
-                      Icons.category_outlined,
-                    ),
-                    _chip(
-                      '${meeting.participants.length} Participants',
-                      const Color(0xFF0891B2),
-                      Icons.groups_outlined,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  meeting.title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF0F172A),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 16,
-                  runSpacing: 8,
-                  children: [
-                    _info(
-                      Icons.schedule_outlined,
-                      _formatDateTime(meeting.startAt),
-                    ),
-                    if (meeting.meetingId.isNotEmpty)
-                      _info(Icons.tag_outlined, 'ID: ${meeting.meetingId}'),
-                    if (meeting.password.isNotEmpty)
-                      _info(
-                        Icons.lock_outline,
-                        'Password: ${meeting.password}',
-                      ),
-                  ],
-                ),
-                if (meeting.agenda.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    'Agenda: ${meeting.agenda}',
-                    style: const TextStyle(
-                      color: Color(0xFF475569),
-                      fontSize: 13,
-                      height: 1.35,
-                    ),
-                  ),
-                ],
-                if (meeting.description.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    meeting.description,
-                    style: const TextStyle(
-                      color: Color(0xFF64748B),
-                      fontSize: 13,
-                      height: 1.35,
-                    ),
-                  ),
-                ],
-                if (link.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  SelectableText(
-                    link,
+                CircleAvatar(
+                  radius: 19,
+                  backgroundColor: const Color(0xFFEFF6FF),
+                  child: Text(
+                    initial,
                     style: const TextStyle(
                       color: Color(0xFF2563EB),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w900,
                     ),
                   ),
-                ],
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: meeting.participants
-                      .map(
-                        (p) => Chip(
-                          label: Text(p.name),
-                          avatar: const Icon(Icons.person_outline, size: 16),
-                        ),
-                      )
-                      .toList(),
                 ),
-              ],
-            );
-
-            final actions = Wrap(
-              spacing: 8,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: meeting.status == 'Cancelled'
-                      ? null
-                      : () => _cancelMeeting(meeting),
-                  icon: const Icon(Icons.cancel_outlined),
-                  label: const Text('Cancel'),
-                ),
-              ],
-            );
-
-            if (compact) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [content, const SizedBox(height: 12), actions],
-              );
-            }
-
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: content),
                 const SizedBox(width: 12),
-                actions,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        meeting.title.isEmpty
+                            ? 'Untitled Meeting'
+                            : meeting.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        meeting.meetingNumber.isEmpty
+                            ? (meeting.agenda.isEmpty ? '-' : meeting.agenda)
+                            : '${meeting.meetingNumber} • ${meeting.agenda.isEmpty ? meeting.meetingType : meeting.agenda}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF64748B),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                PopupMenuButton<String>(
+                  tooltip: 'Meeting actions',
+                  icon: const Icon(Icons.more_vert, color: Color(0xFF64748B)),
+                  onSelected: (value) async {
+                    if (value == 'cancel') {
+                      await _cancelMeeting(meeting);
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem(
+                      value: 'cancel',
+                      enabled: meeting.status != 'Cancelled',
+                      child: const Row(
+                        children: [
+                          Icon(Icons.cancel_outlined, color: Color(0xFFDC2626)),
+                          SizedBox(width: 8),
+                          Text('Cancel Meeting'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _info(IconData icon, String text) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 15, color: const Color(0xFF64748B)),
-        const SizedBox(width: 5),
-        Text(
-          text,
-          style: const TextStyle(
-            fontSize: 12,
-            color: Color(0xFF475569),
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _summaryCard(String title, String value, IconData icon, Color color) {
-    return Container(
-      width: 210,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: color),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF0F172A),
-                  ),
+                _chip(
+                  meeting.status,
+                  _statusColor(meeting.status),
+                  Icons.event_available_outlined,
                 ),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF64748B),
-                    fontWeight: FontWeight.w700,
+                _chip(
+                  meeting.meetingType.isEmpty ? 'Meeting' : meeting.meetingType,
+                  const Color(0xFF7C3AED),
+                  Icons.category_outlined,
+                ),
+                _chip(
+                  '${meeting.participants.length} Participants',
+                  const Color(0xFF0891B2),
+                  Icons.groups_outlined,
+                ),
+                if (link.isNotEmpty)
+                  _chip('Link Added', const Color(0xFF16A34A), Icons.link),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 18,
+              runSpacing: 8,
+              children: [
+                _meetingMeta(
+                  Icons.schedule_outlined,
+                  _formatDateTime(meeting.startAt),
+                ),
+                if (meeting.meetingId.isNotEmpty)
+                  _meetingMeta(Icons.tag_outlined, 'ID: ${meeting.meetingId}'),
+                if (meeting.password.isNotEmpty)
+                  _meetingMeta(
+                    Icons.lock_outline,
+                    'Password: ${meeting.password}',
                   ),
+                _meetingMeta(
+                  Icons.groups_outlined,
+                  '${meeting.participants.length} Participants',
                 ),
               ],
             ),
-          ),
-        ],
+            if (meeting.description.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                meeting.description,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF64748B),
+                  fontSize: 13,
+                  height: 1.35,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -942,29 +947,37 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
     }).length;
     final cancelled = meetings.where((m) => m.status == 'Cancelled').length;
 
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: [
-        _summaryCard(
-          'Upcoming',
-          '$upcoming',
-          Icons.upcoming_outlined,
-          const Color(0xFF2563EB),
+    Widget pill(String text) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
         ),
-        _summaryCard(
-          'Today',
-          '$today',
-          Icons.today_outlined,
-          const Color(0xFF0891B2),
+        child: Text(
+          text,
+          style: const TextStyle(
+            color: Color(0xFF334155),
+            fontWeight: FontWeight.w800,
+            fontSize: 12,
+          ),
         ),
-        _summaryCard(
-          'Cancelled',
-          '$cancelled',
-          Icons.cancel_outlined,
-          const Color(0xFFDC2626),
-        ),
-      ],
+      );
+    }
+
+    return Center(
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 10,
+        alignment: WrapAlignment.center,
+        children: [
+          pill('Total: ${meetings.length}'),
+          pill('Upcoming: $upcoming'),
+          pill('Today: $today'),
+          pill('Cancelled: $cancelled'),
+        ],
+      ),
     );
   }
 
@@ -972,6 +985,11 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _openCreateMeetingDialog,
+        backgroundColor: const Color(0xFF2563EB),
+        child: const Icon(Icons.add, color: Colors.white),
+      ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: _meetingStream(),
         builder: (context, snapshot) {
@@ -985,7 +1003,8 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final meetings = _recordsFromDocs(snapshot.data!.docs);
+          final allMeetings = _recordsFromDocs(snapshot.data!.docs);
+          final meetings = _filterMeetings(allMeetings);
 
           return CustomScrollView(
             slivers: [
@@ -995,16 +1014,9 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: ElevatedButton.icon(
-                          onPressed: _openCreateMeetingDialog,
-                          icon: const Icon(Icons.add),
-                          label: const Text('Schedule Meeting'),
-                        ),
-                      ),
-                      const SizedBox(height: 18),
                       _buildSummary(meetings),
+                      const SizedBox(height: 18),
+                      _buildMeetingToolbar(),
                     ],
                   ),
                 ),

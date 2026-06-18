@@ -890,50 +890,21 @@ class _TaskListScreenState extends State<TaskListScreen> {
     );
   }
 
-  Widget _taskTableHeader() {
-    Widget header(String text, double width) {
-      return SizedBox(
-        width: width,
-        child: Text(
-          text,
+  Widget _miniMeta(IconData icon, String text) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: const Color(0xFF64748B)),
+        const SizedBox(width: 5),
+        Text(
+          text.trim().isEmpty ? '-' : text,
           style: const TextStyle(
             fontSize: 12,
             color: Color(0xFF475569),
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w600,
           ),
         ),
-      );
-    }
-
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.only(bottom: 8),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: Color(0xFFE2E8F0)),
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Container(
-          width: 1320,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          color: const Color(0xFFF8FAFC),
-          child: Row(
-            children: [
-              header('Task', 310),
-              header('Assigned To', 150),
-              header('Status', 130),
-              header('Priority', 120),
-              header('Start Date', 115),
-              header('Due Date', 115),
-              header('Est. Hrs', 90),
-              header('Created By', 140),
-              header('Created Date', 120),
-              header('Actions', 130),
-            ],
-          ),
-        ),
-      ),
+      ],
     );
   }
 
@@ -950,270 +921,203 @@ class _TaskListScreenState extends State<TaskListScreen> {
           ),
         );
 
-    Widget textCell(
-      String text,
-      double width, {
-      bool strong = false,
-      Color? color,
-      int maxLines = 1,
-    }) {
-      return SizedBox(
-        width: width,
-        child: Text(
-          text.isEmpty ? '-' : text,
-          maxLines: maxLines,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: strong ? 13 : 12,
-            fontWeight: strong ? FontWeight.w800 : FontWeight.w600,
-            color: color ?? const Color(0xFF334155),
-            height: 1.25,
-          ),
-        ),
-      );
-    }
-
     final estHours = task.estimatedHours == null
         ? '-'
         : task.estimatedHours!.toStringAsFixed(
             task.estimatedHours! % 1 == 0 ? 0 : 1,
           );
 
+    final initial = task.title.trim().isEmpty
+        ? 'T'
+        : task.title.trim().characters.first.toUpperCase();
+
     return Card(
       elevation: 0,
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: 10),
+      color: Colors.white,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         side: BorderSide(
           color: overdue ? const Color(0xFFFCA5A5) : const Color(0xFFE2E8F0),
         ),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: SizedBox(
-          width: 1320,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SizedBox(
-                  width: 310,
+                CircleAvatar(
+                  radius: 19,
+                  backgroundColor: const Color(0xFFEFF6FF),
+                  child: Text(
+                    initial,
+                    style: const TextStyle(
+                      color: Color(0xFF2563EB),
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        task.taskNumber.isEmpty ? 'TASK' : task.taskNumber,
+                        task.title.isEmpty ? 'Untitled Task' : task.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF2563EB),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        task.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 14,
+                          fontSize: 16,
                           fontWeight: FontWeight.w900,
                           color: Color(0xFF0F172A),
                         ),
                       ),
-                      if (task.description.isNotEmpty) ...[
-                        const SizedBox(height: 3),
-                        Text(
-                          task.description,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFF64748B),
-                            fontWeight: FontWeight.w600,
-                          ),
+                      const SizedBox(height: 3),
+                      Text(
+                        task.taskNumber.isEmpty
+                            ? (task.description.isEmpty
+                                  ? '-'
+                                  : task.description)
+                            : '${task.taskNumber} • ${task.description.isEmpty ? 'No description' : task.description}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF64748B),
+                          fontWeight: FontWeight.w600,
                         ),
-                      ],
+                      ),
                     ],
                   ),
                 ),
-                textCell(task.assignedToName, 150),
-                SizedBox(
-                  width: 130,
-                  child: _chip(
-                    text: task.status,
-                    color: _statusColor(task.status),
-                  ),
-                ),
-                SizedBox(
-                  width: 120,
-                  child: _chip(
-                    text: task.priority,
-                    color: _priorityColor(task.priority),
-                    icon: Icons.flag_outlined,
-                  ),
-                ),
-                textCell(_formatDate(task.startDate), 115),
-                SizedBox(
-                  width: 115,
-                  child: Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          _formatDate(task.dueDate),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: overdue
-                                ? const Color(0xFFDC2626)
-                                : const Color(0xFF334155),
-                            fontWeight: FontWeight.w800,
+                PopupMenuButton<String>(
+                  tooltip: 'Task actions',
+                  icon: const Icon(Icons.more_vert, color: Color(0xFF64748B)),
+                  onSelected: (value) async {
+                    if (value.startsWith('status:')) {
+                      await _updateTaskField(
+                        task,
+                        'status',
+                        value.substring('status:'.length),
+                      );
+                    } else if (value.startsWith('priority:')) {
+                      await _updateTaskField(
+                        task,
+                        'priority',
+                        value.substring('priority:'.length),
+                      );
+                    } else if (value == 'delete') {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Delete Task?'),
+                          content: Text(
+                            'This will remove ${task.taskNumber} from active task list.',
                           ),
-                        ),
-                      ),
-                      if (overdue) ...[
-                        const SizedBox(width: 4),
-                        const Icon(
-                          Icons.warning_amber_outlined,
-                          color: Color(0xFFDC2626),
-                          size: 15,
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                textCell(estHours, 90),
-                textCell(task.createdByName, 140),
-                textCell(
-                  task.createdAt == null
-                      ? '-'
-                      : DateFormat('dd MMM yyyy').format(task.createdAt!),
-                  120,
-                ),
-                SizedBox(
-                  width: 130,
-                  child: Row(
-                    children: [
-                      PopupMenuButton<String>(
-                        tooltip: 'Change Status',
-                        onSelected: (value) =>
-                            _updateTaskField(task, 'status', value),
-                        itemBuilder: (context) => taskStatuses
-                            .map(
-                              (status) => PopupMenuItem(
-                                value: status,
-                                child: Text(status),
-                              ),
-                            )
-                            .toList(),
-                        icon: const Icon(Icons.sync_alt_outlined, size: 20),
-                      ),
-                      PopupMenuButton<String>(
-                        tooltip: 'Change Priority',
-                        onSelected: (value) =>
-                            _updateTaskField(task, 'priority', value),
-                        itemBuilder: (context) => taskPriorities
-                            .map(
-                              (priority) => PopupMenuItem(
-                                value: priority,
-                                child: Text(priority),
-                              ),
-                            )
-                            .toList(),
-                        icon: const Icon(Icons.flag_outlined, size: 20),
-                      ),
-                      IconButton(
-                        tooltip: 'Delete Task',
-                        onPressed: () async {
-                          final confirm = await showDialog<bool>(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text('Delete Task?'),
-                              content: Text(
-                                'This will remove ${task.taskNumber} from active task list.',
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () =>
-                                      Navigator.pop(context, false),
-                                  child: const Text('Cancel'),
-                                ),
-                                FilledButton(
-                                  onPressed: () => Navigator.pop(context, true),
-                                  child: const Text('Delete'),
-                                ),
-                              ],
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, false),
+                              child: const Text('Cancel'),
                             ),
-                          );
-
-                          if (confirm == true) {
-                            await _softDeleteTask(task);
-                          }
-                        },
-                        icon: const Icon(
-                          Icons.delete_outline,
-                          color: Color(0xFFDC2626),
-                          size: 20,
+                            FilledButton(
+                              onPressed: () => Navigator.pop(context, true),
+                              child: const Text('Delete'),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+                      );
 
-  Widget _summaryCard(String title, String value, IconData icon, Color color) {
-    return Container(
-      width: 210,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: color),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF0F172A),
-                  ),
-                ),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF64748B),
-                    fontWeight: FontWeight.w700,
-                  ),
+                      if (confirm == true) {
+                        await _softDeleteTask(task);
+                      }
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      enabled: false,
+                      child: Text('Change Status'),
+                    ),
+                    ...taskStatuses.map(
+                      (status) => PopupMenuItem(
+                        value: 'status:$status',
+                        child: Text(status),
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    const PopupMenuItem(
+                      enabled: false,
+                      child: Text('Change Priority'),
+                    ),
+                    ...taskPriorities.map(
+                      (priority) => PopupMenuItem(
+                        value: 'priority:$priority',
+                        child: Text(priority),
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline, color: Color(0xFFDC2626)),
+                          SizedBox(width: 8),
+                          Text('Delete Task'),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ),
-        ],
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _chip(text: task.status, color: _statusColor(task.status)),
+                _chip(
+                  text: task.priority,
+                  color: _priorityColor(task.priority),
+                  icon: Icons.flag_outlined,
+                ),
+                if (overdue)
+                  _chip(
+                    text: 'Overdue',
+                    color: const Color(0xFFDC2626),
+                    icon: Icons.warning_amber_outlined,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 18,
+              runSpacing: 8,
+              children: [
+                _miniMeta(Icons.person_outline, task.assignedToName),
+                _miniMeta(
+                  Icons.calendar_today_outlined,
+                  'Start: ${_formatDate(task.startDate)}',
+                ),
+                _miniMeta(
+                  Icons.event_busy_outlined,
+                  'Due: ${_formatDate(task.dueDate)}',
+                ),
+                _miniMeta(Icons.timer_outlined, 'Hrs: $estHours'),
+                _miniMeta(
+                  Icons.account_circle_outlined,
+                  'By: ${task.createdByName}',
+                ),
+                _miniMeta(
+                  Icons.add_circle_outline,
+                  'Created: ${task.createdAt == null ? '-' : DateFormat('dd MMM yyyy').format(task.createdAt!)}',
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1224,35 +1128,38 @@ class _TaskListScreenState extends State<TaskListScreen> {
     final completed = tasks.where((t) => t.status == 'Completed').length;
     final critical = tasks.where((t) => t.priority == 'Critical').length;
 
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: [
-        _summaryCard(
-          'Pending',
-          '$pending',
-          Icons.pending_actions_outlined,
-          const Color(0xFF64748B),
+    Widget pill(String text) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
         ),
-        _summaryCard(
-          'In Progress',
-          '$progress',
-          Icons.play_circle_outline,
-          const Color(0xFF2563EB),
+        child: Text(
+          text,
+          style: const TextStyle(
+            color: Color(0xFF334155),
+            fontWeight: FontWeight.w800,
+            fontSize: 12,
+          ),
         ),
-        _summaryCard(
-          'Completed',
-          '$completed',
-          Icons.check_circle_outline,
-          const Color(0xFF16A34A),
-        ),
-        _summaryCard(
-          'Critical',
-          '$critical',
-          Icons.priority_high_outlined,
-          const Color(0xFFDC2626),
-        ),
-      ],
+      );
+    }
+
+    return Center(
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 10,
+        alignment: WrapAlignment.center,
+        children: [
+          pill('Total: ${tasks.length}'),
+          pill('Pending: $pending'),
+          pill('In Progress: $progress'),
+          pill('Completed: $completed'),
+          pill('Critical: $critical'),
+        ],
+      ),
     );
   }
 
@@ -1260,6 +1167,11 @@ class _TaskListScreenState extends State<TaskListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _openCreateTaskDialog,
+        backgroundColor: const Color(0xFF2563EB),
+        child: const Icon(Icons.add, color: Colors.white),
+      ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: _taskStream(),
         builder: (context, snapshot) {
@@ -1285,7 +1197,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
                       const SizedBox(height: 18),
                       _buildTaskToolbar(),
                       const SizedBox(height: 12),
-                      if (tasks.isNotEmpty) _taskTableHeader(),
                     ],
                   ),
                 ),
