@@ -50,6 +50,11 @@ class _TaskListScreenState extends State<TaskListScreen> {
   CollectionReference<Map<String, dynamic>> get _usersRef =>
       _db.collection('companies').doc(widget.companyId).collection('users');
 
+  CollectionReference<Map<String, dynamic>> get _notificationsRef => _db
+      .collection('companies')
+      .doc(widget.companyId)
+      .collection('notifications');
+
   Stream<QuerySnapshot<Map<String, dynamic>>> _taskStream() {
     return _tasksRef.snapshots();
   }
@@ -538,6 +543,27 @@ class _TaskListScreenState extends State<TaskListScreen> {
       };
 
       transaction.set(docRef, payload);
+
+      final notificationRef = _notificationsRef.doc();
+      transaction.set(notificationRef, <String, dynamic>{
+        'companyId': widget.companyId,
+        'recipientUid': assignedTo.uid,
+        'recipientName': assignedTo.name,
+        'recipientEmail': assignedTo.email,
+        'type': 'task_assignment',
+        'title': 'New task assigned: $taskNumber',
+        'message': inquiry?.number == null || inquiry!.number.isEmpty
+            ? title
+            : '$title • Linked Inquiry: ${inquiry.number}',
+        'taskId': docRef.id,
+        'taskNumber': taskNumber,
+        'inquiryId': inquiry?.id ?? '',
+        'inquiryNumber': inquiry?.number ?? '',
+        'isRead': false,
+        'createdAt': FieldValue.serverTimestamp(),
+        'createdByUid': widget.currentUserUid,
+        'createdByName': widget.currentUserName,
+      });
     });
   }
 
@@ -546,7 +572,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
     String field,
     String value,
   ) async {
-    await _tasksRef.doc(task.id).update(<String, dynamic>{
+    final taskRef = _tasksRef.doc(task.id);
+    final batch = _db.batch();
+
+    batch.update(taskRef, <String, dynamic>{
       field: value,
       'updatedAt': FieldValue.serverTimestamp(),
       'updatedByUid': widget.currentUserUid,
@@ -561,6 +590,32 @@ class _TaskListScreenState extends State<TaskListScreen> {
         },
       ]),
     });
+
+    if (task.assignedToUid.isNotEmpty) {
+      final notificationRef = _notificationsRef.doc();
+      final readableField = field == 'status' ? 'status' : 'priority';
+
+      batch.set(notificationRef, <String, dynamic>{
+        'companyId': widget.companyId,
+        'recipientUid': task.assignedToUid,
+        'recipientName': task.assignedToName,
+        'recipientEmail': '',
+        'type': field == 'status' ? 'task_status' : 'task',
+        'title': 'Task ${readableField.toLowerCase()} updated',
+        'message':
+            '${task.taskNumber.isEmpty ? 'Task' : task.taskNumber}: $readableField changed to $value',
+        'taskId': task.id,
+        'taskNumber': task.taskNumber,
+        'inquiryId': task.inquiryId,
+        'inquiryNumber': task.inquiryNumber,
+        'isRead': false,
+        'createdAt': FieldValue.serverTimestamp(),
+        'createdByUid': widget.currentUserUid,
+        'createdByName': widget.currentUserName,
+      });
+    }
+
+    await batch.commit();
   }
 
   Future<void> _softDeleteTask(_TaskRecord task) async {
