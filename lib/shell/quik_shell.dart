@@ -40,7 +40,6 @@ enum ShellPage {
   salesInquiries,
   salesQuotations,
   salesOrders,
-  salesFollowUps,
   salesTasks,
   salesMeetings,
 
@@ -112,8 +111,6 @@ extension ShellPageX on ShellPage {
         return 'Quotations';
       case ShellPage.salesOrders:
         return 'Sales Orders';
-      case ShellPage.salesFollowUps:
-        return 'Follow-ups';
       case ShellPage.salesTasks:
         return 'Tasks';
       case ShellPage.salesMeetings:
@@ -230,8 +227,6 @@ extension ShellPageX on ShellPage {
         return Icons.receipt_long_outlined;
       case ShellPage.salesOrders:
         return Icons.shopping_bag_outlined;
-      case ShellPage.salesFollowUps:
-        return Icons.event_repeat_outlined;
       case ShellPage.salesTasks:
         return Icons.task_alt_outlined;
       case ShellPage.salesMeetings:
@@ -528,8 +523,6 @@ class _ZohoShellState extends State<ZohoShell> {
         return _hasPermission('sales', 'quotations');
       case ShellPage.salesOrders:
         return _hasPermission('sales', 'salesOrder');
-      case ShellPage.salesFollowUps:
-        return false;
       case ShellPage.salesTasks:
         return _hasPermission('sales', 'tasks');
       case ShellPage.salesMeetings:
@@ -2542,7 +2535,6 @@ class _ZohoShellState extends State<ZohoShell> {
         int total = 0;
         int openDeals = 0;
         int untouched = 0;
-        int followupsToday = 0;
 
         if (snap.hasData) {
           final docs = snap.data!.docs;
@@ -2552,22 +2544,16 @@ class _ZohoShellState extends State<ZohoShell> {
             final data = doc.data();
 
             final status = (data['status'] ?? '').toString().trim();
-            final lastNote = (data['lastFollowUpNote'] ?? '').toString().trim();
+            final assignedToUid = (data['assignedToUid'] ?? '')
+                .toString()
+                .trim();
 
             if (status == 'Open' || status == 'Quotation Pending') {
               openDeals++;
             }
 
-            if (status == 'Open' && lastNote.isEmpty) {
+            if (status == 'Open' && assignedToUid.isEmpty) {
               untouched++;
-            }
-
-            final next = data['nextFollowUpDate'];
-            if (next is Timestamp) {
-              final dt = dateOnly(next.toDate());
-              if (dt == today) {
-                followupsToday++;
-              }
             }
           }
         }
@@ -2602,11 +2588,11 @@ class _ZohoShellState extends State<ZohoShell> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Expanded(
+                const Expanded(
                   child: _KpiBox(
-                    title: 'Follow-ups Today',
-                    value: '$followupsToday',
-                    icon: Icons.event_repeat_outlined,
+                    title: 'Open Tasks',
+                    value: 'Live',
+                    icon: Icons.task_alt_outlined,
                   ),
                 ),
                 const SizedBox(width: 8),
