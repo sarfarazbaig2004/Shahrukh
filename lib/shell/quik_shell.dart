@@ -985,49 +985,67 @@ class _ZohoShellState extends State<ZohoShell> {
       builder: (context, snap) {
         final docs =
             snap.data?.docs ?? <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+
         final unreadCount = docs
             .where((doc) => doc.data()['isRead'] != true)
             .length;
 
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
-            IconButton(
-              tooltip: 'Notifications',
-              onPressed: () => _openNotificationsDialog(docs),
-              icon: const Icon(
-                Icons.notifications_none_outlined,
-                color: zMuted,
-              ),
-            ),
-            if (unreadCount > 0)
-              Positioned(
-                right: 6,
-                top: 5,
-                child: Container(
-                  constraints: const BoxConstraints(
-                    minWidth: 18,
-                    minHeight: 18,
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 5),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFDC2626),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: Colors.white, width: 2),
-                  ),
-                  child: Center(
-                    child: Text(
-                      unreadCount > 99 ? '99+' : '$unreadCount',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w900,
-                      ),
+        return Tooltip(
+          message: 'Notifications',
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(999),
+              onTap: () => _openNotificationsDialog(docs),
+              child: SizedBox(
+                width: 46,
+                height: 46,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  alignment: Alignment.center,
+                  children: [
+                    const Icon(
+                      Icons.notifications_none_outlined,
+                      size: 23,
+                      color: Color(0xFF64748B),
                     ),
-                  ),
+                    if (unreadCount > 0)
+                      Positioned(
+                        top: 7,
+                        right: 6,
+                        child: IgnorePointer(
+                          child: Container(
+                            constraints: const BoxConstraints(
+                              minWidth: 17,
+                              minHeight: 17,
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEF4444),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: Colors.white,
+                                width: 1.5,
+                              ),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              unreadCount > 99 ? '99+' : '$unreadCount',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                height: 1,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-          ],
+            ),
+          ),
         );
       },
     );
