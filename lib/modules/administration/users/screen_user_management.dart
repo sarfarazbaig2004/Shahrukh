@@ -75,12 +75,12 @@ class _ScreenUserManagementState extends State<ScreenUserManagement> {
       if (doc.exists && doc.data() != null) {
         final data = doc.data()!;
         final raw =
-        (data['industryType'] ??
-            data['businessCategory'] ??
-            data['industry'] ??
-            '')
-            .toString()
-            .toLowerCase();
+            (data['industryType'] ??
+                    data['businessCategory'] ??
+                    data['industry'] ??
+                    '')
+                .toString()
+                .toLowerCase();
 
         if (raw.contains('export') && raw.contains('import')) {
           _resolvedIndustry = 'export_import';
@@ -127,14 +127,14 @@ class _ScreenUserManagementState extends State<ScreenUserManagement> {
   }
 
   Future<void> _handleViewUser(
-      QueryDocumentSnapshot<Map<String, dynamic>> doc,
-      ) async {
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) async {
     await showViewUserDialog(context: context, doc: doc);
   }
 
   Future<void> _handleEditUser(
-      QueryDocumentSnapshot<Map<String, dynamic>> doc,
-      ) async {
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) async {
     await showEditUserDialog(
       context: context,
       doc: doc,
@@ -143,29 +143,29 @@ class _ScreenUserManagementState extends State<ScreenUserManagement> {
       industry: _resolvedIndustry,
       onSaveUser:
           ({
-        required String companyId,
-        required String userUid,
-        required String role,
-        required bool isActive,
-        required Map<String, dynamic> permissions,
-        String? department,
-        String? designation,
-        String? branchName,
-        String? accessScope,
-      }) {
-        return _userManagementService.updateUser(
-          companyId: companyId,
-          userUid: userUid,
-          role: role,
-          isActive: isActive,
-          permissions: permissions,
-          department: department,
-          designation: designation,
-          branchName: branchName,
-          accessScope: accessScope,
-          updatedByUid: widget.currentUid,
-        );
-      },
+            required String companyId,
+            required String userUid,
+            required String role,
+            required bool isActive,
+            required Map<String, dynamic> permissions,
+            String? department,
+            String? designation,
+            String? branchName,
+            String? accessScope,
+          }) {
+            return _userManagementService.updateUser(
+              companyId: companyId,
+              userUid: userUid,
+              role: role,
+              isActive: isActive,
+              permissions: permissions,
+              department: department,
+              designation: designation,
+              branchName: branchName,
+              accessScope: accessScope,
+              updatedByUid: widget.currentUid,
+            );
+          },
     );
   }
 
@@ -180,9 +180,9 @@ class _ScreenUserManagementState extends State<ScreenUserManagement> {
   }
 
   Future<void> _confirmDeleteUser(
-      BuildContext context,
-      QueryDocumentSnapshot<Map<String, dynamic>> doc,
-      ) async {
+    BuildContext context,
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) async {
     final data = doc.data();
     final String name = (data['displayName'] ?? data['name'] ?? 'User')
         .toString();
@@ -208,7 +208,7 @@ class _ScreenUserManagementState extends State<ScreenUserManagement> {
                 children: [
                   Text(
                     'You are about to delete $name.\n\n'
-                        'This is a destructive action. Please confirm by entering your own account password.',
+                    'This is a destructive action. Please confirm by entering your own account password.',
                     style: const TextStyle(fontSize: 14, height: 1.4),
                   ),
                   const SizedBox(height: 18),
@@ -256,74 +256,74 @@ class _ScreenUserManagementState extends State<ScreenUserManagement> {
                   onPressed: isVerifying
                       ? null
                       : () async {
-                    final password = passwordController.text.trim();
-                    if (password.isEmpty) {
-                      setDialogState(
-                            () => errorMessage = 'Password is required',
-                      );
-                      return;
-                    }
+                          final password = passwordController.text.trim();
+                          if (password.isEmpty) {
+                            setDialogState(
+                              () => errorMessage = 'Password is required',
+                            );
+                            return;
+                          }
 
-                    setDialogState(() {
-                      isVerifying = true;
-                      errorMessage = null;
-                    });
+                          setDialogState(() {
+                            isVerifying = true;
+                            errorMessage = null;
+                          });
 
-                    try {
-                      final User? currentUser =
-                          FirebaseAuth.instance.currentUser;
-                      if (currentUser != null &&
-                          currentUser.email != null) {
-                        final credential = EmailAuthProvider.credential(
-                          email: currentUser.email!,
-                          password: password,
-                        );
+                          try {
+                            final User? currentUser =
+                                FirebaseAuth.instance.currentUser;
+                            if (currentUser != null &&
+                                currentUser.email != null) {
+                              final credential = EmailAuthProvider.credential(
+                                email: currentUser.email!,
+                                password: password,
+                              );
 
-                        await currentUser.reauthenticateWithCredential(
-                          credential,
-                        );
+                              await currentUser.reauthenticateWithCredential(
+                                credential,
+                              );
 
-                        if (dialogContext.mounted) {
-                          Navigator.pop(dialogContext, true);
-                        }
-                      } else {
-                        setDialogState(() {
-                          errorMessage =
-                          'Authentication error. Please re-login.';
-                          isVerifying = false;
-                        });
-                      }
-                    } on FirebaseAuthException catch (e) {
-                      setDialogState(() {
-                        isVerifying = false;
-                        if (e.code == 'wrong-password' ||
-                            e.code == 'invalid-credential') {
-                          errorMessage = 'Incorrect password.';
-                        } else {
-                          errorMessage =
-                              e.message ?? 'Verification failed.';
-                        }
-                      });
-                    } catch (e) {
-                      setDialogState(() {
-                        isVerifying = false;
-                        errorMessage = 'An error occurred. Try again.';
-                      });
-                    }
-                  },
+                              if (dialogContext.mounted) {
+                                Navigator.pop(dialogContext, true);
+                              }
+                            } else {
+                              setDialogState(() {
+                                errorMessage =
+                                    'Authentication error. Please re-login.';
+                                isVerifying = false;
+                              });
+                            }
+                          } on FirebaseAuthException catch (e) {
+                            setDialogState(() {
+                              isVerifying = false;
+                              if (e.code == 'wrong-password' ||
+                                  e.code == 'invalid-credential') {
+                                errorMessage = 'Incorrect password.';
+                              } else {
+                                errorMessage =
+                                    e.message ?? 'Verification failed.';
+                              }
+                            });
+                          } catch (e) {
+                            setDialogState(() {
+                              isVerifying = false;
+                              errorMessage = 'An error occurred. Try again.';
+                            });
+                          }
+                        },
                   child: isVerifying
                       ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
-                    ),
-                  )
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
                       : const Text(
-                    'Verify & Delete',
-                    style: TextStyle(color: Colors.white),
-                  ),
+                          'Verify & Delete',
+                          style: TextStyle(color: Colors.white),
+                        ),
                 ),
               ],
             );
@@ -350,10 +350,107 @@ class _ScreenUserManagementState extends State<ScreenUserManagement> {
     );
   }
 
+  Future<void> _confirmRestoreUser(
+    BuildContext context,
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) async {
+    final data = doc.data();
+    final String name = (data['displayName'] ?? data['name'] ?? 'User')
+        .toString();
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text('Restore User?'),
+        content: Text(
+          'This will restore $name and make the user active again.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            icon: const Icon(Icons.restore_outlined),
+            label: const Text('Restore'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    await _userManagementService.restoreUser(
+      companyId: widget.companyId,
+      userUid: doc.id,
+      restoredByUid: widget.currentUid,
+    );
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('User restored successfully'),
+        backgroundColor: successColor,
+      ),
+    );
+  }
+
+  Future<void> _confirmPermanentDeleteUser(
+    BuildContext context,
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) async {
+    final data = doc.data();
+    final String name = (data['displayName'] ?? data['name'] ?? 'User')
+        .toString();
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text('Permanently Delete User?'),
+        content: Text(
+          'This will permanently delete $name from this company user list. '
+          'This action cannot be undone from the ERP screen.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(backgroundColor: dangerColor),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            icon: const Icon(Icons.delete_forever_outlined),
+            label: const Text('Permanently Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    await _userManagementService.permanentlyDeleteUser(
+      companyId: widget.companyId,
+      userUid: doc.id,
+      deletedByUid: widget.currentUid,
+    );
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('User permanently deleted'),
+        backgroundColor: successColor,
+      ),
+    );
+  }
+
   Future<void> _confirmCancelInvite(
-      BuildContext context,
-      QueryDocumentSnapshot<Map<String, dynamic>> doc,
-      ) async {
+    BuildContext context,
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) async {
     final data = doc.data();
     final String email = (data['email'] ?? '').toString().trim();
     final String name = (data['name'] ?? '').toString().trim();
@@ -643,7 +740,7 @@ class _ScreenUserManagementState extends State<ScreenUserManagement> {
     return [
       const DropdownMenuItem<String>(value: 'all', child: Text('All Roles')),
       ...userRolesList.map(
-            (role) => DropdownMenuItem<String>(
+        (role) => DropdownMenuItem<String>(
           value: role,
           child: Text(formatRole(role)),
         ),
@@ -709,7 +806,7 @@ class _ScreenUserManagementState extends State<ScreenUserManagement> {
                           child: Text('All Departments'),
                         ),
                         ...departments.map(
-                              (dept) => DropdownMenuItem<String>(
+                          (dept) => DropdownMenuItem<String>(
                             value: dept.toLowerCase(),
                             child: Text(dept),
                           ),
@@ -1051,6 +1148,9 @@ class _ScreenUserManagementState extends State<ScreenUserManagement> {
                 onEdit: (doc) async => _handleEditUser(doc),
                 onToggle: (doc) => _handleToggleUser(doc: doc),
                 onDelete: (doc) async => _confirmDeleteUser(context, doc),
+                onRestore: (doc) async => _confirmRestoreUser(context, doc),
+                onPermanentDelete: (doc) async =>
+                    _confirmPermanentDeleteUser(context, doc),
               )
             else
               Column(
@@ -1072,6 +1172,13 @@ class _ScreenUserManagementState extends State<ScreenUserManagement> {
                       onDelete: (isSelfUser || isDeleted)
                           ? null
                           : () async => _confirmDeleteUser(context, doc),
+                      onRestore: (isSelfUser || !isDeleted)
+                          ? null
+                          : () async => _confirmRestoreUser(context, doc),
+                      onPermanentDelete: (isSelfUser || !isDeleted)
+                          ? null
+                          : () async =>
+                                _confirmPermanentDeleteUser(context, doc),
                     ),
                   );
                 }).toList(),
@@ -1287,13 +1394,20 @@ class _ScreenUserManagementState extends State<ScreenUserManagement> {
               }).toList();
 
               final int totalUsers = nonDeletedDocs.length;
-              final int activeUsers = nonDeletedDocs.where((doc) => (doc.data()['isActive'] ?? true) == true).length;
-              final int inactiveUsers = nonDeletedDocs.where((doc) => (doc.data()['isActive'] ?? true) == false).length;
+              final int activeUsers = nonDeletedDocs
+                  .where((doc) => (doc.data()['isActive'] ?? true) == true)
+                  .length;
+              final int inactiveUsers = nonDeletedDocs
+                  .where((doc) => (doc.data()['isActive'] ?? true) == false)
+                  .length;
 
-              final List<String> departments = extractDepartments(nonDeletedDocs);
+              final List<String> departments = extractDepartments(
+                nonDeletedDocs,
+              );
 
               // 🔥 FIX 2: Dynamic Archival filtering mapping based strictly on selected state
-              final List<QueryDocumentSnapshot<Map<String, dynamic>>> allUsers = rawDocs.where((doc) {
+              final List<QueryDocumentSnapshot<Map<String, dynamic>>>
+              allUsers = rawDocs.where((doc) {
                 final data = doc.data();
                 final isDeleted = (data['isDeleted'] ?? false) == true;
 
@@ -1321,26 +1435,26 @@ class _ScreenUserManagementState extends State<ScreenUserManagement> {
 
               final List<QueryDocumentSnapshot<Map<String, dynamic>>>
               pendingInvites =
-              allInvites.where((doc) {
-                final data = doc.data();
-                final String status = (data['status'] ?? '')
-                    .toString()
-                    .trim()
-                    .toLowerCase();
-                final bool isDeleted = (data['isDeleted'] ?? false) == true;
-                return !isDeleted && status == 'pending';
-              }).toList()..sort((a, b) {
-                final aTs = a.data()['createdAt'];
-                final bTs = b.data()['createdAt'];
+                  allInvites.where((doc) {
+                    final data = doc.data();
+                    final String status = (data['status'] ?? '')
+                        .toString()
+                        .trim()
+                        .toLowerCase();
+                    final bool isDeleted = (data['isDeleted'] ?? false) == true;
+                    return !isDeleted && status == 'pending';
+                  }).toList()..sort((a, b) {
+                    final aTs = a.data()['createdAt'];
+                    final bTs = b.data()['createdAt'];
 
-                DateTime aDate = DateTime.fromMillisecondsSinceEpoch(0);
-                DateTime bDate = DateTime.fromMillisecondsSinceEpoch(0);
+                    DateTime aDate = DateTime.fromMillisecondsSinceEpoch(0);
+                    DateTime bDate = DateTime.fromMillisecondsSinceEpoch(0);
 
-                if (aTs is Timestamp) aDate = aTs.toDate();
-                if (bTs is Timestamp) bDate = bTs.toDate();
+                    if (aTs is Timestamp) aDate = aTs.toDate();
+                    if (bTs is Timestamp) bDate = bTs.toDate();
 
-                return bDate.compareTo(aDate);
-              });
+                    return bDate.compareTo(aDate);
+                  });
 
               return LayoutBuilder(
                 builder: (context, constraints) {
