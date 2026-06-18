@@ -383,7 +383,6 @@ class _ZohoShellState extends State<ZohoShell> {
   late Stream<DocumentSnapshot<Map<String, dynamic>>> _userSessionStream;
   late Stream<QuerySnapshot<Map<String, dynamic>>> _inquiryCountStream;
   late Stream<QuerySnapshot<Map<String, dynamic>>> _taskCountStream;
-  late Stream<QuerySnapshot<Map<String, dynamic>>> _meetingCountStream;
 
   @override
   void initState() {
@@ -408,12 +407,6 @@ class _ZohoShellState extends State<ZohoShell> {
         .collection('companies')
         .doc(widget.companyId)
         .collection('tasks')
-        .snapshots();
-
-    _meetingCountStream = FirebaseFirestore.instance
-        .collection('companies')
-        .doc(widget.companyId)
-        .collection('meetings')
         .snapshots();
 
     if (_resolvedIndustry == null || _resolvedIndustry!.isEmpty) {
@@ -1775,8 +1768,6 @@ class _ZohoShellState extends State<ZohoShell> {
                 _inquiryBadge(selected: selected),
               if (page == ShellPage.salesTasks)
                 _taskSidebarBadge(selected: selected),
-              if (page == ShellPage.salesMeetings)
-                _meetingSidebarBadge(selected: selected),
             ],
           ],
         ),
@@ -1802,13 +1793,6 @@ class _ZohoShellState extends State<ZohoShell> {
     return assignedToUid == widget.userUid || createdByUid == widget.userUid;
   }
 
-  DateTime? _readDateTime(dynamic value) {
-    if (value is Timestamp) return value.toDate();
-    if (value is DateTime) return value;
-    if (value is String) return DateTime.tryParse(value);
-    return null;
-  }
-
   int _openTaskCount(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
     int count = 0;
 
@@ -1819,35 +1803,6 @@ class _ZohoShellState extends State<ZohoShell> {
 
       final status = (data['status'] ?? '').toString().trim().toLowerCase();
       if (status != 'completed') count++;
-    }
-
-    return count;
-  }
-
-  int _upcomingMeetingCount(
-    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
-  ) {
-    int count = 0;
-    final now = DateTime.now();
-
-    for (final doc in docs) {
-      final data = doc.data();
-      if (data['isDeleted'] == true) continue;
-
-      final status = (data['status'] ?? '').toString().trim().toLowerCase();
-      if (status == 'cancelled') continue;
-
-      final participants = data['participantUids'];
-      final createdByUid = (data['createdByUid'] ?? '').toString().trim();
-      final canSee =
-          isAdminOrManager ||
-          createdByUid == widget.userUid ||
-          (participants is List && participants.contains(widget.userUid));
-
-      if (!canSee) continue;
-
-      final startAt = _readDateTime(data['startAt']);
-      if (startAt != null && startAt.isAfter(now)) count++;
     }
 
     return count;
@@ -1905,22 +1860,6 @@ class _ZohoShellState extends State<ZohoShell> {
           count: count,
           selected: selected,
           color: const Color(0xFF60A5FA),
-        );
-      },
-    );
-  }
-
-  Widget _meetingSidebarBadge({required bool selected}) {
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: _meetingCountStream,
-      builder: (context, snap) {
-        final docs =
-            snap.data?.docs ?? <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-        final count = _upcomingMeetingCount(docs);
-        return _navCountBadge(
-          count: count,
-          selected: selected,
-          color: const Color(0xFF22C55E),
         );
       },
     );
