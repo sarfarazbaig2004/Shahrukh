@@ -924,7 +924,41 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
   }
 
   void _showComingSoon(String title) {
-    _showSnack('$title will be added next', isError: false);
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: zBlue.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.auto_awesome_outlined, color: zBlue),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+            ),
+          ],
+        ),
+        content: const Text(
+          'This enterprise setting is planned for the next configuration upgrade. Current live modules will continue to work normally.',
+          style: TextStyle(height: 1.4),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _showChangePasswordDialog(BuildContext context) async {

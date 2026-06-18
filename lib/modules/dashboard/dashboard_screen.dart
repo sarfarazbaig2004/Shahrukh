@@ -548,8 +548,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
         context,
         MaterialPageRoute(
           builder: (_) => Scaffold(
+            backgroundColor: const Color(0xFFF8FAFC),
             appBar: AppBar(title: Text(title)),
-            body: const Center(child: Text('Module Screen Placeholder')),
+            body: Center(
+              child: Container(
+                width: 520,
+                margin: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(28),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.rocket_launch_outlined,
+                      size: 44,
+                      color: Color(0xFF2563EB),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'This quick action is reserved for the next enterprise workflow upgrade. Please open the module from the sidebar for currently active workflows.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(height: 1.45, color: Color(0xFF64748B)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       );
