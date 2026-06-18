@@ -45,10 +45,7 @@ Color roleColor(String role) {
 /// STATUS
 /// ------------------------------------------------------------
 
-String statusLabel({
-  required bool isActive,
-  required bool isDeleted,
-}) {
+String statusLabel({required bool isActive, required bool isDeleted}) {
   if (isDeleted) return 'Archived';
   if (isActive) return 'Active';
   return 'Inactive';
@@ -67,10 +64,7 @@ String statusLabelFromValue(String status) {
   }
 }
 
-Color statusColor({
-  required bool isActive,
-  required bool isDeleted,
-}) {
+Color statusColor({required bool isActive, required bool isDeleted}) {
   if (isDeleted) return dangerColor;
   if (isActive) return successColor;
   return warningColor;
@@ -158,21 +152,19 @@ String formatAccessScope(String scope) {
 
 String permissionLabel(String key) {
   switch (key) {
-  // Dashboard
+    // Dashboard
     case 'dashboard':
       return 'Dashboard';
 
-  // CRM
+    // CRM
     case 'customers':
       return 'Customers';
     case 'contacts':
       return 'Contacts';
     case 'customerVisits':
       return 'Customer Visits';
-    case 'communicationHistory':
-      return 'Communication History';
 
-  // Sales
+    // Sales
     case 'inquiries':
       return 'Inquiries';
     case 'quotations':
@@ -184,7 +176,7 @@ String permissionLabel(String key) {
     case 'meetings':
       return 'Meetings';
 
-  // Inventory
+    // Inventory
     case 'products':
       return 'Products';
     case 'stockSummary':
@@ -196,7 +188,7 @@ String permissionLabel(String key) {
     case 'warehouse':
       return 'Warehouse';
 
-  // Purchase
+    // Purchase
     case 'vendors':
       return 'Vendors';
     case 'purchaseOrders':
@@ -204,7 +196,7 @@ String permissionLabel(String key) {
     case 'grn':
       return 'GRN';
 
-  // Finance
+    // Finance
     case 'invoice':
       return 'Invoices';
     case 'payments':
@@ -212,11 +204,11 @@ String permissionLabel(String key) {
     case 'expenses':
       return 'Expenses';
 
-  // Reports
+    // Reports
     case 'reports':
       return 'Reports';
 
-  // Admin
+    // Admin
     case 'userManagement':
       return 'User Management';
     case 'rolesPermissions':
@@ -244,9 +236,9 @@ String _humanizeKey(String value) {
 
   final withSpaces = normalized
       .replaceAllMapped(
-    RegExp(r'([a-z])([A-Z])'),
+        RegExp(r'([a-z])([A-Z])'),
         (match) => '${match.group(1)} ${match.group(2)}',
-  )
+      )
       .replaceAll('_', ' ')
       .replaceAll('-', ' ');
 

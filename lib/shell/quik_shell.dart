@@ -57,7 +57,6 @@ enum ShellPage {
   crmCustomers,
   crmContacts,
   crmVisits,
-  crmCommunication,
 
   purchaseVendors,
   purchaseOrders,
@@ -141,8 +140,6 @@ extension ShellPageX on ShellPage {
         return 'Contacts';
       case ShellPage.crmVisits:
         return 'Customer Visits';
-      case ShellPage.crmCommunication:
-        return 'Communication History';
 
       case ShellPage.purchaseVendors:
         return 'Vendors';
@@ -257,8 +254,6 @@ extension ShellPageX on ShellPage {
         return Icons.contact_phone_outlined;
       case ShellPage.crmVisits:
         return Icons.location_on_outlined;
-      case ShellPage.crmCommunication:
-        return Icons.chat_bubble_outline;
       case ShellPage.purchaseVendors:
         return Icons.business_outlined;
       case ShellPage.purchaseOrders:
@@ -563,8 +558,6 @@ class _ZohoShellState extends State<ZohoShell> {
         return _hasPermission('crm', 'contacts');
       case ShellPage.crmVisits:
         return _hasPermission('crm', 'customerVisits');
-      case ShellPage.crmCommunication:
-        return _hasPermission('crm', 'communicationHistory');
 
       // Purchase
       case ShellPage.purchaseVendors:
@@ -678,7 +671,6 @@ class _ZohoShellState extends State<ZohoShell> {
           ShellPage.crmCustomers,
           ShellPage.crmContacts,
           ShellPage.crmVisits,
-          ShellPage.crmCommunication,
         ],
       ),
       SidebarGroup(
