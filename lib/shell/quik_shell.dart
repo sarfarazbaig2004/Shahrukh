@@ -1390,8 +1390,8 @@ class _ZohoShellState extends State<ZohoShell> {
                                 child: Row(
                                   children: [
                                     Container(
-                                      width: 36,
-                                      height: 36,
+                                      width: _isSidebarCollapsed ? 30 : 36,
+                                      height: _isSidebarCollapsed ? 30 : 36,
                                       decoration: BoxDecoration(
                                         color: Colors.white.withValues(
                                           alpha: 0.10,
@@ -1445,6 +1445,10 @@ class _ZohoShellState extends State<ZohoShell> {
                                         ),
                                       ),
                                       const SizedBox(width: 8),
+                                      _sidebarBookletToggle(),
+                                    ],
+                                    if (_isSidebarCollapsed) ...[
+                                      const Spacer(),
                                       _sidebarBookletToggle(),
                                     ],
                                   ],
@@ -1501,7 +1505,7 @@ class _ZohoShellState extends State<ZohoShell> {
                                         const Icon(
                                           Icons.logout,
                                           color: Colors.white70,
-                                          size: 17,
+                                          size: 16,
                                         ),
                                         if (!_isSidebarCollapsed) ...[
                                           const SizedBox(width: 8),
@@ -1651,8 +1655,8 @@ class _ZohoShellState extends State<ZohoShell> {
           });
         },
         child: Container(
-          width: 30,
-          height: 30,
+          width: 26,
+          height: 26,
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(8),
