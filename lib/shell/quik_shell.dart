@@ -382,6 +382,8 @@ class _ZohoShellState extends State<ZohoShell> {
 
   late Stream<DocumentSnapshot<Map<String, dynamic>>> _userSessionStream;
   late Stream<QuerySnapshot<Map<String, dynamic>>> _inquiryCountStream;
+  late Stream<QuerySnapshot<Map<String, dynamic>>> _taskCountStream;
+  late Stream<QuerySnapshot<Map<String, dynamic>>> _meetingCountStream;
 
   @override
   void initState() {
@@ -400,6 +402,18 @@ class _ZohoShellState extends State<ZohoShell> {
         .doc(widget.companyId)
         .collection('inquiries')
         .where('assignedToUid', isEqualTo: widget.userUid)
+        .snapshots();
+
+    _taskCountStream = FirebaseFirestore.instance
+        .collection('companies')
+        .doc(widget.companyId)
+        .collection('tasks')
+        .snapshots();
+
+    _meetingCountStream = FirebaseFirestore.instance
+        .collection('companies')
+        .doc(widget.companyId)
+        .collection('meetings')
         .snapshots();
 
     if (_resolvedIndustry == null || _resolvedIndustry!.isEmpty) {
@@ -1364,23 +1378,41 @@ class _ZohoShellState extends State<ZohoShell> {
                         ),
                         child: Row(
                           children: [
-                            Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.10),
+                            Tooltip(
+                              message: _isSidebarCollapsed
+                                  ? 'Click QUIK logo to expand sidebar'
+                                  : 'Click QUIK logo to collapse sidebar',
+                              child: InkWell(
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.12),
-                                ),
-                              ),
-                              child: const Center(
-                                child: Text(
-                                  'Q',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 18,
+                                onTap: () {
+                                  setState(() {
+                                    _isSidebarCollapsed = !_isSidebarCollapsed;
+                                    if (_isSidebarCollapsed) {
+                                      expandedGroups.clear();
+                                    }
+                                  });
+                                },
+                                child: Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.10),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.12,
+                                      ),
+                                    ),
+                                  ),
+                                  child: const Center(
+                                    child: Text(
+                                      'Q',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 18,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -1415,36 +1447,6 @@ class _ZohoShellState extends State<ZohoShell> {
                                 ),
                               ),
                             ],
-                            Tooltip(
-                              message: _isSidebarCollapsed
-                                  ? 'Expand sidebar'
-                                  : 'Collapse sidebar',
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(10),
-                                onTap: () {
-                                  setState(() {
-                                    _isSidebarCollapsed = !_isSidebarCollapsed;
-                                    if (_isSidebarCollapsed) {
-                                      expandedGroups.clear();
-                                    }
-                                  });
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.06),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Icon(
-                                    _isSidebarCollapsed
-                                        ? Icons.keyboard_double_arrow_right
-                                        : Icons.keyboard_double_arrow_left,
-                                    color: Colors.white70,
-                                    size: 18,
-                                  ),
-                                ),
-                              ),
-                            ),
                           ],
                         ),
                       ),
@@ -1771,6 +1773,10 @@ class _ZohoShellState extends State<ZohoShell> {
               ),
               if (page == ShellPage.salesInquiries && canInquiries)
                 _inquiryBadge(selected: selected),
+              if (page == ShellPage.salesTasks)
+                _taskSidebarBadge(selected: selected),
+              if (page == ShellPage.salesMeetings)
+                _meetingSidebarBadge(selected: selected),
             ],
           ],
         ),
@@ -1787,30 +1793,134 @@ class _ZohoShellState extends State<ZohoShell> {
     );
   }
 
+  bool _isDocVisibleForCurrentUser(Map<String, dynamic> data) {
+    if (isAdminOrManager) return true;
+
+    final assignedToUid = (data['assignedToUid'] ?? '').toString().trim();
+    final createdByUid = (data['createdByUid'] ?? '').toString().trim();
+
+    return assignedToUid == widget.userUid || createdByUid == widget.userUid;
+  }
+
+  DateTime? _readDateTime(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value);
+    return null;
+  }
+
+  int _openTaskCount(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
+    int count = 0;
+
+    for (final doc in docs) {
+      final data = doc.data();
+      if (data['isDeleted'] == true) continue;
+      if (!_isDocVisibleForCurrentUser(data)) continue;
+
+      final status = (data['status'] ?? '').toString().trim().toLowerCase();
+      if (status != 'completed') count++;
+    }
+
+    return count;
+  }
+
+  int _upcomingMeetingCount(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
+    int count = 0;
+    final now = DateTime.now();
+
+    for (final doc in docs) {
+      final data = doc.data();
+      if (data['isDeleted'] == true) continue;
+
+      final status = (data['status'] ?? '').toString().trim().toLowerCase();
+      if (status == 'cancelled') continue;
+
+      final participants = data['participantUids'];
+      final createdByUid = (data['createdByUid'] ?? '').toString().trim();
+      final canSee =
+          isAdminOrManager ||
+          createdByUid == widget.userUid ||
+          (participants is List && participants.contains(widget.userUid));
+
+      if (!canSee) continue;
+
+      final startAt = _readDateTime(data['startAt']);
+      if (startAt != null && startAt.isAfter(now)) count++;
+    }
+
+    return count;
+  }
+
+  Widget _navCountBadge({
+    required int count,
+    required bool selected,
+    Color? color,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(left: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: selected
+            ? zBlueSoft
+            : (color ?? Colors.white).withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: selected
+              ? zBlue.withValues(alpha: 0.16)
+              : Colors.white.withValues(alpha: 0.08),
+        ),
+      ),
+      child: Text(
+        count > 99 ? '99+' : '$count',
+        style: TextStyle(
+          fontSize: 10,
+          height: 1,
+          fontWeight: FontWeight.w900,
+          color: selected ? zBlue : Colors.white,
+        ),
+      ),
+    );
+  }
+
   Widget _inquiryBadge({required bool selected}) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: _inquiryCountStream,
       builder: (context, snap) {
         final count = snap.data?.docs.length ?? 0;
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(
-            color: selected ? zBlueSoft : Colors.white.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: selected
-                  ? zBlue.withValues(alpha: 0.14)
-                  : Colors.transparent,
-            ),
-          ),
-          child: Text(
-            '$count',
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w900,
-              color: selected ? zBlue : Colors.white,
-            ),
-          ),
+        return _navCountBadge(count: count, selected: selected);
+      },
+    );
+  }
+
+  Widget _taskSidebarBadge({required bool selected}) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _taskCountStream,
+      builder: (context, snap) {
+        final docs =
+            snap.data?.docs ?? <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+        final count = _openTaskCount(docs);
+        return _navCountBadge(
+          count: count,
+          selected: selected,
+          color: const Color(0xFF60A5FA),
+        );
+      },
+    );
+  }
+
+  Widget _meetingSidebarBadge({required bool selected}) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _meetingCountStream,
+      builder: (context, snap) {
+        final docs =
+            snap.data?.docs ?? <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+        final count = _upcomingMeetingCount(docs);
+        return _navCountBadge(
+          count: count,
+          selected: selected,
+          color: const Color(0xFF22C55E),
         );
       },
     );
@@ -2536,9 +2646,6 @@ class _ZohoShellState extends State<ZohoShell> {
 
   // ignore: unused_element
   Widget _homeDashboardLive() {
-    DateTime dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
-    final today = dateOnly(DateTime.now());
-
     final canShowInquiryDashboard = canInquiries;
     final welcomeText = _dashboardWelcomeText();
 

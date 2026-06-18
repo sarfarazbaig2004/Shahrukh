@@ -62,12 +62,6 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
     return DateFormat('dd MMM yyyy, hh:mm a').format(date);
   }
 
-  String _formatDate(dynamic value) {
-    final date = _toDate(value);
-    if (date == null) return '-';
-    return DateFormat('dd MMM yyyy').format(date);
-  }
-
   String _currentYear() => DateTime.now().year.toString();
 
   Future<String> _nextMeetingNumber(Transaction transaction) async {
