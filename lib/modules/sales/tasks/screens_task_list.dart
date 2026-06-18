@@ -275,6 +275,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
                           ),
                           const SizedBox(height: 12),
                           DropdownButtonFormField<_InquiryOption?>(
+                            isExpanded: true,
                             initialValue: selectedInquiry,
                             items: [
                               const DropdownMenuItem<_InquiryOption?>(
@@ -286,7 +287,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
                                   value: inq,
                                   child: Text(
                                     '${inq.number.isEmpty ? 'Inquiry' : inq.number}  ${inq.subject.isEmpty ? inq.customerName : inq.subject}',
+                                    maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
+                                    softWrap: false,
                                   ),
                                 ),
                               ),
@@ -304,6 +307,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
                             children: [
                               Expanded(
                                 child: DropdownButtonFormField<String>(
+                                  isExpanded: true,
                                   initialValue: selectedStatus,
                                   items: taskStatuses
                                       .map(
@@ -329,6 +333,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
                               const SizedBox(width: 12),
                               Expanded(
                                 child: DropdownButtonFormField<String>(
+                                  isExpanded: true,
                                   initialValue: selectedPriority,
                                   items: taskPriorities
                                       .map(
@@ -358,6 +363,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
                             children: [
                               Expanded(
                                 child: DropdownButtonFormField<_UserOption>(
+                                  isExpanded: true,
                                   initialValue: selectedUser,
                                   items: users
                                       .map(
@@ -365,7 +371,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
                                           value: user,
                                           child: Text(
                                             user.name,
+                                            maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
+                                            softWrap: false,
                                           ),
                                         ),
                                       )
@@ -666,6 +674,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
         SizedBox(
           width: 190,
           child: DropdownButtonFormField<String>(
+            isExpanded: true,
             initialValue: _statusFilter,
             items: ['All', ...taskStatuses]
                 .map(
@@ -686,6 +695,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
         SizedBox(
           width: 190,
           child: DropdownButtonFormField<String>(
+            isExpanded: true,
             initialValue: _priorityFilter,
             items: ['All', ...taskPriorities]
                 .map(
