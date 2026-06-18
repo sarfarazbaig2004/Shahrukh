@@ -369,6 +369,7 @@ class ZohoShell extends StatefulWidget {
 
 class _ZohoShellState extends State<ZohoShell> {
   ShellPage activePage = ShellPage.dashboard;
+  bool _isSidebarCollapsed = false;
 
   final Set<String> expandedGroups = {};
 
@@ -794,6 +795,8 @@ class _ZohoShellState extends State<ZohoShell> {
       case ShellPage.salesInquiries:
       case ShellPage.salesQuotations:
       case ShellPage.salesOrders:
+      case ShellPage.salesTasks:
+      case ShellPage.salesMeetings:
       case ShellPage.crmCustomers:
       case ShellPage.crmVisits: // ✅ NEW: Registered CRM Visits
       case ShellPage.inventoryProducts:
@@ -1343,37 +1346,103 @@ class _ZohoShellState extends State<ZohoShell> {
           backgroundColor: zCanvasBg,
           body: Row(
             children: [
-              Container(
-                width: 240,
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                width: _isSidebarCollapsed ? 76 : 240,
                 color: zIconRail,
                 child: SafeArea(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        padding: EdgeInsets.fromLTRB(
+                          _isSidebarCollapsed ? 8 : 14,
+                          12,
+                          _isSidebarCollapsed ? 8 : 14,
+                          10,
+                        ),
+                        child: Row(
                           children: [
-                            const Text(
-                              'QUIK ERP',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 15,
-                                letterSpacing: 0.2,
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.10),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.12),
+                                ),
+                              ),
+                              child: const Center(
+                                child: Text(
+                                  'Q',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 18,
+                                  ),
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 6),
-                            Text(
-                              widget.companyName,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                height: 1.4,
+                            if (!_isSidebarCollapsed) ...[
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'QUIK ERP',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 15,
+                                        letterSpacing: 0.2,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      widget.companyName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            Tooltip(
+                              message: _isSidebarCollapsed
+                                  ? 'Expand sidebar'
+                                  : 'Collapse sidebar',
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(10),
+                                onTap: () {
+                                  setState(() {
+                                    _isSidebarCollapsed = !_isSidebarCollapsed;
+                                    if (_isSidebarCollapsed) {
+                                      expandedGroups.clear();
+                                    }
+                                  });
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.06),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Icon(
+                                    _isSidebarCollapsed
+                                        ? Icons.keyboard_double_arrow_right
+                                        : Icons.keyboard_double_arrow_left,
+                                    color: Colors.white70,
+                                    size: 18,
+                                  ),
+                                ),
                               ),
                             ),
                           ],
@@ -1411,31 +1480,36 @@ class _ZohoShellState extends State<ZohoShell> {
                               ),
                             ),
                             child: Row(
+                              mainAxisAlignment: _isSidebarCollapsed
+                                  ? MainAxisAlignment.center
+                                  : MainAxisAlignment.start,
                               children: [
                                 const Icon(
                                   Icons.logout,
                                   color: Colors.white70,
                                   size: 18,
                                 ),
-                                const SizedBox(width: 8),
-                                const Expanded(
-                                  child: Text(
-                                    'Logout',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 12,
+                                if (!_isSidebarCollapsed) ...[
+                                  const SizedBox(width: 8),
+                                  const Expanded(
+                                    child: Text(
+                                      'Logout',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 12,
+                                      ),
                                     ),
                                   ),
-                                ),
-                                Text(
-                                  _currentRole.toUpperCase(),
-                                  style: const TextStyle(
-                                    color: Colors.white54,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
+                                  Text(
+                                    _currentRole.toUpperCase(),
+                                    style: const TextStyle(
+                                      color: Colors.white54,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
-                                ),
+                                ],
                               ],
                             ),
                           ),
@@ -1461,93 +1535,84 @@ class _ZohoShellState extends State<ZohoShell> {
   }
 
   Widget _dashboardNavItem() {
-    final selected = activePage == ShellPage.dashboard;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: () => _selectPage(ShellPage.dashboard),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            color: selected
-                ? Colors.white.withValues(alpha: 0.10)
-                : Colors.transparent,
-            border: Border.all(
-              color: selected
-                  ? Colors.white.withValues(alpha: 0.16)
-                  : Colors.transparent,
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.dashboard_outlined,
-                size: 18,
-                color: selected ? Colors.white : Colors.white70,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Dashboard',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: selected ? Colors.white : Colors.white70,
-                    fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return _singleNavItem(
+      page: ShellPage.dashboard,
+      icon: Icons.home_outlined,
+      label: 'Dashboard',
+      selected: activePage == ShellPage.dashboard,
     );
   }
 
   Widget _settingsNavItem() {
-    final selected = activePage == ShellPage.settingsGeneral;
+    return _singleNavItem(
+      page: ShellPage.settingsGeneral,
+      icon: Icons.settings_outlined,
+      label: 'Settings',
+      selected: activePage == ShellPage.settingsGeneral,
+    );
+  }
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 2),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: () => _selectPage(ShellPage.settingsGeneral),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
+  Widget _singleNavItem({
+    required ShellPage page,
+    required IconData icon,
+    required String label,
+    required bool selected,
+  }) {
+    final item = InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => _selectPage(page),
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: _isSidebarCollapsed ? 10 : 10,
+          vertical: 9,
+        ),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          color: selected
+              ? Colors.white.withValues(
+                  alpha: _isSidebarCollapsed ? 0.14 : 0.10,
+                )
+              : Colors.transparent,
+          border: Border.all(
             color: selected
-                ? Colors.white.withValues(alpha: 0.10)
+                ? Colors.white.withValues(alpha: 0.12)
                 : Colors.transparent,
-            border: Border.all(
-              color: selected
-                  ? Colors.white.withValues(alpha: 0.16)
-                  : Colors.transparent,
-            ),
           ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.settings_outlined,
-                size: 18,
-                color: selected ? Colors.white : Colors.white70,
-              ),
-              const SizedBox(width: 8),
+        ),
+        child: Row(
+          mainAxisAlignment: _isSidebarCollapsed
+              ? MainAxisAlignment.center
+              : MainAxisAlignment.start,
+          children: [
+            Icon(
+              icon,
+              size: 19,
+              color: selected ? Colors.white : Colors.white70,
+            ),
+            if (!_isSidebarCollapsed) ...[
+              const SizedBox(width: 9),
               Expanded(
                 child: Text(
-                  'Settings',
+                  label,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 12.5,
                     color: selected ? Colors.white : Colors.white70,
                     fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
                   ),
                 ),
               ),
             ],
-          ),
+          ],
         ),
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Tooltip(
+        message: label,
+        waitDuration: const Duration(milliseconds: 450),
+        child: item,
       ),
     );
   }
@@ -1556,85 +1621,106 @@ class _ZohoShellState extends State<ZohoShell> {
     final bool expanded = expandedGroups.contains(group.key);
     final bool hasActiveChild = _groupContainsActive(group);
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
+    final groupTile = InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () {
+        setState(() {
+          if (_isSidebarCollapsed) {
+            _isSidebarCollapsed = false;
+            expandedGroups
+              ..clear()
+              ..add(group.key);
+            return;
+          }
+
+          if (expanded) {
+            expandedGroups.remove(group.key);
+          } else {
+            expandedGroups
+              ..clear()
+              ..add(group.key);
+          }
+        });
+      },
       child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: _isSidebarCollapsed ? 10 : 10,
+          vertical: 9,
+        ),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
           color: hasActiveChild
-              ? Colors.white.withValues(alpha: 0.05)
+              ? Colors.white.withValues(
+                  alpha: _isSidebarCollapsed ? 0.14 : 0.08,
+                )
               : Colors.transparent,
           border: Border.all(
             color: hasActiveChild
-                ? Colors.white.withValues(alpha: 0.08)
+                ? Colors.white.withValues(alpha: 0.12)
                 : Colors.transparent,
           ),
         ),
+        child: Row(
+          mainAxisAlignment: _isSidebarCollapsed
+              ? MainAxisAlignment.center
+              : MainAxisAlignment.start,
+          children: [
+            Icon(
+              group.icon,
+              size: 19,
+              color: hasActiveChild ? Colors.white : Colors.white70,
+            ),
+            if (!_isSidebarCollapsed) ...[
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  group.title,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: hasActiveChild ? Colors.white : Colors.white70,
+                    fontWeight: hasActiveChild
+                        ? FontWeight.w900
+                        : FontWeight.w700,
+                  ),
+                ),
+              ),
+              Icon(
+                expanded
+                    ? Icons.keyboard_arrow_down
+                    : Icons.keyboard_arrow_right,
+                color: Colors.white60,
+                size: 16,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Tooltip(
+        message: group.title,
+        waitDuration: const Duration(milliseconds: 450),
         child: Column(
           children: [
-            InkWell(
-              borderRadius: BorderRadius.circular(10),
-              onTap: () {
-                setState(() {
-                  if (expanded) {
-                    expandedGroups.remove(group.key);
-                  } else {
-                    expandedGroups.clear();
-                    expandedGroups.add(group.key);
-                  }
-                });
-              },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
+            groupTile,
+            if (!_isSidebarCollapsed)
+              AnimatedCrossFade(
+                duration: const Duration(milliseconds: 180),
+                crossFadeState: expanded
+                    ? CrossFadeState.showFirst
+                    : CrossFadeState.showSecond,
+                firstChild: Padding(
+                  padding: const EdgeInsets.fromLTRB(6, 2, 6, 6),
+                  child: Column(
+                    children: group.children
+                        .map((page) => _subNavItem(page))
+                        .toList(),
+                  ),
                 ),
-                child: Row(
-                  children: [
-                    Icon(
-                      group.icon,
-                      size: 18,
-                      color: hasActiveChild ? Colors.white : Colors.white70,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        group.title,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: hasActiveChild ? Colors.white : Colors.white70,
-                          fontWeight: hasActiveChild
-                              ? FontWeight.w900
-                              : FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    Icon(
-                      expanded
-                          ? Icons.keyboard_arrow_down
-                          : Icons.keyboard_arrow_right,
-                      color: Colors.white60,
-                      size: 16,
-                    ),
-                  ],
-                ),
+                secondChild: const SizedBox.shrink(),
               ),
-            ),
-            AnimatedCrossFade(
-              duration: const Duration(milliseconds: 180),
-              crossFadeState: expanded
-                  ? CrossFadeState.showFirst
-                  : CrossFadeState.showSecond,
-              firstChild: Padding(
-                padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
-                child: Column(
-                  children: group.children
-                      .map((page) => _subNavItem(page))
-                      .toList(),
-                ),
-              ),
-              secondChild: const SizedBox.shrink(),
-            ),
           ],
         ),
       ),
@@ -1648,31 +1734,30 @@ class _ZohoShellState extends State<ZohoShell> {
             (activePage == ShellPage.financeExportInvoiceCreate ||
                 activePage == ShellPage.financeTaxInvoiceCreate));
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 1),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: () => _selectPage(page),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
+    final item = InkWell(
+      borderRadius: BorderRadius.circular(9),
+      onTap: () => _selectPage(page),
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: _isSidebarCollapsed ? 8 : 10,
+          vertical: 8,
+        ),
+        decoration: BoxDecoration(
+          color: selected ? Colors.white : Colors.white.withValues(alpha: 0.03),
+          borderRadius: BorderRadius.circular(9),
+          border: Border.all(
             color: selected
                 ? Colors.white
-                : Colors.white.withValues(alpha: 0.03),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: selected
-                  ? Colors.white
-                  : Colors.white.withValues(alpha: 0.05),
-            ),
+                : Colors.white.withValues(alpha: 0.05),
           ),
-          child: Row(
-            children: [
-              Icon(
-                page.icon,
-                size: 16,
-                color: selected ? zBlue : Colors.white70,
-              ),
+        ),
+        child: Row(
+          mainAxisAlignment: _isSidebarCollapsed
+              ? MainAxisAlignment.center
+              : MainAxisAlignment.start,
+          children: [
+            Icon(page.icon, size: 16, color: selected ? zBlue : Colors.white70),
+            if (!_isSidebarCollapsed) ...[
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -1687,8 +1772,17 @@ class _ZohoShellState extends State<ZohoShell> {
               if (page == ShellPage.salesInquiries && canInquiries)
                 _inquiryBadge(selected: selected),
             ],
-          ),
+          ],
         ),
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1),
+      child: Tooltip(
+        message: page.label,
+        waitDuration: const Duration(milliseconds: 450),
+        child: item,
       ),
     );
   }
