@@ -365,16 +365,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     SizedBox(
                       width: cardWidth,
                       child: DashboardCard(
-                        title: 'Follow-ups Today',
-                        child: Text(
-                          data.followUpsToday.toString(),
-                          style: kpiStyle,
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      width: cardWidth,
-                      child: DashboardCard(
                         title: 'New Inquiries',
                         child: Text(
                           data.newInquiries.toString(),
@@ -394,63 +384,84 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget? _buildTasksActivitiesSection() {
     final showTasks = hasPermission('sales', 'tasks');
-    final showActivities = hasPermission('sales', 'followUps');
+    final showMeetings = hasPermission('sales', 'meetings');
 
-    if (!showTasks && !showActivities) return null;
+    if (!showTasks && !showMeetings) return null;
 
-    Widget activities = DashboardCard(
-      title: 'Recent Activities',
-      child: ListView.separated(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: 3,
-        separatorBuilder: (context, index) =>
-            const Divider(height: 24, color: Color(0xFFF1F5F9)),
-        itemBuilder: (context, index) =>
-            const ActivityItem(text: 'System synchronization successful.'),
-      ),
-    );
-
-    Widget tasks = DashboardCard(
-      title: 'Pending Tasks',
-      child: ListView.separated(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: 3,
-        separatorBuilder: (context, index) =>
-            const Divider(height: 24, color: Color(0xFFF1F5F9)),
-        itemBuilder: (context, index) =>
-            const TaskItem(text: 'Check pending invoices and follow-ups.'),
-      ),
+    const kpiStyle = TextStyle(
+      fontSize: 22,
+      fontWeight: FontWeight.w800,
+      color: Color(0xFF0F172A),
+      letterSpacing: -0.5,
     );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionHeader(title: 'Tasks & Activities'),
+        const SectionHeader(title: 'Productivity'),
         const SizedBox(height: 16),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            bool isWide = constraints.maxWidth > 800;
-
-            if (showTasks && showActivities) {
-              return isWide
-                  ? Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(child: activities),
-                        const SizedBox(width: 16),
-                        Expanded(child: tasks),
-                      ],
-                    )
-                  : Column(
-                      children: [activities, const SizedBox(height: 16), tasks],
-                    );
-            } else if (showActivities) {
-              return activities;
-            } else {
-              return tasks;
+        StreamBuilder<DashboardProductivityData>(
+          stream: _service.streamProductivityData(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const SizedBox(
+                height: 100,
+                child: Center(child: CircularProgressIndicator()),
+              );
             }
+
+            final data = snapshot.data!;
+            final cards = <Widget>[];
+
+            if (showTasks) {
+              cards.add(
+                DashboardCard(
+                  title: 'Open Tasks',
+                  child: Text(data.openTasks.toString(), style: kpiStyle),
+                ),
+              );
+              cards.add(
+                DashboardCard(
+                  title: 'Critical Tasks',
+                  child: Text(data.criticalTasks.toString(), style: kpiStyle),
+                ),
+              );
+            }
+
+            if (showMeetings) {
+              cards.add(
+                DashboardCard(
+                  title: 'Upcoming Meetings',
+                  child: Text(
+                    data.upcomingMeetings.toString(),
+                    style: kpiStyle,
+                  ),
+                ),
+              );
+              cards.add(
+                DashboardCard(
+                  title: 'Today Meetings',
+                  child: Text(data.todayMeetings.toString(), style: kpiStyle),
+                ),
+              );
+            }
+
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                final width = constraints.maxWidth;
+                final cardWidth = width > 1000
+                    ? (width - 48) / 4
+                    : (width > 650 ? (width - 16) / 2 : width);
+
+                return Wrap(
+                  spacing: 16,
+                  runSpacing: 16,
+                  children: cards
+                      .map((card) => SizedBox(width: cardWidth, child: card))
+                      .toList(),
+                );
+              },
+            );
           },
         ),
       ],
