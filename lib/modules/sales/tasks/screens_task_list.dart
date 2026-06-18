@@ -1016,11 +1016,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openCreateTaskDialog,
-        icon: const Icon(Icons.add_task_outlined),
-        label: const Text('Create Task'),
-      ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: _taskStream(),
         builder: (context, snapshot) {
@@ -1042,55 +1037,13 @@ class _TaskListScreenState extends State<TaskListScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          final compact = constraints.maxWidth < 700;
-                          final titleBlock = const Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Tasks',
-                                style: TextStyle(
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.w900,
-                                  color: Color(0xFF0F172A),
-                                ),
-                              ),
-                              SizedBox(height: 4),
-                              Text(
-                                'Inquiry-linked task management with real-time status and priority tracking.',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Color(0xFF64748B),
-                                ),
-                              ),
-                            ],
-                          );
-
-                          final button = ElevatedButton.icon(
-                            onPressed: _openCreateTaskDialog,
-                            icon: const Icon(Icons.add_task_outlined),
-                            label: const Text('Create Task'),
-                          );
-
-                          if (compact) {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                titleBlock,
-                                const SizedBox(height: 12),
-                                button,
-                              ],
-                            );
-                          }
-
-                          return Row(
-                            children: [
-                              Expanded(child: titleBlock),
-                              button,
-                            ],
-                          );
-                        },
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: ElevatedButton.icon(
+                          onPressed: _openCreateTaskDialog,
+                          icon: const Icon(Icons.add_task_outlined),
+                          label: const Text('Create Task'),
+                        ),
                       ),
                       const SizedBox(height: 18),
                       _buildSummary(tasks),

@@ -1247,6 +1247,29 @@ class _ZohoShellState extends State<ZohoShell> {
       ),
       child: Row(
         children: [
+          Tooltip(
+            message: _isSidebarCollapsed
+                ? 'Expand sidebar'
+                : 'Collapse sidebar',
+            child: IconButton(
+              icon: Icon(
+                _isSidebarCollapsed
+                    ? Icons.keyboard_double_arrow_right
+                    : Icons.keyboard_double_arrow_left,
+                color: zText,
+                size: 20,
+              ),
+              onPressed: () {
+                setState(() {
+                  _isSidebarCollapsed = !_isSidebarCollapsed;
+                  if (_isSidebarCollapsed) {
+                    expandedGroups.clear();
+                  }
+                });
+              },
+            ),
+          ),
+          const SizedBox(width: 6),
           Expanded(
             child: Text(
               _activeSectionTitle(),

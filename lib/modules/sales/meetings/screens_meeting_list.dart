@@ -924,11 +924,6 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openCreateMeetingDialog,
-        icon: const Icon(Icons.add),
-        label: const Text('Schedule Meeting'),
-      ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: _meetingStream(),
         builder: (context, snapshot) {
@@ -952,55 +947,13 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          final compact = constraints.maxWidth < 700;
-                          const titleBlock = Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Meetings',
-                                style: TextStyle(
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.w900,
-                                  color: Color(0xFF0F172A),
-                                ),
-                              ),
-                              SizedBox(height: 4),
-                              Text(
-                                'Schedule internal meetings with participant notifications, links and reminders.',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Color(0xFF64748B),
-                                ),
-                              ),
-                            ],
-                          );
-
-                          final button = ElevatedButton.icon(
-                            onPressed: _openCreateMeetingDialog,
-                            icon: const Icon(Icons.add),
-                            label: const Text('Schedule Meeting'),
-                          );
-
-                          if (compact) {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                titleBlock,
-                                const SizedBox(height: 12),
-                                button,
-                              ],
-                            );
-                          }
-
-                          return Row(
-                            children: [
-                              const Expanded(child: titleBlock),
-                              button,
-                            ],
-                          );
-                        },
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: ElevatedButton.icon(
+                          onPressed: _openCreateMeetingDialog,
+                          icon: const Icon(Icons.add),
+                          label: const Text('Schedule Meeting'),
+                        ),
                       ),
                       const SizedBox(height: 18),
                       _buildSummary(meetings),
