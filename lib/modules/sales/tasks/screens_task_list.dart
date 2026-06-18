@@ -23,6 +23,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
   String _statusFilter = 'All';
   String _priorityFilter = 'All';
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  String _sortField = 'dueDate';
+  bool _sortAscending = true;
 
   static const List<String> taskStatuses = [
     'Pending',
@@ -37,6 +41,12 @@ class _TaskListScreenState extends State<TaskListScreen> {
     'High',
     'Critical',
   ];
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   CollectionReference<Map<String, dynamic>> get _tasksRef =>
       _db.collection('companies').doc(widget.companyId).collection('tasks');
@@ -133,6 +143,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
   List<_TaskRecord> _filterTasks(
     List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
   ) {
+    final query = _searchQuery.trim().toLowerCase();
+
     final records = docs
         .map((doc) => _TaskRecord.fromDoc(doc))
         .where((task) => task.isDeleted != true)
@@ -143,14 +155,69 @@ class _TaskListScreenState extends State<TaskListScreen> {
           if (_priorityFilter != 'All' && task.priority != _priorityFilter) {
             return false;
           }
-          return true;
+          if (query.isEmpty) {
+            return true;
+          }
+
+          final haystack = [
+            task.taskNumber,
+            task.title,
+            task.description,
+            task.status,
+            task.priority,
+            task.assignedToName,
+            task.createdByName,
+            task.comments,
+          ].join(' ').toLowerCase();
+
+          return haystack.contains(query);
         })
         .toList();
 
+    int compareText(String a, String b) =>
+        a.toLowerCase().compareTo(b.toLowerCase());
+
+    int compareDate(dynamic a, dynamic b) {
+      final da = _toDate(a);
+      final db = _toDate(b);
+      if (da == null && db == null) return 0;
+      if (da == null) return 1;
+      if (db == null) return -1;
+      return da.compareTo(db);
+    }
+
     records.sort((a, b) {
-      final aDate = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-      final bDate = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-      return bDate.compareTo(aDate);
+      int result;
+      switch (_sortField) {
+        case 'taskNumber':
+          result = compareText(a.taskNumber, b.taskNumber);
+          break;
+        case 'title':
+          result = compareText(a.title, b.title);
+          break;
+        case 'assignedToName':
+          result = compareText(a.assignedToName, b.assignedToName);
+          break;
+        case 'status':
+          result = compareText(a.status, b.status);
+          break;
+        case 'priority':
+          result = compareText(a.priority, b.priority);
+          break;
+        case 'startDate':
+          result = compareDate(a.startDate, b.startDate);
+          break;
+        case 'createdAt':
+          result = (a.createdAt ?? DateTime(1900)).compareTo(
+            b.createdAt ?? DateTime(1900),
+          );
+          break;
+        case 'dueDate':
+        default:
+          result = compareDate(a.dueDate, b.dueDate);
+      }
+
+      return _sortAscending ? result : -result;
     });
 
     return records;
@@ -698,55 +765,175 @@ class _TaskListScreenState extends State<TaskListScreen> {
     );
   }
 
-  Widget _buildFilters() {
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        SizedBox(
-          width: 190,
-          child: DropdownButtonFormField<String>(
-            isExpanded: true,
-            initialValue: _statusFilter,
-            items: ['All', ...taskStatuses]
-                .map(
-                  (status) =>
-                      DropdownMenuItem(value: status, child: Text(status)),
-                )
-                .toList(),
-            onChanged: (value) {
-              if (value != null) setState(() => _statusFilter = value);
-            },
-            decoration: const InputDecoration(
-              labelText: 'Status',
-              border: OutlineInputBorder(),
-              isDense: true,
+  Widget _buildTaskToolbar() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          SizedBox(
+            width: 320,
+            child: TextField(
+              controller: _searchController,
+              onChanged: (value) => setState(() => _searchQuery = value),
+              decoration: InputDecoration(
+                labelText: 'Search tasks',
+                hintText: 'Task number, title, assignee...',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchQuery.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Clear search',
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                        icon: const Icon(Icons.close),
+                      ),
+                border: const OutlineInputBorder(),
+                isDense: true,
+              ),
             ),
           ),
-        ),
-        SizedBox(
-          width: 190,
-          child: DropdownButtonFormField<String>(
-            isExpanded: true,
-            initialValue: _priorityFilter,
-            items: ['All', ...taskPriorities]
-                .map(
-                  (priority) =>
-                      DropdownMenuItem(value: priority, child: Text(priority)),
-                )
-                .toList(),
-            onChanged: (value) {
-              if (value != null) setState(() => _priorityFilter = value);
-            },
-            decoration: const InputDecoration(
-              labelText: 'Priority',
-              border: OutlineInputBorder(),
-              isDense: true,
+          SizedBox(
+            width: 170,
+            child: DropdownButtonFormField<String>(
+              isExpanded: true,
+              initialValue: _statusFilter,
+              items: ['All', ...taskStatuses]
+                  .map(
+                    (status) =>
+                        DropdownMenuItem(value: status, child: Text(status)),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) setState(() => _statusFilter = value);
+              },
+              decoration: const InputDecoration(
+                labelText: 'Status',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
             ),
           ),
+          SizedBox(
+            width: 170,
+            child: DropdownButtonFormField<String>(
+              isExpanded: true,
+              initialValue: _priorityFilter,
+              items: ['All', ...taskPriorities]
+                  .map(
+                    (priority) => DropdownMenuItem(
+                      value: priority,
+                      child: Text(priority),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) setState(() => _priorityFilter = value);
+              },
+              decoration: const InputDecoration(
+                labelText: 'Priority',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+            ),
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'Sort tasks',
+            onSelected: (field) {
+              setState(() {
+                if (_sortField == field) {
+                  _sortAscending = !_sortAscending;
+                } else {
+                  _sortField = field;
+                  _sortAscending = true;
+                }
+              });
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 'dueDate', child: Text('Due Date')),
+              PopupMenuItem(value: 'startDate', child: Text('Start Date')),
+              PopupMenuItem(value: 'priority', child: Text('Priority')),
+              PopupMenuItem(value: 'status', child: Text('Status')),
+              PopupMenuItem(
+                value: 'assignedToName',
+                child: Text('Assigned To'),
+              ),
+              PopupMenuItem(value: 'createdAt', child: Text('Created Date')),
+            ],
+            child: OutlinedButton.icon(
+              onPressed: null,
+              icon: Icon(
+                _sortAscending
+                    ? Icons.arrow_upward_rounded
+                    : Icons.arrow_downward_rounded,
+                size: 17,
+              ),
+              label: const Text('Sort'),
+            ),
+          ),
+          ElevatedButton.icon(
+            onPressed: _openCreateTaskDialog,
+            icon: const Icon(Icons.add_task_outlined),
+            label: const Text('Create Task'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _taskTableHeader() {
+    Widget header(String text, double width) {
+      return SizedBox(
+        width: width,
+        child: Text(
+          text,
+          style: const TextStyle(
+            fontSize: 12,
+            color: Color(0xFF475569),
+            fontWeight: FontWeight.w900,
+          ),
         ),
-      ],
+      );
+    }
+
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Container(
+          width: 1320,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          color: const Color(0xFFF8FAFC),
+          child: Row(
+            children: [
+              header('Task', 310),
+              header('Assigned To', 150),
+              header('Status', 130),
+              header('Priority', 120),
+              header('Start Date', 115),
+              header('Due Date', 115),
+              header('Est. Hrs', 90),
+              header('Created By', 140),
+              header('Created Date', 120),
+              header('Actions', 130),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -763,197 +950,223 @@ class _TaskListScreenState extends State<TaskListScreen> {
           ),
         );
 
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: Color(0xFFE2E8F0)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final compact = constraints.maxWidth < 760;
-
-            final left = Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _chip(
-                      text: task.taskNumber.isEmpty ? 'TASK' : task.taskNumber,
-                      color: const Color(0xFF0F172A),
-                      icon: Icons.confirmation_number_outlined,
-                    ),
-                    _chip(text: task.status, color: _statusColor(task.status)),
-                    _chip(
-                      text: task.priority,
-                      color: _priorityColor(task.priority),
-                      icon: Icons.flag_outlined,
-                    ),
-                    if (overdue)
-                      _chip(
-                        text: 'Overdue',
-                        color: const Color(0xFFDC2626),
-                        icon: Icons.warning_amber_outlined,
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  task.title,
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF0F172A),
-                  ),
-                ),
-                if (task.description.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    task.description,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFF64748B),
-                      height: 1.35,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 16,
-                  runSpacing: 8,
-                  children: [
-                    _infoLine(
-                      Icons.person_outline,
-                      'Assigned: ${task.assignedToName.isEmpty ? '-' : task.assignedToName}',
-                    ),
-                    _infoLine(
-                      Icons.event_outlined,
-                      'Due: ${_formatDate(task.dueDate)}',
-                    ),
-                    if (task.estimatedHours != null)
-                      _infoLine(
-                        Icons.timer_outlined,
-                        'Est: ${task.estimatedHours!.toStringAsFixed(task.estimatedHours! % 1 == 0 ? 0 : 1)} hrs',
-                      ),
-                  ],
-                ),
-              ],
-            );
-
-            final actions = Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                PopupMenuButton<String>(
-                  tooltip: 'Change Status',
-                  onSelected: (value) =>
-                      _updateTaskField(task, 'status', value),
-                  itemBuilder: (context) => taskStatuses
-                      .map(
-                        (status) =>
-                            PopupMenuItem(value: status, child: Text(status)),
-                      )
-                      .toList(),
-                  child: OutlinedButton.icon(
-                    onPressed: null,
-                    icon: const Icon(Icons.sync_alt_outlined),
-                    label: const Text('Status'),
-                  ),
-                ),
-                PopupMenuButton<String>(
-                  tooltip: 'Change Priority',
-                  onSelected: (value) =>
-                      _updateTaskField(task, 'priority', value),
-                  itemBuilder: (context) => taskPriorities
-                      .map(
-                        (priority) => PopupMenuItem(
-                          value: priority,
-                          child: Text(priority),
-                        ),
-                      )
-                      .toList(),
-                  child: OutlinedButton.icon(
-                    onPressed: null,
-                    icon: const Icon(Icons.flag_outlined),
-                    label: const Text('Priority'),
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Delete Task',
-                  onPressed: () async {
-                    final confirm = await showDialog<bool>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Delete Task?'),
-                        content: Text(
-                          'This will remove ${task.taskNumber} from active task list.',
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, false),
-                            child: const Text('Cancel'),
-                          ),
-                          FilledButton(
-                            onPressed: () => Navigator.pop(context, true),
-                            child: const Text('Delete'),
-                          ),
-                        ],
-                      ),
-                    );
-
-                    if (confirm == true) {
-                      await _softDeleteTask(task);
-                    }
-                  },
-                  icon: const Icon(
-                    Icons.delete_outline,
-                    color: Color(0xFFDC2626),
-                  ),
-                ),
-              ],
-            );
-
-            if (compact) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [left, const SizedBox(height: 12), actions],
-              );
-            }
-
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: left),
-                const SizedBox(width: 12),
-                actions,
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _infoLine(IconData icon, String text) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 15, color: const Color(0xFF64748B)),
-        const SizedBox(width: 5),
-        Text(
-          text,
-          style: const TextStyle(
-            fontSize: 12,
-            color: Color(0xFF475569),
-            fontWeight: FontWeight.w600,
+    Widget textCell(
+      String text,
+      double width, {
+      bool strong = false,
+      Color? color,
+      int maxLines = 1,
+    }) {
+      return SizedBox(
+        width: width,
+        child: Text(
+          text.isEmpty ? '-' : text,
+          maxLines: maxLines,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: strong ? 13 : 12,
+            fontWeight: strong ? FontWeight.w800 : FontWeight.w600,
+            color: color ?? const Color(0xFF334155),
+            height: 1.25,
           ),
         ),
-      ],
+      );
+    }
+
+    final estHours = task.estimatedHours == null
+        ? '-'
+        : task.estimatedHours!.toStringAsFixed(
+            task.estimatedHours! % 1 == 0 ? 0 : 1,
+          );
+
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(
+          color: overdue ? const Color(0xFFFCA5A5) : const Color(0xFFE2E8F0),
+        ),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SizedBox(
+          width: 1320,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 310,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        task.taskNumber.isEmpty ? 'TASK' : task.taskNumber,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF2563EB),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        task.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      if (task.description.isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          task.description,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF64748B),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                textCell(task.assignedToName, 150),
+                SizedBox(
+                  width: 130,
+                  child: _chip(
+                    text: task.status,
+                    color: _statusColor(task.status),
+                  ),
+                ),
+                SizedBox(
+                  width: 120,
+                  child: _chip(
+                    text: task.priority,
+                    color: _priorityColor(task.priority),
+                    icon: Icons.flag_outlined,
+                  ),
+                ),
+                textCell(_formatDate(task.startDate), 115),
+                SizedBox(
+                  width: 115,
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          _formatDate(task.dueDate),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: overdue
+                                ? const Color(0xFFDC2626)
+                                : const Color(0xFF334155),
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      if (overdue) ...[
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.warning_amber_outlined,
+                          color: Color(0xFFDC2626),
+                          size: 15,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                textCell(estHours, 90),
+                textCell(task.createdByName, 140),
+                textCell(
+                  task.createdAt == null
+                      ? '-'
+                      : DateFormat('dd MMM yyyy').format(task.createdAt!),
+                  120,
+                ),
+                SizedBox(
+                  width: 130,
+                  child: Row(
+                    children: [
+                      PopupMenuButton<String>(
+                        tooltip: 'Change Status',
+                        onSelected: (value) =>
+                            _updateTaskField(task, 'status', value),
+                        itemBuilder: (context) => taskStatuses
+                            .map(
+                              (status) => PopupMenuItem(
+                                value: status,
+                                child: Text(status),
+                              ),
+                            )
+                            .toList(),
+                        icon: const Icon(Icons.sync_alt_outlined, size: 20),
+                      ),
+                      PopupMenuButton<String>(
+                        tooltip: 'Change Priority',
+                        onSelected: (value) =>
+                            _updateTaskField(task, 'priority', value),
+                        itemBuilder: (context) => taskPriorities
+                            .map(
+                              (priority) => PopupMenuItem(
+                                value: priority,
+                                child: Text(priority),
+                              ),
+                            )
+                            .toList(),
+                        icon: const Icon(Icons.flag_outlined, size: 20),
+                      ),
+                      IconButton(
+                        tooltip: 'Delete Task',
+                        onPressed: () async {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('Delete Task?'),
+                              content: Text(
+                                'This will remove ${task.taskNumber} from active task list.',
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(context, false),
+                                  child: const Text('Cancel'),
+                                ),
+                                FilledButton(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  child: const Text('Delete'),
+                                ),
+                              ],
+                            ),
+                          );
+
+                          if (confirm == true) {
+                            await _softDeleteTask(task);
+                          }
+                        },
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          color: Color(0xFFDC2626),
+                          size: 20,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -1068,18 +1281,11 @@ class _TaskListScreenState extends State<TaskListScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: ElevatedButton.icon(
-                          onPressed: _openCreateTaskDialog,
-                          icon: const Icon(Icons.add_task_outlined),
-                          label: const Text('Create Task'),
-                        ),
-                      ),
-                      const SizedBox(height: 18),
                       _buildSummary(tasks),
                       const SizedBox(height: 18),
-                      _buildFilters(),
+                      _buildTaskToolbar(),
+                      const SizedBox(height: 12),
+                      if (tasks.isNotEmpty) _taskTableHeader(),
                     ],
                   ),
                 ),
