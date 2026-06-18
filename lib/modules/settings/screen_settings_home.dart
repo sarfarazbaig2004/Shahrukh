@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:QUIK/auth/register/register_screen_local.dart';
 import 'package:QUIK/core/theme/app_theme.dart';
 import 'package:QUIK/modules/notifications/screen_notification_center.dart';
+import 'package:QUIK/modules/settings/screen_company_profile_bank_settings.dart';
 
 enum _SettingsSection { personal, workspace, access, system, danger }
 
@@ -801,12 +802,20 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
             // Standard Action Tiles
             if (canOpenCompanyProfile)
               _ActionTile(
-                title: 'Company Profile & Settings',
+                title: 'Company Profile & Banking',
                 subtitle:
-                    'Manage company identity, GST, PAN, address, and billing information.',
+                    'Manage company identity, GST, PAN, address, billing information, and multiple bank accounts.',
                 icon: Icons.apartment_outlined,
                 enabled: canOpenCompanyProfile,
-                onTap: widget.onOpenCompanyProfile,
+                onTap: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ScreenCompanyProfileBankSettings(
+                        companyId: widget.companyId,
+                      ),
+                    ),
+                  );
+                },
               ),
             if (!isExportImport) ...[
               _ActionTile(
