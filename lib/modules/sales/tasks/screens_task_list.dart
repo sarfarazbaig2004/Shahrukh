@@ -44,9 +44,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
   CollectionReference<Map<String, dynamic>> get _countersRef =>
       _db.collection('companies').doc(widget.companyId).collection('counters');
 
-  CollectionReference<Map<String, dynamic>> get _inquiriesRef =>
-      _db.collection('companies').doc(widget.companyId).collection('inquiries');
-
   CollectionReference<Map<String, dynamic>> get _usersRef =>
       _db.collection('companies').doc(widget.companyId).collection('users');
 
