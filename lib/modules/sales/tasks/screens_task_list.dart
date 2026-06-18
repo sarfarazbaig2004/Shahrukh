@@ -97,28 +97,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
     return 'TASK-$year-$formatted';
   }
 
-  Future<List<_InquiryOption>> _loadInquiries() async {
-    final snap = await _inquiriesRef.limit(200).get();
-    final list = snap.docs
-        .where((doc) {
-          final data = doc.data();
-          return data['isDeleted'] != true && data['isActive'] != false;
-        })
-        .map((doc) {
-          final data = doc.data();
-          return _InquiryOption(
-            id: doc.id,
-            number: _safeString(data['inquiryNumber']),
-            subject: _safeString(data['subject']),
-            customerName: _safeString(data['customerName']),
-          );
-        })
-        .toList();
-
-    list.sort((a, b) => b.number.compareTo(a.number));
-    return list;
-  }
-
   Future<List<_UserOption>> _loadUsers() async {
     final snap = await _usersRef.limit(200).get();
     final list = snap.docs.map((doc) {
@@ -212,24 +190,27 @@ class _TaskListScreenState extends State<TaskListScreen> {
   Future<void> _openCreateTaskDialog() async {
     final titleCtrl = TextEditingController();
     final descriptionCtrl = TextEditingController();
+    final startDateCtrl = TextEditingController();
     final dueDateCtrl = TextEditingController();
+    final estimatedHoursCtrl = TextEditingController();
+    final notesCtrl = TextEditingController();
+    final attachmentCtrl = TextEditingController();
 
     String selectedStatus = 'Pending';
     String selectedPriority = 'Medium';
+    DateTime? selectedStartDate;
     DateTime? selectedDueDate;
 
-    _InquiryOption? selectedInquiry;
     _UserOption? selectedUser;
 
-    final inquiriesFuture = _loadInquiries();
     final usersFuture = _loadUsers();
 
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) {
-        return FutureBuilder<List<dynamic>>(
-          future: Future.wait([inquiriesFuture, usersFuture]),
+        return FutureBuilder<List<_UserOption>>(
+          future: usersFuture,
           builder: (context, snap) {
             if (snap.connectionState != ConnectionState.done) {
               return const AlertDialog(
@@ -240,10 +221,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
               );
             }
 
-            final inquiries =
-                (snap.data?[0] as List<_InquiryOption>? ?? <_InquiryOption>[]);
-            final users =
-                (snap.data?[1] as List<_UserOption>? ?? <_UserOption>[]);
+            final users = snap.data ?? <_UserOption>[];
 
             selectedUser ??= users.isNotEmpty
                 ? users.firstWhere(
@@ -270,35 +248,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
                             controller: titleCtrl,
                             decoration: const InputDecoration(
                               labelText: 'Task Title *',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          DropdownButtonFormField<_InquiryOption?>(
-                            isExpanded: true,
-                            initialValue: selectedInquiry,
-                            items: [
-                              const DropdownMenuItem<_InquiryOption?>(
-                                value: null,
-                                child: Text('No inquiry linked'),
-                              ),
-                              ...inquiries.map(
-                                (inq) => DropdownMenuItem<_InquiryOption?>(
-                                  value: inq,
-                                  child: Text(
-                                    '${inq.number.isEmpty ? 'Inquiry' : inq.number}  ${inq.subject.isEmpty ? inq.customerName : inq.subject}',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    softWrap: false,
-                                  ),
-                                ),
-                              ),
-                            ],
-                            onChanged: (value) {
-                              setDialogState(() => selectedInquiry = value);
-                            },
-                            decoration: const InputDecoration(
-                              labelText: 'Linked Inquiry',
                               border: OutlineInputBorder(),
                             ),
                           ),
@@ -394,6 +343,54 @@ class _TaskListScreenState extends State<TaskListScreen> {
                               const SizedBox(width: 12),
                               Expanded(
                                 child: TextField(
+                                  controller: estimatedHoursCtrl,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                  decoration: const InputDecoration(
+                                    labelText: 'Estimated Hours',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: startDateCtrl,
+                                  readOnly: true,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Start Date',
+                                    border: OutlineInputBorder(),
+                                    suffixIcon: Icon(
+                                      Icons.calendar_month_outlined,
+                                    ),
+                                  ),
+                                  onTap: () async {
+                                    final picked = await showDatePicker(
+                                      context: context,
+                                      firstDate: DateTime(2020),
+                                      lastDate: DateTime(2100),
+                                      initialDate:
+                                          selectedStartDate ?? DateTime.now(),
+                                    );
+                                    if (picked != null) {
+                                      selectedStartDate = picked;
+                                      startDateCtrl.text = DateFormat(
+                                        'dd MMM yyyy',
+                                      ).format(picked);
+                                      setDialogState(() {});
+                                    }
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: TextField(
                                   controller: dueDateCtrl,
                                   readOnly: true,
                                   decoration: const InputDecoration(
@@ -429,7 +426,29 @@ class _TaskListScreenState extends State<TaskListScreen> {
                             minLines: 3,
                             maxLines: 5,
                             decoration: const InputDecoration(
-                              labelText: 'Description / Notes',
+                              labelText: 'Task Description',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: notesCtrl,
+                            minLines: 2,
+                            maxLines: 4,
+                            decoration: const InputDecoration(
+                              labelText: 'Comments / Notes',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: attachmentCtrl,
+                            minLines: 1,
+                            maxLines: 3,
+                            decoration: const InputDecoration(
+                              labelText: 'Attachments / Links',
+                              hintText:
+                                  'Paste file links or attachment references',
                               border: OutlineInputBorder(),
                             ),
                           ),
@@ -456,14 +475,26 @@ class _TaskListScreenState extends State<TaskListScreen> {
                           return;
                         }
 
+                        final estimatedHours = double.tryParse(
+                          estimatedHoursCtrl.text.trim(),
+                        );
+                        final attachments = attachmentCtrl.text
+                            .split(RegExp(r'[\n,]'))
+                            .map((value) => value.trim())
+                            .where((value) => value.isNotEmpty)
+                            .toList();
+
                         try {
                           await _createTask(
                             title: title,
                             description: descriptionCtrl.text.trim(),
                             status: selectedStatus,
                             priority: selectedPriority,
+                            startDate: selectedStartDate,
                             dueDate: selectedDueDate,
-                            inquiry: selectedInquiry,
+                            estimatedHours: estimatedHours,
+                            notes: notesCtrl.text.trim(),
+                            attachments: attachments,
                             assignee: selectedUser,
                           );
 
@@ -495,7 +526,11 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
     titleCtrl.dispose();
     descriptionCtrl.dispose();
+    startDateCtrl.dispose();
     dueDateCtrl.dispose();
+    estimatedHoursCtrl.dispose();
+    notesCtrl.dispose();
+    attachmentCtrl.dispose();
   }
 
   Future<void> _createTask({
@@ -503,8 +538,11 @@ class _TaskListScreenState extends State<TaskListScreen> {
     required String description,
     required String status,
     required String priority,
+    required DateTime? startDate,
     required DateTime? dueDate,
-    required _InquiryOption? inquiry,
+    required double? estimatedHours,
+    required String notes,
+    required List<String> attachments,
     required _UserOption? assignee,
   }) async {
     final docRef = _tasksRef.doc();
@@ -526,11 +564,12 @@ class _TaskListScreenState extends State<TaskListScreen> {
         'description': description,
         'status': status,
         'priority': priority,
+        'startDate': startDate == null ? null : Timestamp.fromDate(startDate),
         'dueDate': dueDate == null ? null : Timestamp.fromDate(dueDate),
-        'inquiryId': inquiry?.id ?? '',
-        'inquiryNumber': inquiry?.number ?? '',
-        'inquirySubject': inquiry?.subject ?? '',
-        'customerName': inquiry?.customerName ?? '',
+        'estimatedHours': estimatedHours,
+        'comments': notes,
+        'notes': notes,
+        'attachments': attachments,
         'assignedToUid': assignedTo.uid,
         'assignedToName': assignedTo.name,
         'assignedToEmail': assignedTo.email,
@@ -562,13 +601,12 @@ class _TaskListScreenState extends State<TaskListScreen> {
         'recipientEmail': assignedTo.email,
         'type': 'task_assignment',
         'title': 'New task assigned: $taskNumber',
-        'message': inquiry?.number == null || inquiry!.number.isEmpty
-            ? title
-            : '$title • Linked Inquiry: ${inquiry.number}',
+        'message': '$title • Priority: $priority',
         'taskId': docRef.id,
         'taskNumber': taskNumber,
-        'inquiryId': inquiry?.id ?? '',
-        'inquiryNumber': inquiry?.number ?? '',
+        'taskTitle': title,
+        'taskStatus': status,
+        'taskPriority': priority,
         'isRead': false,
         'createdAt': FieldValue.serverTimestamp(),
         'createdByUid': widget.currentUserUid,
@@ -616,8 +654,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
             '${task.taskNumber.isEmpty ? 'Task' : task.taskNumber}: $readableField changed to $value',
         'taskId': task.id,
         'taskNumber': task.taskNumber,
-        'inquiryId': task.inquiryId,
-        'inquiryNumber': task.inquiryNumber,
         'isRead': false,
         'createdAt': FieldValue.serverTimestamp(),
         'createdByUid': widget.currentUserUid,
@@ -802,13 +838,11 @@ class _TaskListScreenState extends State<TaskListScreen> {
                       Icons.event_outlined,
                       'Due: ${_formatDate(task.dueDate)}',
                     ),
-                    if (task.inquiryNumber.isNotEmpty)
+                    if (task.estimatedHours != null)
                       _infoLine(
-                        Icons.campaign_outlined,
-                        'Inquiry: ${task.inquiryNumber}',
+                        Icons.timer_outlined,
+                        'Est: ${task.estimatedHours!.toStringAsFixed(task.estimatedHours! % 1 == 0 ? 0 : 1)} hrs',
                       ),
-                    if (task.customerName.isNotEmpty)
-                      _infoLine(Icons.business_outlined, task.customerName),
                   ],
                 ),
               ],
@@ -1058,7 +1092,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
                   hasScrollBody: false,
                   child: Center(
                     child: Text(
-                      'No tasks found. Create your first inquiry-linked task.',
+                      'No tasks found. Create your first task.',
                       style: TextStyle(color: Color(0xFF64748B)),
                     ),
                   ),
@@ -1086,13 +1120,14 @@ class _TaskRecord {
   final String description;
   final String status;
   final String priority;
+  final dynamic startDate;
   final dynamic dueDate;
-  final String inquiryId;
-  final String inquiryNumber;
-  final String inquirySubject;
-  final String customerName;
+  final double? estimatedHours;
+  final String comments;
+  final List<String> attachments;
   final String assignedToUid;
   final String assignedToName;
+  final String createdByName;
   final DateTime? createdAt;
   final bool isDeleted;
 
@@ -1103,13 +1138,14 @@ class _TaskRecord {
     required this.description,
     required this.status,
     required this.priority,
+    required this.startDate,
     required this.dueDate,
-    required this.inquiryId,
-    required this.inquiryNumber,
-    required this.inquirySubject,
-    required this.customerName,
+    required this.estimatedHours,
+    required this.comments,
+    required this.attachments,
     required this.assignedToUid,
     required this.assignedToName,
+    required this.createdByName,
     required this.createdAt,
     required this.isDeleted,
   });
@@ -1127,6 +1163,28 @@ class _TaskRecord {
 
     String str(dynamic value) => (value ?? '').toString().trim();
 
+    double? numberValue(dynamic value) {
+      if (value == null) return null;
+      if (value is num) return value.toDouble();
+      return double.tryParse(value.toString());
+    }
+
+    List<String> stringList(dynamic value) {
+      if (value is Iterable) {
+        return value
+            .map((item) => item.toString().trim())
+            .where((item) => item.isNotEmpty)
+            .toList();
+      }
+      final text = str(value);
+      if (text.isEmpty) return <String>[];
+      return text
+          .split(RegExp(r'[\n,]'))
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty)
+          .toList();
+    }
+
     return _TaskRecord(
       id: doc.id,
       taskNumber: str(data['taskNumber']),
@@ -1136,31 +1194,20 @@ class _TaskRecord {
       priority: str(data['priority']).isEmpty
           ? 'Medium'
           : str(data['priority']),
+      startDate: data['startDate'],
       dueDate: data['dueDate'],
-      inquiryId: str(data['inquiryId']),
-      inquiryNumber: str(data['inquiryNumber']),
-      inquirySubject: str(data['inquirySubject']),
-      customerName: str(data['customerName']),
+      estimatedHours: numberValue(data['estimatedHours']),
+      comments: str(data['comments']).isEmpty
+          ? str(data['notes'])
+          : str(data['comments']),
+      attachments: stringList(data['attachments']),
       assignedToUid: str(data['assignedToUid']),
       assignedToName: str(data['assignedToName']),
+      createdByName: str(data['createdByName']),
       createdAt: created,
       isDeleted: data['isDeleted'] == true,
     );
   }
-}
-
-class _InquiryOption {
-  final String id;
-  final String number;
-  final String subject;
-  final String customerName;
-
-  _InquiryOption({
-    required this.id,
-    required this.number,
-    required this.subject,
-    required this.customerName,
-  });
 }
 
 class _UserOption {
