@@ -967,7 +967,11 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
         title: 'Assignment',
         subtitle: 'Assign this request to a service coordinator or engineer',
         child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            stream: _usersRef.where('isActive', isEqualTo: true).snapshots(),
+          // Optimized Firestore Query
+            stream: _usersRef
+                .where('isActive', isEqualTo: true)
+                .where('department', isEqualTo: 'Service')
+                .snapshots(),
             builder: (context, snap) {
               if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
                 return const LinearProgressIndicator();
@@ -978,16 +982,13 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
 
               var docs = snap.data?.docs ?? [];
 
-              // ONLY Service Department users
+              // Strict Local Designation Filtering
               docs = docs.where((doc) {
-                final dept = (doc.data()['department'] ?? '').toString().toLowerCase().trim();
-                return dept.contains('service');
+                final designation = (doc.data()['designation'] ?? '').toString().toLowerCase().trim();
+                return designation == 'service manager' || designation == 'service coordinator';
               }).toList();
 
-              List<DropdownMenuItem<String?>> items = [
-                const DropdownMenuItem(value: null, child: Text('Unassigned (Leave blank)')),
-              ];
-
+              List<DropdownMenuItem<String?>> items = [];
               Set<String> addedIds = {}; // Prevent duplicates
 
               for (var doc in docs) {
@@ -1001,7 +1002,7 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
                 items.add(DropdownMenuItem(value: doc.id, child: Text(label)));
               }
 
-              // Handle case where existing assigned user is no longer active or moved out of service dept
+              // Handle case where existing assigned user is no longer active, moved dept, or changed designation
               if (_assignedToUid != null && !addedIds.contains(_assignedToUid)) {
                 items.add(DropdownMenuItem(
                   value: _assignedToUid,
@@ -1015,7 +1016,7 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
               return DropdownButtonFormField<String?>(
                 value: safeAssignedToUid,
                 decoration: _inputDecoration(label: 'Assign To', icon: Icons.person_pin_circle_outlined),
-                items: items,
+                items: items.isEmpty ? null : items, // If empty, appropriately disables dropdown
                 onChanged: (val) {
                   setState(() {
                     _assignedToUid = val;
