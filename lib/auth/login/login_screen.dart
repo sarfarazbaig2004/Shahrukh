@@ -22,6 +22,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _obscure = true;
   bool _loading = false;
+  bool _resettingPassword = false;
   bool _rememberMe = true;
 
   // Added ValueNotifier to sync background image index with marketing caption
@@ -101,17 +102,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final msg = switch (e.code) {
         'user-not-found' =>
-        'Firebase Auth: user-not-found - No account found for this email.',
+          'Firebase Auth: user-not-found - No account found for this email.',
         'wrong-password' =>
-        'Firebase Auth: wrong-password - Incorrect password.',
+          'Firebase Auth: wrong-password - Incorrect password.',
         'invalid-email' =>
-        'Firebase Auth: invalid-email - Invalid email format.',
+          'Firebase Auth: invalid-email - Invalid email format.',
         'invalid-credential' =>
-        'Firebase Auth: invalid-credential - Invalid email or password.',
+          'Firebase Auth: invalid-credential - Invalid email or password.',
         'user-disabled' =>
-        'Firebase Auth: user-disabled - This account has been disabled.',
+          'Firebase Auth: user-disabled - This account has been disabled.',
         'too-many-requests' =>
-        'Firebase Auth: too-many-requests - Too many attempts. Please wait and try again.',
+          'Firebase Auth: too-many-requests - Too many attempts. Please wait and try again.',
         _ => 'Firebase Auth: ${e.code} - ${e.message ?? 'Sign in failed.'}',
       };
       _toast(
@@ -134,46 +135,177 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _forgot() async {
-    final email = _email.text.trim().toLowerCase();
+    final resetEmailController = TextEditingController(
+      text: _email.text.trim().toLowerCase(),
+    );
 
-    if (email.isEmpty) {
-      _toast('Enter your work email first', err: true);
-      return;
+    bool isSending = false;
+    String? errorMessage;
+
+    final sent = await showDialog<bool>(
+      context: context,
+      barrierDismissible: !isSending,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Future<void> submit() async {
+              final email = resetEmailController.text.trim().toLowerCase();
+              final emailError = _validateEmail(email);
+
+              if (emailError != null) {
+                setDialogState(() => errorMessage = emailError);
+                return;
+              }
+
+              setDialogState(() {
+                isSending = true;
+                errorMessage = null;
+              });
+
+              final success = await _sendPasswordReset(
+                email,
+                showSuccessToast: false,
+              );
+
+              if (!dialogContext.mounted) return;
+
+              if (success) {
+                Navigator.pop(dialogContext, true);
+              } else {
+                setDialogState(() {
+                  isSending = false;
+                  errorMessage =
+                      'Unable to process reset request. Please try again.';
+                });
+              }
+            }
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              title: const Text(
+                'Reset Password',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Enter your registered work email. If an account exists, a secure reset link will be sent.',
+                    style: TextStyle(height: 1.4),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: resetEmailController,
+                    enabled: !isSending,
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => submit(),
+                    decoration: InputDecoration(
+                      labelText: 'Work Email',
+                      errorText: errorMessage,
+                      prefixIcon: const Icon(Icons.email_outlined),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSending
+                      ? null
+                      : () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton.icon(
+                  onPressed: isSending ? null : submit,
+                  icon: isSending
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.lock_reset_outlined),
+                  label: Text(isSending ? 'Sending...' : 'Send Reset Link'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    resetEmailController.dispose();
+
+    if (sent == true) {
+      _toast(
+        'If an account exists for this email, a password reset link has been sent. Please check inbox and spam.',
+      );
     }
-
-    final emailError = _validateEmail(email);
-    if (emailError != null) {
-      _toast(emailError, err: true);
-      return;
-    }
-
-    await _sendPasswordReset(email);
   }
 
-  Future<void> _sendPasswordReset(String email) async {
+  Future<bool> _sendPasswordReset(
+    String email, {
+    bool showSuccessToast = true,
+  }) async {
     final normalizedEmail = email.trim().toLowerCase();
 
-    if (normalizedEmail.isEmpty) {
-      _toast('Enter your work email first', err: true);
-      return;
+    final emailError = _validateEmail(normalizedEmail);
+    if (emailError != null) {
+      if (showSuccessToast) _toast(emailError, err: true);
+      return false;
     }
 
+    if (mounted) setState(() => _resettingPassword = true);
+
     try {
-      debugPrint('Password reset requested for: $normalizedEmail');
       await FirebaseAuth.instance.sendPasswordResetEmail(
         email: normalizedEmail,
       );
-      _toast('Password reset link sent to $normalizedEmail');
+
+      if (showSuccessToast) {
+        _toast(
+          'If an account exists for this email, a password reset link has been sent. Please check inbox and spam.',
+        );
+      }
+
+      return true;
     } on FirebaseAuthException catch (e) {
       debugPrint('Firebase reset error code: ${e.code}');
       debugPrint('Firebase reset error message: ${e.message}');
-      _toast(
-        'Firebase Auth: ${e.code} - ${e.message ?? 'Unable to send password reset email.'}',
-        err: true,
-      );
+
+      // Do not reveal whether an email exists in Firebase Auth.
+      if (e.code == 'user-not-found' || e.code == 'invalid-email') {
+        if (showSuccessToast) {
+          _toast(
+            'If an account exists for this email, a password reset link has been sent. Please check inbox and spam.',
+          );
+        }
+        return true;
+      }
+
+      if (showSuccessToast) {
+        _toast(
+          'Password reset could not be processed. Please try again later.',
+          err: true,
+        );
+      }
+      return false;
     } catch (e) {
       debugPrint('Password reset non-Firebase error: $e');
-      _toast('Failed: $e', err: true);
+      if (showSuccessToast) {
+        _toast(
+          'Password reset could not be processed. Please try again later.',
+          err: true,
+        );
+      }
+      return false;
+    } finally {
+      if (mounted) setState(() => _resettingPassword = false);
     }
   }
 
@@ -190,7 +322,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return InputDecoration(
       hintText: placeholder,
       filled: true,
-      fillColor: Colors.white.withOpacity(0.9),
+      fillColor: Colors.white.withValues(alpha: 0.9),
       isDense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
@@ -226,12 +358,12 @@ class _LoginScreenState extends State<LoginScreen> {
       margin: const EdgeInsets.only(right: 8, bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
+        color: Colors.white.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -251,7 +383,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildMarketingSection(bool isWide) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: isWide ? 60.0 : 24.0, vertical: 40.0),
+      padding: EdgeInsets.symmetric(
+        horizontal: isWide ? 60.0 : 24.0,
+        vertical: 40.0,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
@@ -267,10 +402,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   color: Colors.white,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: Colors.black.withValues(alpha: 0.1),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
-                    )
+                    ),
                   ],
                 ),
                 child: ClipRRect(
@@ -278,11 +413,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Image.asset(
                     'assets/images/logo.png',
                     fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const Icon(
-                      Icons.business,
-                      size: 24,
-                      color: zBlue,
-                    ),
+                    errorBuilder: (_, __, ___) =>
+                        const Icon(Icons.business, size: 24, color: zBlue),
                   ),
                 ),
               ),
@@ -331,7 +463,7 @@ class _LoginScreenState extends State<LoginScreen> {
           Text(
             'CRM, Inventory, Finance, Service Management and Analytics in one connected workspace.',
             style: TextStyle(
-              color: Colors.white.withOpacity(0.85),
+              color: Colors.white.withValues(alpha: 0.85),
               fontSize: 18,
               height: 1.5,
               fontWeight: FontWeight.w400,
@@ -411,15 +543,15 @@ class _LoginScreenState extends State<LoginScreen> {
           width: 380,
           padding: const EdgeInsets.all(40),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.80),
+            color: Colors.white.withValues(alpha: 0.80),
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
-              color: Colors.white.withOpacity(0.5),
+              color: Colors.white.withValues(alpha: 0.5),
               width: 1.5,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.08),
+                color: Colors.black.withValues(alpha: 0.08),
                 blurRadius: 30,
                 offset: const Offset(0, 10),
               ),
@@ -443,10 +575,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 6),
                 const Text(
                   'Enter your credentials to access your workspace.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Color(0xFF64748B),
-                  ),
+                  style: TextStyle(fontSize: 14, color: Color(0xFF64748B)),
                 ),
                 const SizedBox(height: 32),
 
@@ -524,7 +653,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       ],
                     ),
                     TextButton(
-                      onPressed: _loading ? null : _forgot,
+                      onPressed: (_loading || _resettingPassword)
+                          ? null
+                          : _forgot,
                       style: TextButton.styleFrom(
                         padding: EdgeInsets.zero,
                         minimumSize: Size.zero,
@@ -558,20 +689,20 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: _loading ? null : _login,
                     child: _loading
                         ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
                         : const Text(
-                      'Sign In',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                            'Sign In',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                   ),
                 ),
                 const SizedBox(height: 28),
@@ -584,13 +715,14 @@ class _LoginScreenState extends State<LoginScreen> {
                       onPressed: _loading
                           ? null
                           : () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const reg.RegisterScreenLocal(),
-                          ),
-                        );
-                      },
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const reg.RegisterScreenLocal(),
+                                ),
+                              );
+                            },
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                         minimumSize: Size.zero,
@@ -607,19 +739,22 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const Text(
                       '·',
-                      style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        color: Color(0xFF94A3B8),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     TextButton(
                       onPressed: _loading
                           ? null
                           : () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const ScreenJoinCompany(),
-                          ),
-                        );
-                      },
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const ScreenJoinCompany(),
+                                ),
+                              );
+                            },
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                         minimumSize: Size.zero,
@@ -668,44 +803,46 @@ class _LoginScreenState extends State<LoginScreen> {
             child: SafeArea(
               child: isWide
                   ? Row(
-                children: [
-                  Expanded(
-                    flex: 5,
-                    child: _buildMarketingSection(true),
-                  ),
-                  Expanded(
-                    flex: 4,
-                    child: Center(
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.all(40),
-                        child: _buildLoginCard(),
+                      children: [
+                        Expanded(flex: 5, child: _buildMarketingSection(true)),
+                        Expanded(
+                          flex: 4,
+                          child: Center(
+                            child: SingleChildScrollView(
+                              padding: const EdgeInsets.all(40),
+                              child: _buildLoginCard(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : SingleChildScrollView(
+                      child: Container(
+                        constraints: BoxConstraints(
+                          minHeight:
+                              media.size.height -
+                              media.padding.top -
+                              media.padding.bottom,
+                        ),
+                        padding: EdgeInsets.only(
+                          bottom: media.viewInsets.bottom > 0
+                              ? media.viewInsets.bottom + 20
+                              : 40,
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _buildMarketingSection(false),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                              ),
+                              child: _buildLoginCard(),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              )
-                  : SingleChildScrollView(
-                child: Container(
-                  constraints: BoxConstraints(
-                    minHeight: media.size.height - media.padding.top - media.padding.bottom,
-                  ),
-                  padding: EdgeInsets.only(
-                    bottom: media.viewInsets.bottom > 0
-                        ? media.viewInsets.bottom + 20
-                        : 40,
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildMarketingSection(false),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: _buildLoginCard(),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
             ),
           ),
         ],
@@ -788,9 +925,9 @@ class _LoginHeroCarouselState extends State<_LoginHeroCarousel> {
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
               colors: [
-                Colors.black.withOpacity(0.85),
-                Colors.black.withOpacity(0.40),
-                Colors.black.withOpacity(0.20),
+                Colors.black.withValues(alpha: 0.85),
+                Colors.black.withValues(alpha: 0.40),
+                Colors.black.withValues(alpha: 0.20),
               ],
               stops: const [0.0, 0.5, 1.0],
             ),
