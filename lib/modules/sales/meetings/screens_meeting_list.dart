@@ -162,6 +162,14 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
 
     DateTime? selectedDate;
     TimeOfDay? selectedTime;
+    String selectedMeetingType = 'Online';
+    final meetingTypes = [
+      'Online',
+      'Offline',
+      'Customer Meeting',
+      'Internal',
+      'Review',
+    ];
     final selectedParticipants = <String, _Participant>{};
 
     final usersFuture = _loadUsers();
@@ -273,6 +281,30 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
                                 ),
                               ),
                             ],
+                          ),
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<String>(
+                            isExpanded: true,
+                            initialValue: selectedMeetingType,
+                            items: meetingTypes
+                                .map(
+                                  (type) => DropdownMenuItem(
+                                    value: type,
+                                    child: Text(type),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) {
+                              if (value != null) {
+                                setDialogState(
+                                  () => selectedMeetingType = value,
+                                );
+                              }
+                            },
+                            decoration: const InputDecoration(
+                              labelText: 'Meeting Type',
+                              border: OutlineInputBorder(),
+                            ),
                           ),
                           const SizedBox(height: 12),
                           TextField(
@@ -428,6 +460,7 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
                           await _createMeeting(
                             title: title,
                             startAt: startAt,
+                            meetingType: selectedMeetingType,
                             agenda: agendaCtrl.text.trim(),
                             description: descriptionCtrl.text.trim(),
                             teamsLink: teamsCtrl.text.trim(),
@@ -479,6 +512,7 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
   Future<void> _createMeeting({
     required String title,
     required DateTime startAt,
+    required String meetingType,
     required String agenda,
     required String description,
     required String teamsLink,
@@ -506,6 +540,7 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
         'meetingNumber': meetingNumber,
         'title': title,
         'startAt': Timestamp.fromDate(startAt),
+        'meetingType': meetingType,
         'agenda': agenda,
         'description': description,
         'teamsLink': teamsLink,
@@ -538,12 +573,17 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
           'recipientName': participant.name,
           'recipientEmail': participant.email,
           'type': 'meeting_invitation',
+          'module': 'meetings',
+          'relatedModule': 'meetings',
+          'relatedDocId': meetingRef.id,
+          'route': 'salesMeetings',
           'title': 'Meeting invitation: $title',
           'message':
               '${DateFormat('dd MMM yyyy, hh:mm a').format(startAt)} • $linkText',
           'meetingDocId': meetingRef.id,
           'meetingNumber': meetingNumber,
           'meetingTitle': title,
+          'meetingType': meetingType,
           'meetingStartAt': Timestamp.fromDate(startAt),
           'meetingLink': linkText,
           'meetingId': meetingId,
@@ -562,7 +602,7 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
             'toEmail': participant.email,
             'subject': 'Meeting invitation: $title',
             'body':
-                'Meeting: $title\nDate & Time: ${DateFormat('dd MMM yyyy, hh:mm a').format(startAt)}\nLink: $linkText\nMeeting ID: $meetingId\nPassword: $password\nAgenda: $agenda',
+                'Meeting: $title\nType: $meetingType\nDate & Time: ${DateFormat('dd MMM yyyy, hh:mm a').format(startAt)}\nLink: $linkText\nMeeting ID: $meetingId\nPassword: $password\nAgenda: $agenda',
             'type': 'meeting_invitation',
             'meetingDocId': meetingRef.id,
             'meetingNumber': meetingNumber,
@@ -594,6 +634,7 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
               'meetingDocId': meetingRef.id,
               'meetingNumber': meetingNumber,
               'meetingTitle': title,
+              'meetingType': meetingType,
               'meetingStartAt': Timestamp.fromDate(startAt),
               'meetingLink': linkText,
               'meetingId': meetingId,
@@ -694,6 +735,13 @@ class _MeetingListScreenState extends State<MeetingListScreen> {
                       meeting.status,
                       _statusColor(meeting.status),
                       Icons.event_available_outlined,
+                    ),
+                    _chip(
+                      meeting.meetingType.isEmpty
+                          ? 'Meeting'
+                          : meeting.meetingType,
+                      const Color(0xFF7C3AED),
+                      Icons.category_outlined,
                     ),
                     _chip(
                       '${meeting.participants.length} Participants',
@@ -993,6 +1041,7 @@ class _MeetingRecord {
   final String meetingNumber;
   final String title;
   final dynamic startAt;
+  final String meetingType;
   final String agenda;
   final String description;
   final String teamsLink;
@@ -1008,6 +1057,7 @@ class _MeetingRecord {
     required this.meetingNumber,
     required this.title,
     required this.startAt,
+    required this.meetingType,
     required this.agenda,
     required this.description,
     required this.teamsLink,
@@ -1051,6 +1101,9 @@ class _MeetingRecord {
           ? 'Untitled Meeting'
           : str(data['title']),
       startAt: data['startAt'],
+      meetingType: str(data['meetingType']).isEmpty
+          ? 'Online'
+          : str(data['meetingType']),
       agenda: str(data['agenda']),
       description: str(data['description']),
       teamsLink: str(data['teamsLink']),
