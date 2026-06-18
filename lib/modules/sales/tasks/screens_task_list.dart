@@ -162,10 +162,12 @@ class _TaskListScreenState extends State<TaskListScreen> {
         .map((doc) => _TaskRecord.fromDoc(doc))
         .where((task) => task.isDeleted != true)
         .where((task) {
-          if (_statusFilter != 'All' && task.status != _statusFilter)
+          if (_statusFilter != 'All' && task.status != _statusFilter) {
             return false;
-          if (_priorityFilter != 'All' && task.priority != _priorityFilter)
+          }
+          if (_priorityFilter != 'All' && task.priority != _priorityFilter) {
             return false;
+          }
           return true;
         })
         .toList();
@@ -273,7 +275,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
                           ),
                           const SizedBox(height: 12),
                           DropdownButtonFormField<_InquiryOption?>(
-                            value: selectedInquiry,
+                            initialValue: selectedInquiry,
                             items: [
                               const DropdownMenuItem<_InquiryOption?>(
                                 value: null,
@@ -302,7 +304,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
                             children: [
                               Expanded(
                                 child: DropdownButtonFormField<String>(
-                                  value: selectedStatus,
+                                  initialValue: selectedStatus,
                                   items: taskStatuses
                                       .map(
                                         (status) => DropdownMenuItem(
@@ -327,7 +329,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
                               const SizedBox(width: 12),
                               Expanded(
                                 child: DropdownButtonFormField<String>(
-                                  value: selectedPriority,
+                                  initialValue: selectedPriority,
                                   items: taskPriorities
                                       .map(
                                         (priority) => DropdownMenuItem(
@@ -356,7 +358,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
                             children: [
                               Expanded(
                                 child: DropdownButtonFormField<_UserOption>(
-                                  value: selectedUser,
+                                  initialValue: selectedUser,
                                   items: users
                                       .map(
                                         (user) => DropdownMenuItem(
@@ -664,7 +666,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
         SizedBox(
           width: 190,
           child: DropdownButtonFormField<String>(
-            value: _statusFilter,
+            initialValue: _statusFilter,
             items: ['All', ...taskStatuses]
                 .map(
                   (status) =>
@@ -684,7 +686,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
         SizedBox(
           width: 190,
           child: DropdownButtonFormField<String>(
-            value: _priorityFilter,
+            initialValue: _priorityFilter,
             items: ['All', ...taskPriorities]
                 .map(
                   (priority) =>
