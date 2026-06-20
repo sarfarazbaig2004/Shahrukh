@@ -1265,7 +1265,7 @@ export const resetPasswordWithOtp = onCall(async (request) => {
   const resetToken = callableString(request.data?.resetToken);
   const newPassword = callableString(request.data?.newPassword);
 
-  if (!email || !resetToken || newPassword.length < 6) {
+  if (!email || !resetToken || newPassword.length < 8) {
     throw new HttpsError(
       "invalid-argument",
       "Email, valid OTP session and password are required.",
@@ -1302,6 +1302,12 @@ export const resetPasswordWithOtp = onCall(async (request) => {
   }
 
   await admin.auth().updateUser(uid, {password: newPassword});
+
+  await db.collection("users").doc(uid).set({
+    passwordUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    passwordResetCompletedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, {merge: true});
+
   await ref.delete();
 
   return {ok: true};
