@@ -1662,12 +1662,23 @@ class _ZohoShellState extends State<ZohoShell> {
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
           ),
-          child: Icon(
-            _isSidebarCollapsed
-                ? Icons.view_sidebar_outlined
-                : Icons.view_sidebar_outlined,
-            color: Colors.white70,
-            size: 17,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 180),
+            transitionBuilder: (child, animation) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+            child: _isSidebarCollapsed
+                ? const Icon(
+                    Icons.keyboard_arrow_right_rounded,
+                    key: ValueKey<String>('sidebar-toggle-arrow'),
+                    color: Colors.white70,
+                    size: 20,
+                  )
+                : const _ChatGptSidebarGlyph(
+                    key: ValueKey<String>('sidebar-toggle-panel'),
+                    color: Colors.white70,
+                    size: 18,
+                  ),
           ),
         ),
       ),
@@ -2971,5 +2982,73 @@ class _Panel extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _ChatGptSidebarGlyph extends StatelessWidget {
+  const _ChatGptSidebarGlyph({super.key, required this.color, this.size = 18});
+
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(painter: _ChatGptSidebarGlyphPainter(color)),
+    );
+  }
+}
+
+class _ChatGptSidebarGlyphPainter extends CustomPainter {
+  const _ChatGptSidebarGlyphPainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.65
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final rect = Rect.fromLTWH(2.2, 2.2, size.width - 4.4, size.height - 4.4);
+
+    final outer = RRect.fromRectAndRadius(rect, const Radius.circular(3.2));
+
+    canvas.drawRRect(outer, stroke);
+
+    final dividerX = size.width * 0.38;
+    canvas.drawLine(
+      Offset(dividerX, 3.8),
+      Offset(dividerX, size.height - 3.8),
+      stroke,
+    );
+
+    final softStroke = Paint()
+      ..color = color.withValues(alpha: 0.55)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.35
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawLine(
+      Offset(dividerX + 3.2, size.height * 0.38),
+      Offset(size.width - 4.2, size.height * 0.38),
+      softStroke,
+    );
+
+    canvas.drawLine(
+      Offset(dividerX + 3.2, size.height * 0.58),
+      Offset(size.width - 5.8, size.height * 0.58),
+      softStroke,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _ChatGptSidebarGlyphPainter oldDelegate) {
+    return oldDelegate.color != color;
   }
 }
