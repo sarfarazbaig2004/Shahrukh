@@ -13,6 +13,15 @@ const db = admin.firestore();
 const gmailUser = defineSecret("QUIK_GMAIL_USER");
 const gmailPass = defineSecret("QUIK_GMAIL_APP_PASSWORD");
 
+function gmailUserValue(): string {
+  return process.env.QUIK_GMAIL_USER || gmailUser.value();
+}
+
+function gmailPasswordValue(): string {
+  return process.env.QUIK_GMAIL_APP_PASSWORD || gmailPass.value();
+}
+
+
 /* ===================== HELPERS ===================== */
 
 /**
@@ -31,8 +40,8 @@ function buildTransporter() {
   return nodemailer.createTransport({
     service: "gmail",
     auth: {
-      user: gmailUser.value(),
-      pass: gmailPass.value(),
+      user: gmailUserValue(),
+      pass: gmailPasswordValue(),
     },
   });
 }
@@ -753,7 +762,7 @@ export const sendWorkspaceOtp = onCall(
     const transporter = buildTransporter();
 
     await transporter.sendMail({
-      from: `"QUIK ERP" <${gmailUser.value()}>`,
+      from: `"QUIK ERP" <${gmailUserValue()}>`,
       to: email,
       subject: "QUIK ERP - Workspace Verification OTP",
       text: `Your OTP is: ${otp}`,
@@ -808,7 +817,7 @@ export const resendWorkspaceOtp = onCall(
     const transporter = buildTransporter();
 
     await transporter.sendMail({
-      from: `"QUIK ERP" <${gmailUser.value()}>`,
+      from: `"QUIK ERP" <${gmailUserValue()}>`,
       to: email,
       subject: "QUIK ERP - Resend Workspace OTP",
       text: `Your OTP is: ${otp}`,
@@ -990,7 +999,7 @@ export const sendJoinCompanyOtp = onCall(
     const transporter = buildTransporter();
 
     await transporter.sendMail({
-      from: `"QUIK ERP" <${gmailUser.value()}>`,
+      from: `"QUIK ERP" <${gmailUserValue()}>`,
       to: email,
       subject: "QUIK ERP - Join Company OTP",
       text: `Your OTP is: ${otp}`,
@@ -1030,7 +1039,7 @@ export const resendJoinCompanyOtp = onCall(
     const transporter = buildTransporter();
 
     await transporter.sendMail({
-      from: `"QUIK ERP" <${gmailUser.value()}>`,
+      from: `"QUIK ERP" <${gmailUserValue()}>`,
       to: email,
       subject: "QUIK ERP - Resend OTP",
       text: `Your OTP is: ${otp}`,
@@ -1146,7 +1155,7 @@ async function sendPasswordOtpEmail(
   const transporter = buildTransporter();
 
   await transporter.sendMail({
-    from: `"QUIK ERP" <${gmailUser.value()}>`,
+    from: `"QUIK ERP" <${gmailUserValue()}>`,
     to: email,
     subject: "QUIK ERP Password Reset OTP",
     text:
