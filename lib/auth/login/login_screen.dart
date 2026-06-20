@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:ui';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
 import 'package:QUIK/auth/register/register_screen_local.dart' as reg;
@@ -135,65 +136,205 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _forgot() async {
-    final resetEmailController = TextEditingController(
-      text: _email.text.trim().toLowerCase(),
-    );
+    await _openForgotPasswordDialog();
+  }
 
+  Future<void> _openForgotPasswordDialog({String? initialEmail}) async {
+    final resetEmailController = TextEditingController(
+      text: (initialEmail ?? _email.text).trim().toLowerCase(),
+    );
+    final otpController = TextEditingController();
+    final newPasswordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+
+    int step = 0;
     bool isSending = false;
     String? errorMessage;
+    String? infoMessage;
+    String verifiedEmail = '';
+    String resetToken = '';
 
-    final sent = await showDialog<bool>(
+    Future<void> requestOtp(StateSetter setDialogState) async {
+      final normalizedEmail = resetEmailController.text.trim().toLowerCase();
+      final emailError = _validateEmail(normalizedEmail);
+
+      if (emailError != null) {
+        setDialogState(() {
+          errorMessage = emailError;
+          infoMessage = null;
+        });
+        return;
+      }
+
+      setDialogState(() {
+        isSending = true;
+        errorMessage = null;
+        infoMessage = null;
+      });
+
+      try {
+        await FirebaseFunctions.instance
+            .httpsCallable('requestPasswordOtp')
+            .call({'email': normalizedEmail});
+
+        verifiedEmail = normalizedEmail;
+
+        setDialogState(() {
+          step = 1;
+          infoMessage =
+              'OTP sent to $normalizedEmail. Please check inbox and spam.';
+        });
+      } on FirebaseFunctionsException catch (e) {
+        debugPrint('requestPasswordOtp error: ${e.code} ${e.message}');
+        setDialogState(() {
+          errorMessage = e.message ?? 'OTP could not be sent.';
+        });
+      } catch (e) {
+        debugPrint('requestPasswordOtp non-Firebase error: $e');
+        setDialogState(() {
+          errorMessage = 'OTP could not be sent. Please try again.';
+        });
+      } finally {
+        setDialogState(() {
+          isSending = false;
+        });
+      }
+    }
+
+    Future<void> verifyOtp(StateSetter setDialogState) async {
+      final otp = otpController.text.trim();
+
+      if (otp.length != 6) {
+        setDialogState(() {
+          errorMessage = 'Enter the 6 digit OTP.';
+          infoMessage = null;
+        });
+        return;
+      }
+
+      setDialogState(() {
+        isSending = true;
+        errorMessage = null;
+        infoMessage = null;
+      });
+
+      try {
+        final result = await FirebaseFunctions.instance
+            .httpsCallable('verifyPasswordOtp')
+            .call({'email': verifiedEmail, 'otp': otp});
+
+        final data = Map<String, dynamic>.from(result.data as Map);
+        resetToken = (data['resetToken'] ?? '').toString();
+
+        if (resetToken.isEmpty) {
+          throw Exception('Reset token missing.');
+        }
+
+        setDialogState(() {
+          step = 2;
+          infoMessage = 'OTP verified. Create your new password.';
+        });
+      } on FirebaseFunctionsException catch (e) {
+        debugPrint('verifyPasswordOtp error: ${e.code} ${e.message}');
+        setDialogState(() {
+          errorMessage = e.message ?? 'Invalid or expired OTP.';
+        });
+      } catch (e) {
+        debugPrint('verifyPasswordOtp non-Firebase error: $e');
+        setDialogState(() {
+          errorMessage = 'Invalid or expired OTP.';
+        });
+      } finally {
+        setDialogState(() {
+          isSending = false;
+        });
+      }
+    }
+
+    Future<void> updatePassword(
+      BuildContext dialogContext,
+      StateSetter setDialogState,
+    ) async {
+      final newPassword = newPasswordController.text.trim();
+      final confirmPassword = confirmPasswordController.text.trim();
+
+      if (newPassword.length < 6) {
+        setDialogState(() {
+          errorMessage = 'Password must be at least 6 characters.';
+          infoMessage = null;
+        });
+        return;
+      }
+
+      if (newPassword != confirmPassword) {
+        setDialogState(() {
+          errorMessage = 'New password and confirm password do not match.';
+          infoMessage = null;
+        });
+        return;
+      }
+
+      setDialogState(() {
+        isSending = true;
+        errorMessage = null;
+        infoMessage = null;
+      });
+
+      try {
+        await FirebaseFunctions.instance
+            .httpsCallable('resetPasswordWithOtp')
+            .call({
+              'email': verifiedEmail,
+              'resetToken': resetToken,
+              'newPassword': newPassword,
+            });
+
+        if (!dialogContext.mounted) return;
+        Navigator.pop(dialogContext, true);
+      } on FirebaseFunctionsException catch (e) {
+        debugPrint('resetPasswordWithOtp error: ${e.code} ${e.message}');
+        setDialogState(() {
+          errorMessage = e.message ?? 'Password could not be updated.';
+        });
+      } catch (e) {
+        debugPrint('resetPasswordWithOtp non-Firebase error: $e');
+        setDialogState(() {
+          errorMessage = 'Password could not be updated. Please try again.';
+        });
+      } finally {
+        setDialogState(() {
+          isSending = false;
+        });
+      }
+    }
+
+    final completed = await showDialog<bool>(
       context: context,
       barrierDismissible: !isSending,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            Future<void> submit() async {
-              final email = resetEmailController.text.trim().toLowerCase();
-              final emailError = _validateEmail(email);
+            final title = step == 0
+                ? 'Forgot Password'
+                : step == 1
+                ? 'Verify OTP'
+                : 'Create New Password';
 
-              if (emailError != null) {
-                setDialogState(() => errorMessage = emailError);
-                return;
-              }
+            final primaryLabel = step == 0
+                ? 'Send OTP'
+                : step == 1
+                ? 'Verify OTP'
+                : 'Update Password';
 
-              setDialogState(() {
-                isSending = true;
-                errorMessage = null;
-              });
+            Widget content;
 
-              final success = await _sendPasswordReset(
-                email,
-                showSuccessToast: false,
-              );
-
-              if (!dialogContext.mounted) return;
-
-              if (success) {
-                Navigator.pop(dialogContext, true);
-              } else {
-                setDialogState(() {
-                  isSending = false;
-                  errorMessage =
-                      'Unable to process reset request. Please try again.';
-                });
-              }
-            }
-
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-              ),
-              title: const Text(
-                'Reset Password',
-                style: TextStyle(fontWeight: FontWeight.w800),
-              ),
-              content: Column(
+            if (step == 0) {
+              content = Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Enter your registered work email. If an account exists, a secure reset link will be sent.',
+                    'Enter your registered work email. A 6 digit OTP will be sent to your email.',
                     style: TextStyle(height: 1.4),
                   ),
                   const SizedBox(height: 16),
@@ -202,10 +343,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     enabled: !isSending,
                     keyboardType: TextInputType.emailAddress,
                     textInputAction: TextInputAction.done,
-                    onSubmitted: (_) => submit(),
+                    onSubmitted: (_) => requestOtp(setDialogState),
                     decoration: InputDecoration(
                       labelText: 'Work Email',
-                      errorText: errorMessage,
                       prefixIcon: const Icon(Icons.email_outlined),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -213,24 +353,156 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                 ],
+              );
+            } else if (step == 1) {
+              content = Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Enter the 6 digit OTP sent to $verifiedEmail.',
+                    style: const TextStyle(height: 1.4),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: otpController,
+                    enabled: !isSending,
+                    keyboardType: TextInputType.number,
+                    maxLength: 6,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => verifyOtp(setDialogState),
+                    decoration: InputDecoration(
+                      labelText: 'OTP',
+                      counterText: '',
+                      prefixIcon: const Icon(Icons.pin_outlined),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            } else {
+              content = Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Create a new password for your ERP account.',
+                    style: TextStyle(height: 1.4),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: newPasswordController,
+                    enabled: !isSending,
+                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: 'New Password',
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: confirmPasswordController,
+                    enabled: !isSending,
+                    obscureText: true,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) =>
+                        updatePassword(dialogContext, setDialogState),
+                    decoration: InputDecoration(
+                      labelText: 'Confirm New Password',
+                      prefixIcon: const Icon(Icons.lock_reset_outlined),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              title: Text(
+                title,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  content,
+                  if (infoMessage != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      infoMessage!,
+                      style: const TextStyle(
+                        color: zSuccess,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                  if (errorMessage != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      errorMessage!,
+                      style: const TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ],
               ),
               actions: [
                 TextButton(
                   onPressed: isSending
                       ? null
-                      : () => Navigator.pop(dialogContext, false),
-                  child: const Text('Cancel'),
+                      : () {
+                          if (step == 0) {
+                            Navigator.pop(dialogContext, false);
+                            return;
+                          }
+
+                          setDialogState(() {
+                            step -= 1;
+                            errorMessage = null;
+                            infoMessage = null;
+                          });
+                        },
+                  child: Text(step == 0 ? 'Cancel' : 'Back'),
                 ),
                 FilledButton.icon(
-                  onPressed: isSending ? null : submit,
+                  onPressed: isSending
+                      ? null
+                      : () {
+                          if (step == 0) {
+                            requestOtp(setDialogState);
+                          } else if (step == 1) {
+                            verifyOtp(setDialogState);
+                          } else {
+                            updatePassword(dialogContext, setDialogState);
+                          }
+                        },
                   icon: isSending
                       ? const SizedBox(
                           width: 16,
                           height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Icon(Icons.lock_reset_outlined),
-                  label: Text(isSending ? 'Sending...' : 'Send Reset Link'),
+                      : Icon(
+                          step == 0
+                              ? Icons.mark_email_read_outlined
+                              : step == 1
+                              ? Icons.verified_user_outlined
+                              : Icons.lock_reset_outlined,
+                        ),
+                  label: Text(isSending ? 'Please wait...' : primaryLabel),
                 ),
               ],
             );
@@ -240,11 +512,12 @@ class _LoginScreenState extends State<LoginScreen> {
     );
 
     resetEmailController.dispose();
+    otpController.dispose();
+    newPasswordController.dispose();
+    confirmPasswordController.dispose();
 
-    if (sent == true) {
-      _toast(
-        'If an account exists for this email, a password reset link has been sent. Please check inbox and spam.',
-      );
+    if (completed == true) {
+      _toast('Password updated successfully. Please login with new password.');
     }
   }
 
@@ -252,58 +525,15 @@ class _LoginScreenState extends State<LoginScreen> {
     String email, {
     bool showSuccessToast = true,
   }) async {
-    final normalizedEmail = email.trim().toLowerCase();
-
-    final emailError = _validateEmail(normalizedEmail);
-    if (emailError != null) {
-      if (showSuccessToast) _toast(emailError, err: true);
-      return false;
+    if (!showSuccessToast) {
+      debugPrint('Opening password OTP reset without success toast.');
     }
 
     if (mounted) setState(() => _resettingPassword = true);
 
     try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(
-        email: normalizedEmail,
-      );
-
-      if (showSuccessToast) {
-        _toast(
-          'If an account exists for this email, a password reset link has been sent. Please check inbox and spam.',
-        );
-      }
-
+      await _openForgotPasswordDialog(initialEmail: email);
       return true;
-    } on FirebaseAuthException catch (e) {
-      debugPrint('Firebase reset error code: ${e.code}');
-      debugPrint('Firebase reset error message: ${e.message}');
-
-      // Do not reveal whether an email exists in Firebase Auth.
-      if (e.code == 'user-not-found' || e.code == 'invalid-email') {
-        if (showSuccessToast) {
-          _toast(
-            'If an account exists for this email, a password reset link has been sent. Please check inbox and spam.',
-          );
-        }
-        return true;
-      }
-
-      if (showSuccessToast) {
-        _toast(
-          'Password reset could not be processed. Please try again later.',
-          err: true,
-        );
-      }
-      return false;
-    } catch (e) {
-      debugPrint('Password reset non-Firebase error: $e');
-      if (showSuccessToast) {
-        _toast(
-          'Password reset could not be processed. Please try again later.',
-          err: true,
-        );
-      }
-      return false;
     } finally {
       if (mounted) setState(() => _resettingPassword = false);
     }

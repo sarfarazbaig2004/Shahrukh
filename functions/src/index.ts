@@ -3,6 +3,7 @@ import * as nodemailer from "nodemailer";
 import * as XLSX from "xlsx";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
 import {defineSecret} from "firebase-functions/params";
+import {createHash, randomBytes, timingSafeEqual} from "crypto";
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -1083,3 +1084,225 @@ export const verifyJoinCompanyOtp = onCall(
     };
   },
 );
+
+
+/* ===================== PASSWORD OTP RESET ===================== */
+
+const passwordResetCollection = "passwordResetOtps";
+const otpExpiryMs = 10 * 60 * 1000;
+const resetTokenExpiryMs = 10 * 60 * 1000;
+
+/**
+ * Hashes a sensitive reset value.
+ * @param {string} value raw value
+ * @return {string}
+ */
+function hashResetSecret(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+/**
+ * Builds Firestore doc id from email.
+ * @param {string} email normalized email
+ * @return {string}
+ */
+function passwordResetDocId(email: string): string {
+  return hashResetSecret(email);
+}
+
+/**
+ * Compares two hex strings safely.
+ * @param {string} left first value
+ * @param {string} right second value
+ * @return {boolean}
+ */
+function safeHexCompare(left: string, right: string): boolean {
+  if (!left || !right || left.length !== right.length) return false;
+  return timingSafeEqual(Buffer.from(left, "hex"), Buffer.from(right, "hex"));
+}
+
+/**
+ * Reads Firestore timestamp safely.
+ * @param {unknown} value timestamp-like value
+ * @return {number}
+ */
+function timestampMillis(value: unknown): number {
+  if (value instanceof admin.firestore.Timestamp) {
+    return value.toMillis();
+  }
+  return 0;
+}
+
+/**
+ * Sends password reset OTP email.
+ * @param {string} email recipient email
+ * @param {string} otp one time password
+ * @return {Promise<void>}
+ */
+async function sendPasswordOtpEmail(
+  email: string,
+  otp: string,
+): Promise<void> {
+  const transporter = buildTransporter();
+
+  await transporter.sendMail({
+    from: `"QUIK ERP" <${gmailUser.value()}>`,
+    to: email,
+    subject: "QUIK ERP Password Reset OTP",
+    text:
+      `Your QUIK ERP password reset OTP is ${otp}.\n\n` +
+      "This OTP is valid for 10 minutes. Do not share it with anyone.",
+    html:
+      "<p>Your QUIK ERP password reset OTP is:</p>" +
+      `<h2 style="letter-spacing:4px">${otp}</h2>` +
+      "<p>This OTP is valid for 10 minutes.</p>" +
+      "<p>Do not share it with anyone.</p>",
+  });
+}
+
+export const requestPasswordOtp = onCall(
+  {secrets: [gmailUser, gmailPass]},
+  async (request) => {
+    const email = callableString(request.data?.email).toLowerCase();
+
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      throw new HttpsError("invalid-argument", "Enter a valid email.");
+    }
+
+    try {
+      const user = await admin.auth().getUserByEmail(email);
+      const otp = generateOtp();
+      const expiresAt = admin.firestore.Timestamp.fromMillis(
+        Date.now() + otpExpiryMs,
+      );
+
+      await db.collection(passwordResetCollection)
+        .doc(passwordResetDocId(email))
+        .set({
+          email,
+          uid: user.uid,
+          otpHash: hashResetSecret(`otp:${email}:${otp}`),
+          attempts: 0,
+          used: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          expiresAt,
+        });
+
+      await sendPasswordOtpEmail(email, otp);
+    } catch (error) {
+      const code = (error as {code?: string}).code;
+      if (code === "auth/user-not-found") {
+        return {ok: true};
+      }
+
+      console.error("requestPasswordOtp failed", error);
+      throw new HttpsError(
+        "internal",
+        "OTP could not be sent. Please try again later.",
+      );
+    }
+
+    return {ok: true};
+  },
+);
+
+export const verifyPasswordOtp = onCall(async (request) => {
+  const email = callableString(request.data?.email).toLowerCase();
+  const otp = callableString(request.data?.otp);
+
+  if (!email || !otp) {
+    throw new HttpsError("invalid-argument", "Email and OTP are required.");
+  }
+
+  const ref = db.collection(passwordResetCollection)
+    .doc(passwordResetDocId(email));
+  const snap = await ref.get();
+
+  if (!snap.exists) {
+    throw new HttpsError("failed-precondition", "Invalid or expired OTP.");
+  }
+
+  const data = snap.data() || {};
+  const expiresAtMs = timestampMillis(data.expiresAt);
+  const attempts = typeof data.attempts === "number" ? data.attempts : 0;
+
+  if (
+    data.used === true ||
+    attempts >= 5 ||
+    expiresAtMs <= Date.now()
+  ) {
+    throw new HttpsError("failed-precondition", "Invalid or expired OTP.");
+  }
+
+  const expectedHash = callableString(data.otpHash);
+  const enteredHash = hashResetSecret(`otp:${email}:${otp}`);
+
+  if (!safeHexCompare(expectedHash, enteredHash)) {
+    await ref.set({
+      attempts: admin.firestore.FieldValue.increment(1),
+      lastFailedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, {merge: true});
+
+    throw new HttpsError("failed-precondition", "Invalid or expired OTP.");
+  }
+
+  const resetToken = randomBytes(32).toString("hex");
+  const tokenExpiresAt = admin.firestore.Timestamp.fromMillis(
+    Date.now() + resetTokenExpiryMs,
+  );
+
+  await ref.set({
+    resetTokenHash: hashResetSecret(`token:${email}:${resetToken}`),
+    tokenExpiresAt,
+    verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, {merge: true});
+
+  return {ok: true, resetToken};
+});
+
+export const resetPasswordWithOtp = onCall(async (request) => {
+  const email = callableString(request.data?.email).toLowerCase();
+  const resetToken = callableString(request.data?.resetToken);
+  const newPassword = callableString(request.data?.newPassword);
+
+  if (!email || !resetToken || newPassword.length < 6) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Email, valid OTP session and password are required.",
+    );
+  }
+
+  const ref = db.collection(passwordResetCollection)
+    .doc(passwordResetDocId(email));
+  const snap = await ref.get();
+
+  if (!snap.exists) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Password reset session expired.",
+    );
+  }
+
+  const data = snap.data() || {};
+  const tokenExpiresAtMs = timestampMillis(data.tokenExpiresAt);
+  const expectedTokenHash = callableString(data.resetTokenHash);
+  const enteredTokenHash = hashResetSecret(`token:${email}:${resetToken}`);
+  const uid = callableString(data.uid);
+
+  if (
+    !uid ||
+    data.used === true ||
+    tokenExpiresAtMs <= Date.now() ||
+    !safeHexCompare(expectedTokenHash, enteredTokenHash)
+  ) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Password reset session expired.",
+    );
+  }
+
+  await admin.auth().updateUser(uid, {password: newPassword});
+  await ref.delete();
+
+  return {ok: true};
+});
