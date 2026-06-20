@@ -1422,7 +1422,7 @@ class _ZohoShellState extends State<ZohoShell> {
                                               CrossAxisAlignment.start,
                                           children: [
                                             const Text(
-                                              'QUIK ERP',
+                                              kAppName,
                                               style: TextStyle(
                                                 color: Colors.white,
                                                 fontWeight: FontWeight.w900,
@@ -1795,7 +1795,7 @@ class _ZohoShellState extends State<ZohoShell> {
                     borderRadius: BorderRadius.circular(12),
                     border: Border(
                       left: BorderSide(
-                        color: const Color(0xFF60A5FA).withValues(alpha: 0.75),
+                        color: zBlue.withValues(alpha: 0.85),
                         width: 3,
                       ),
                     ),
@@ -1830,11 +1830,13 @@ class _ZohoShellState extends State<ZohoShell> {
           vertical: 8,
         ),
         decoration: BoxDecoration(
-          color: selected ? Colors.white : Colors.white.withValues(alpha: 0.03),
+          color: selected
+              ? Colors.white.withValues(alpha: 0.10)
+              : Colors.white.withValues(alpha: 0.03),
           borderRadius: BorderRadius.circular(9),
           border: Border.all(
             color: selected
-                ? Colors.white
+                ? zBlue.withValues(alpha: 0.45)
                 : Colors.white.withValues(alpha: 0.05),
           ),
         ),
@@ -1850,7 +1852,7 @@ class _ZohoShellState extends State<ZohoShell> {
                 child: Text(
                   page.label,
                   style: TextStyle(
-                    color: selected ? zText : Colors.white70,
+                    color: selected ? Colors.white : Colors.white70,
                     fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                     fontSize: 11.5,
                   ),

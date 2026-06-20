@@ -1,6 +1,7 @@
 // FILE: lib/modules/dashboard/dashboard_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:QUIK/core/theme/app_theme.dart';
 import 'package:intl/intl.dart';
 import 'package:QUIK/modules/dashboard/dashboard_widgets.dart';
 import 'package:QUIK/modules/dashboard/dashboard_service.dart';
@@ -52,7 +53,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: zCanvasBg,
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(20.0),
@@ -106,24 +107,109 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildHeader() {
     final displayName = widget.userName.isNotEmpty ? widget.userName : 'Admin';
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Welcome $displayName',
-          style: const TextStyle(
-            fontSize: 26,
-            fontWeight: FontWeight.w800,
-            color: Color(0xFF0F172A),
-            letterSpacing: -0.5,
+    final today = DateFormat('EEE, dd MMM yyyy').format(DateTime.now());
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(kAppRadiusXl),
+        border: Border.all(color: zBorder),
+        boxShadow: [
+          BoxShadow(
+            color: zText.withValues(alpha: 0.045),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
           ),
-        ),
-        const SizedBox(height: 4),
-        const Text(
-          'Here is your live business overview.',
-          style: TextStyle(fontSize: 14, color: Color(0xFF64748B)),
-        ),
-      ],
+        ],
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isCompact = constraints.maxWidth < 650;
+
+          final titleBlock = Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 5,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: zBlue,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Welcome $displayName',
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                        color: zText,
+                        letterSpacing: -0.7,
+                        height: 1.15,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Live business overview for sales, finance, service and operations.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: zMuted,
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+
+          final dateBadge = Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: zSurfaceSoft,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: zBorder),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.factory_outlined, color: zBlue, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  today,
+                  style: const TextStyle(
+                    color: zText,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12.5,
+                  ),
+                ),
+              ],
+            ),
+          );
+
+          if (isCompact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [titleBlock, const SizedBox(height: 18), dateBadge],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: titleBlock),
+              const SizedBox(width: 20),
+              dateBadge,
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -167,7 +253,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   title: 'Total Revenue',
                   value: formatter.format(data.totalRevenue),
                   icon: Icons.account_balance_wallet_outlined,
-                  color: const Color(0xFF3B82F6),
+                  color: zBlue,
                   trendText: 'Live Data',
                   isPositive: true,
                 ),
@@ -180,7 +266,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   title: 'Outstanding',
                   value: formatter.format(data.totalOutstanding),
                   icon: Icons.access_time_rounded,
-                  color: const Color(0xFFF59E0B),
+                  color: zBlue,
                   trendText: 'Pending Collections',
                   isPositive: false,
                 ),
@@ -193,7 +279,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   title: 'Active Quotes',
                   value: data.activeQuotes.toString(),
                   icon: Icons.description_outlined,
-                  color: const Color(0xFF8B5CF6),
+                  color: zBlue,
                   trendText: 'In Pipeline',
                   isPositive: true,
                 ),
@@ -206,7 +292,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   title: 'Conversion Rate',
                   value: '${data.conversionRate.toStringAsFixed(1)}%',
                   icon: Icons.trending_up_rounded,
-                  color: const Color(0xFF10B981),
+                  color: zBlue,
                   trendText: 'Avg Performance',
                   isPositive: true,
                 ),
@@ -548,7 +634,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         context,
         MaterialPageRoute(
           builder: (_) => Scaffold(
-            backgroundColor: const Color(0xFFF8FAFC),
+            backgroundColor: zCanvasBg,
             appBar: AppBar(title: Text(title)),
             body: Center(
               child: Container(
