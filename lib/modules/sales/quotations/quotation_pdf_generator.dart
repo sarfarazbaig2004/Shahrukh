@@ -480,7 +480,7 @@ class QuotationPdfGenerator {
               height: 1.5,
               width: double.infinity,
               color: _accentColor,
-            ), // Thin GOLD divider
+            ), // Thin MEMCO accent divider
             pw.SizedBox(height: 24),
             _buildTwoColumnInfo(
               quotation,
@@ -644,7 +644,7 @@ class QuotationPdfGenerator {
               pw.Text(
                 displayDocumentType.toUpperCase(),
                 style: pw.TextStyle(
-                  color: _accentColor, // Document type in GOLD
+                  color: _accentColor, // Document type in MEMCO accent
                   fontSize: 26,
                   fontWeight: pw.FontWeight.bold,
                   letterSpacing: 1.5,
@@ -1130,7 +1130,7 @@ class QuotationPdfGenerator {
 
               pw.Container(
                 decoration: pw.BoxDecoration(
-                  color: _accentColor, // GOLD BACKGROUND
+                  color: _accentColor, // MEMCO accent background
                   borderRadius: const pw.BorderRadius.vertical(
                     bottom: pw.Radius.circular(9),
                   ),
@@ -1212,7 +1212,7 @@ class QuotationPdfGenerator {
                             height: 4,
                             width: 4,
                             decoration: pw.BoxDecoration(
-                              color: _accentColor, // Gold dots
+                              color: _accentColor, // MEMCO accent dots
                               shape: pw.BoxShape.circle,
                             ),
                           ),
