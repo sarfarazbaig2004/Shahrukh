@@ -8,6 +8,7 @@ import 'package:QUIK/modules/crm/customers/screens_customer_list.dart';
 import 'package:QUIK/modules/crm/customer_visits/customer_visit_list_screen.dart';
 import 'package:QUIK/modules/dashboard/dashboard_screen.dart';
 import 'package:QUIK/modules/inventory/products/screens_product_list.dart';
+import 'package:QUIK/modules/inventory/stock_in/screens/stock_in_screen.dart';
 import 'package:QUIK/modules/sales/inquiries/screens_inquiry_list.dart';
 import 'package:QUIK/modules/sales/quotations/screens_quotation_list.dart';
 import 'package:QUIK/modules/settings/screen_settings_home.dart';
@@ -2055,6 +2056,15 @@ class _ZohoShellState extends State<ZohoShell> {
         return const Padding(
           padding: EdgeInsets.all(10),
           child: ScreensProductList(),
+        );
+
+      case ShellPage.inventoryStockIn:
+        return Padding(
+          padding: const EdgeInsets.all(10),
+          child: StockInScreen(
+            companyId: widget.companyId,
+            userUid: widget.userUid,
+          ),
         );
 
       case ShellPage.salesQuotations:
