@@ -7,6 +7,10 @@ import 'package:QUIK/modules/administration/users/screen_user_management.dart';
 import 'package:QUIK/modules/crm/customers/screens_customer_list.dart';
 import 'package:QUIK/modules/crm/customer_visits/customer_visit_list_screen.dart';
 import 'package:QUIK/modules/dashboard/dashboard_screen.dart';
+import 'package:QUIK/modules/dispatch/screens/ready_for_dispatch_screen.dart';
+import 'package:QUIK/modules/dispatch/screens/dispatch_challans_screen.dart';
+import 'package:QUIK/modules/dispatch/screens/shipment_tracking_screen.dart';
+import 'package:QUIK/modules/dispatch/screens/delivered_orders_screen.dart';
 import 'package:QUIK/modules/inventory/products/screens_product_list.dart';
 import 'package:QUIK/modules/inventory/stock_in/screens/stock_in_screen.dart';
 import 'package:QUIK/modules/sales/inquiries/screens_inquiry_list.dart';
@@ -2062,6 +2066,42 @@ class _ZohoShellState extends State<ZohoShell> {
         return Padding(
           padding: const EdgeInsets.all(10),
           child: StockInScreen(
+            companyId: widget.companyId,
+            userUid: widget.userUid,
+          ),
+        );
+
+      case ShellPage.dispatchReady:
+        return Padding(
+          padding: const EdgeInsets.all(10),
+          child: ReadyForDispatchScreen(
+            companyId: widget.companyId,
+            userUid: widget.userUid,
+          ),
+        );
+
+      case ShellPage.dispatchChallans:
+        return Padding(
+          padding: const EdgeInsets.all(10),
+          child: DispatchChallansScreen(
+            companyId: widget.companyId,
+            userUid: widget.userUid,
+          ),
+        );
+
+      case ShellPage.dispatchShipmentTracking:
+        return Padding(
+          padding: const EdgeInsets.all(10),
+          child: ShipmentTrackingScreen(
+            companyId: widget.companyId,
+            userUid: widget.userUid,
+          ),
+        );
+
+      case ShellPage.dispatchDelivered:
+        return Padding(
+          padding: const EdgeInsets.all(10),
+          child: DeliveredOrdersScreen(
             companyId: widget.companyId,
             userUid: widget.userUid,
           ),
