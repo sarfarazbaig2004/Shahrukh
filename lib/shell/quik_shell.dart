@@ -8,7 +8,12 @@ import 'package:QUIK/modules/crm/customers/screens_customer_list.dart';
 import 'package:QUIK/modules/crm/contacts/screens_contact_list.dart';
 import 'package:QUIK/modules/crm/customer_visits/customer_visit_list_screen.dart';
 import 'package:QUIK/modules/dashboard/dashboard_screen.dart';
+import 'package:QUIK/modules/dispatch/screens/ready_for_dispatch_screen.dart';
+import 'package:QUIK/modules/dispatch/screens/dispatch_challans_screen.dart';
+import 'package:QUIK/modules/dispatch/screens/shipment_tracking_screen.dart';
+import 'package:QUIK/modules/dispatch/screens/delivered_orders_screen.dart';
 import 'package:QUIK/modules/inventory/products/screens_product_list.dart';
+import 'package:QUIK/modules/inventory/stock_in/screens_stock_in_list.dart';
 import 'package:QUIK/modules/sales/inquiries/screens_inquiry_list.dart';
 import 'package:QUIK/modules/sales/quotations/screens_quotation_list.dart';
 import 'package:QUIK/modules/settings/screen_settings_home.dart';
@@ -419,12 +424,13 @@ class _ZohoShellState extends State<ZohoShell> {
 
       if (doc.exists && doc.data() != null) {
         final data = doc.data()!;
-        final raw = (data['industryType'] ??
-            data['businessCategory'] ??
-            data['industry'] ??
-            '')
-            .toString()
-            .toLowerCase();
+        final raw =
+            (data['industryType'] ??
+                    data['businessCategory'] ??
+                    data['industry'] ??
+                    '')
+                .toString()
+                .toLowerCase();
 
         _resolvedIndustry = raw;
       } else {
@@ -476,10 +482,10 @@ class _ZohoShellState extends State<ZohoShell> {
   }
 
   bool _hasPermission(
-      String module,
-      String submodule, {
-        String action = 'view',
-      }) {
+    String module,
+    String submodule, {
+    String action = 'view',
+  }) {
     if (isAdminOrManager) return true;
 
     // 1. Exact match check
@@ -517,7 +523,7 @@ class _ZohoShellState extends State<ZohoShell> {
       case ShellPage.settingsGeneral:
         return true;
 
-    // Sales
+      // Sales
       case ShellPage.salesInquiries:
         return _hasPermission('sales', 'inquiries');
       case ShellPage.salesQuotations:
@@ -531,7 +537,7 @@ class _ZohoShellState extends State<ZohoShell> {
       case ShellPage.salesMeetings:
         return _hasPermission('sales', 'meetings');
 
-    // Service (Industrial Workflow)
+      // Service (Industrial Workflow)
       case ShellPage.serviceRequests:
         return _hasPermission('service', 'serviceRequests');
       case ShellPage.serviceWorkOrders:
@@ -551,7 +557,7 @@ class _ZohoShellState extends State<ZohoShell> {
       case ShellPage.serviceClosedWorkOrders:
         return _hasPermission('service', 'closedWorkOrders');
 
-    // CRM
+      // CRM
       case ShellPage.crmCustomers:
         return _hasPermission('crm', 'customers');
       case ShellPage.crmContacts:
@@ -561,7 +567,7 @@ class _ZohoShellState extends State<ZohoShell> {
       case ShellPage.crmCommunication:
         return _hasPermission('crm', 'communicationHistory');
 
-    // Purchase
+      // Purchase
       case ShellPage.purchaseVendors:
         return _hasPermission('purchase', 'vendors');
       case ShellPage.purchaseOrders:
@@ -571,7 +577,7 @@ class _ZohoShellState extends State<ZohoShell> {
       case ShellPage.purchaseLedger:
         return _hasPermission('purchase', 'vendorLedger');
 
-    // Inventory
+      // Inventory
       case ShellPage.inventoryProducts:
         return _hasPermission('inventory', 'products');
       case ShellPage.inventoryStockSummary:
@@ -585,7 +591,7 @@ class _ZohoShellState extends State<ZohoShell> {
       case ShellPage.inventoryLowStock:
         return _hasPermission('inventory', 'lowStockAlerts');
 
-    // Dispatch
+      // Dispatch
       case ShellPage.dispatchReady:
         return _hasPermission('dispatch', 'readyForDispatch');
       case ShellPage.dispatchChallans:
@@ -595,7 +601,7 @@ class _ZohoShellState extends State<ZohoShell> {
       case ShellPage.dispatchDelivered:
         return _hasPermission('dispatch', 'deliveredOrders');
 
-    // Finance
+      // Finance
       case ShellPage.financeProforma:
         return _hasPermission('finance', 'proformaInvoice');
       case ShellPage.financeTaxInvoice:
@@ -609,7 +615,7 @@ class _ZohoShellState extends State<ZohoShell> {
       case ShellPage.financeExpenses:
         return _hasPermission('finance', 'expenseEntries');
 
-    // Reports
+      // Reports
       case ShellPage.reportsSales:
         return _hasPermission('reports', 'salesReport');
       case ShellPage.reportsInquiry:
@@ -621,7 +627,7 @@ class _ZohoShellState extends State<ZohoShell> {
       case ShellPage.reportsPayment:
         return _hasPermission('reports', 'paymentReport');
 
-    // Administration
+      // Administration
       case ShellPage.adminUsers:
         return _hasPermission('administration', 'users');
       case ShellPage.adminRoles:
@@ -756,8 +762,9 @@ class _ZohoShellState extends State<ZohoShell> {
     final filtered = <SidebarGroup>[];
 
     for (var group in allGroups) {
-      final allowedChildren =
-      group.children.where((page) => _canViewPage(page)).toList();
+      final allowedChildren = group.children
+          .where((page) => _canViewPage(page))
+          .toList();
 
       if (allowedChildren.isNotEmpty) {
         filtered.add(
@@ -814,7 +821,7 @@ class _ZohoShellState extends State<ZohoShell> {
       case ShellPage.serviceRequests: // ✅ Connected Service Requests
         return true;
       default:
-      // Service modules removed to trigger placeholder correctly
+        // Service modules removed to trigger placeholder correctly
         return false;
     }
   }
@@ -838,10 +845,10 @@ class _ZohoShellState extends State<ZohoShell> {
     }
 
     if (_currentSidebarGroups.any(
-          (group) => group.children.contains(activePage),
+      (group) => group.children.contains(activePage),
     )) {
       final group = _currentSidebarGroups.firstWhere(
-            (g) => g.children.contains(activePage),
+        (g) => g.children.contains(activePage),
       );
       return '${group.title} • ${activePage.label}';
     }
@@ -1283,8 +1290,9 @@ class _ZohoShellState extends State<ZohoShell> {
               firstChild: Padding(
                 padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
                 child: Column(
-                  children:
-                  group.children.map((page) => _subNavItem(page)).toList(),
+                  children: group.children
+                      .map((page) => _subNavItem(page))
+                      .toList(),
                 ),
               ),
               secondChild: const SizedBox.shrink(),
@@ -1296,7 +1304,8 @@ class _ZohoShellState extends State<ZohoShell> {
   }
 
   Widget _subNavItem(ShellPage page) {
-    final bool selected = activePage == page ||
+    final bool selected =
+        activePage == page ||
         (page == ShellPage.financeTaxInvoice &&
             (activePage == ShellPage.financeExportInvoiceCreate ||
                 activePage == ShellPage.financeTaxInvoiceCreate));
@@ -1415,7 +1424,7 @@ class _ZohoShellState extends State<ZohoShell> {
           ),
         );
 
-    // Industrial Service Submodules Routing (Now using placeholder fallback)
+      // Industrial Service Submodules Routing (Now using placeholder fallback)
       case ShellPage.serviceWorkOrders:
       case ShellPage.serviceQuotations:
       case ShellPage.serviceVisits:
@@ -1426,7 +1435,9 @@ class _ZohoShellState extends State<ZohoShell> {
       case ShellPage.serviceClosedWorkOrders:
         return Padding(
           padding: const EdgeInsets.all(10),
-          child: _moduleLandingPage(activePage), // Render professional placeholder for now
+          child: _moduleLandingPage(
+            activePage,
+          ), // Render professional placeholder for now
         );
 
       case ShellPage.crmCustomers:
@@ -1446,7 +1457,7 @@ class _ZohoShellState extends State<ZohoShell> {
           ),
         );
 
-    // ✅ NEW: Connected Customer Visits
+      // ✅ NEW: Connected Customer Visits
       case ShellPage.crmVisits:
         return Padding(
           padding: const EdgeInsets.all(10),
@@ -1461,6 +1472,51 @@ class _ZohoShellState extends State<ZohoShell> {
         return const Padding(
           padding: EdgeInsets.all(10),
           child: ScreensProductList(),
+        );
+
+      case ShellPage.inventoryStockIn:
+        return Padding(
+          padding: const EdgeInsets.all(10),
+          child: ScreensStockInList(
+            companyId: widget.companyId,
+            userUid: widget.userUid,
+          ),
+        );
+
+      case ShellPage.dispatchReady:
+        return Padding(
+          padding: const EdgeInsets.all(10),
+          child: ReadyForDispatchScreen(
+            companyId: widget.companyId,
+            userUid: widget.userUid,
+          ),
+        );
+
+      case ShellPage.dispatchChallans:
+        return Padding(
+          padding: const EdgeInsets.all(10),
+          child: DispatchChallansScreen(
+            companyId: widget.companyId,
+            userUid: widget.userUid,
+          ),
+        );
+
+      case ShellPage.dispatchShipmentTracking:
+        return Padding(
+          padding: const EdgeInsets.all(10),
+          child: ShipmentTrackingScreen(
+            companyId: widget.companyId,
+            userUid: widget.userUid,
+          ),
+        );
+
+      case ShellPage.dispatchDelivered:
+        return Padding(
+          padding: const EdgeInsets.all(10),
+          child: DeliveredOrdersScreen(
+            companyId: widget.companyId,
+            userUid: widget.userUid,
+          ),
         );
 
       case ShellPage.salesQuotations:
@@ -1628,8 +1684,8 @@ class _ZohoShellState extends State<ZohoShell> {
                     : 'Restricted',
                 icon: allowed
                     ? (implemented
-                    ? Icons.check_circle_outline
-                    : Icons.construction_outlined)
+                          ? Icons.check_circle_outline
+                          : Icons.construction_outlined)
                     : Icons.lock_outline,
                 tint: allowed
                     ? (implemented ? zSuccessSoft : zBlueSoft)
@@ -1797,7 +1853,7 @@ class _ZohoShellState extends State<ZohoShell> {
       case ShellPage.settingsGeneral:
         return 'Manage workspace preferences, company controls, users, security, notifications, integrations, and audit-related options from one professional ERP settings hub.';
 
-    // Professional Service Module Descriptions
+      // Professional Service Module Descriptions
       case ShellPage.serviceRequests:
         return 'Log incoming customer complaints, verify warranty status, and generate initial service requests for the engineering team.';
       case ShellPage.serviceWorkOrders:
@@ -1868,7 +1924,7 @@ class _ZohoShellState extends State<ZohoShell> {
           'Audit and integrations',
         ];
 
-    // Professional Service Module Recommendations
+      // Professional Service Module Recommendations
       case ShellPage.serviceRequests:
         return [
           'Complaint logging',
@@ -2041,30 +2097,30 @@ class _ZohoShellState extends State<ZohoShell> {
               children: lines
                   .map(
                     (e) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Padding(
-                        padding: EdgeInsets.only(top: 4),
-                        child: Icon(Icons.circle, size: 5, color: zBlue),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          e,
-                          style: const TextStyle(
-                            color: zMuted,
-                            fontSize: 11.5,
-                            height: 1.45,
-                            fontWeight: FontWeight.w600,
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.only(top: 4),
+                            child: Icon(Icons.circle, size: 5, color: zBlue),
                           ),
-                        ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              e,
+                              style: const TextStyle(
+                                color: zMuted,
+                                fontSize: 11.5,
+                                height: 1.45,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
-              )
+                    ),
+                  )
                   .toList(),
             ),
           ),
@@ -2147,7 +2203,7 @@ class _ZohoShellState extends State<ZohoShell> {
                   child: _Panel(
                     title: 'Next Build Suggestion',
                     emptyText:
-                    'Start with Follow-ups, Stock Summary and Vendors',
+                        'Start with Follow-ups, Stock Summary and Vendors',
                     emptyIcon: Icons.rocket_launch_outlined,
                   ),
                 ),

@@ -1,8 +1,5 @@
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
-import 'package:QUIK/core/theme/app_theme.dart';
-import 'package:QUIK/modules/authentication/forgot_password/screens/forgot_password_otp_screen.dart';
 import 'package:QUIK/modules/authentication/forgot_password/services/forgot_password_service.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -21,11 +18,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   bool _isLoading = false;
   String? _errorMessage;
+  String? _successMessage;
 
   @override
   void initState() {
     super.initState();
-    _emailController.text = (widget.initialEmail ?? '').trim().toLowerCase();
+    _emailController.text = widget.initialEmail?.trim() ?? '';
   }
 
   @override
@@ -34,168 +32,157 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     super.dispose();
   }
 
-  String? _validateEmail(String? value) {
-    final email = (value ?? '').trim();
-    if (email.isEmpty) return 'Registered email is required';
-
-    final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
-    if (!emailRegex.hasMatch(email)) {
-      return 'Enter a valid email address';
-    }
-
-    return null;
-  }
-
-  Future<void> _sendOtp() async {
-    FocusScope.of(context).unfocus();
-
+  Future<void> _sendResetLink() async {
     if (!_formKey.currentState!.validate()) return;
-
-    final email = _emailController.text.trim().toLowerCase();
 
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _successMessage = null;
     });
 
     try {
-      await _service.requestOtp(email);
+      await _service.sendFirebaseResetLink(_emailController.text);
 
       if (!mounted) return;
 
-      final completed = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          builder: (_) => ForgotPasswordOtpScreen(email: email),
-        ),
-      );
-
-      if (!mounted) return;
-
-      if (completed == true) {
-        Navigator.of(context).pop(true);
-      }
-    } on FirebaseFunctionsException catch (e) {
       setState(() {
-        _errorMessage = e.message ?? 'OTP could not be sent.';
+        _successMessage =
+            'Password reset link has been sent. Please check your email inbox and spam folder.';
       });
+    } on ForgotPasswordException catch (e) {
+      if (!mounted) return;
+      setState(() => _errorMessage = e.message);
     } catch (_) {
+      if (!mounted) return;
       setState(() {
-        _errorMessage = 'OTP could not be sent. Please try again.';
+        _errorMessage =
+            'Password reset email could not be sent. Please try again later.';
       });
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  InputDecoration _inputDecoration(String label, IconData icon) {
-    return InputDecoration(
-      labelText: label,
-      prefixIcon: Icon(icon),
-      filled: true,
-      fillColor: Colors.white,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: zBlue, width: 1.5),
-      ),
-    );
+  String? _validateEmail(String? value) {
+    final email = value?.trim() ?? '';
+    if (email.isEmpty) return 'Email is required.';
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+      return 'Enter a valid email address.';
+    }
+    return null;
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF0F172A),
-        title: const Text('Forgot Password'),
-      ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 460),
-          child: Card(
-            elevation: 0,
-            margin: const EdgeInsets.all(20),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(22),
-              side: const BorderSide(color: Color(0xFFE2E8F0)),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(28),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(
-                      Icons.mark_email_read_outlined,
-                      size: 42,
-                      color: zBlue,
-                    ),
-                    const SizedBox(height: 18),
-                    const Text(
-                      'Reset your password',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF0F172A),
+      appBar: AppBar(title: const Text('Forgot Password'), elevation: 0),
+      body: Container(
+        width: double.infinity,
+        color: const Color(0xFFF6F7F9),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+                side: BorderSide(color: Colors.grey.shade300),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(28),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Icon(
+                        Icons.mark_email_read_outlined,
+                        size: 42,
+                        color: Color(0xFFFF6A00),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Enter your registered work email. A 6 digit OTP will be sent to your registered email.',
-                      style: TextStyle(height: 1.45, color: Color(0xFF64748B)),
-                    ),
-                    const SizedBox(height: 24),
-                    TextFormField(
-                      controller: _emailController,
-                      enabled: !_isLoading,
-                      keyboardType: TextInputType.emailAddress,
-                      textInputAction: TextInputAction.done,
-                      validator: _validateEmail,
-                      onFieldSubmitted: (_) => _sendOtp(),
-                      decoration: _inputDecoration(
-                        'Registered Email',
-                        Icons.email_outlined,
-                      ),
-                    ),
-                    if (_errorMessage != null) ...[
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 22),
                       Text(
-                        _errorMessage!,
-                        style: const TextStyle(
-                          color: Colors.red,
-                          fontWeight: FontWeight.w600,
+                        'Reset your password',
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF111827),
                         ),
                       ),
-                    ],
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: FilledButton.icon(
-                        onPressed: _isLoading ? null : _sendOtp,
-                        icon: _isLoading
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.send_outlined),
-                        label: Text(_isLoading ? 'Sending OTP...' : 'Send OTP'),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Enter your registered email address. A secure password reset link will be sent to your email.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: const Color(0xFF64748B),
+                          height: 1.45,
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 22),
+                      TextFormField(
+                        controller: _emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        validator: _validateEmail,
+                        decoration: const InputDecoration(
+                          labelText: 'Registered Email',
+                          prefixIcon: Icon(Icons.email_outlined),
+                          border: OutlineInputBorder(),
+                        ),
+                        onFieldSubmitted: (_) => _sendResetLink(),
+                      ),
+                      if (_errorMessage != null) ...[
+                        const SizedBox(height: 14),
+                        Text(
+                          _errorMessage!,
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                      if (_successMessage != null) ...[
+                        const SizedBox(height: 14),
+                        Text(
+                          _successMessage!,
+                          style: const TextStyle(
+                            color: Color(0xFF15803D),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        height: 50,
+                        child: ElevatedButton.icon(
+                          onPressed: _isLoading ? null : _sendResetLink,
+                          icon: _isLoading
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.send_outlined),
+                          label: Text(
+                            _isLoading
+                                ? 'Sending reset link...'
+                                : 'Send Reset Link',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      TextButton.icon(
+                        onPressed: _isLoading
+                            ? null
+                            : () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.arrow_back),
+                        label: const Text('Back to Login'),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

@@ -91,6 +91,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       );
 
       Navigator.of(context).pop(true);
+    } on ForgotPasswordException catch (e) {
+      setState(() {
+        _errorMessage = e.message;
+      });
     } on FirebaseFunctionsException catch (e) {
       setState(() {
         _errorMessage = e.message ?? 'Password could not be updated.';
