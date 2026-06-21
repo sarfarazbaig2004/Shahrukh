@@ -22,8 +22,10 @@ class _ShipmentTrackingScreenState extends State<ShipmentTrackingScreen> {
 
   bool _isActive(Map<String, dynamic> data) {
     final status = _text(data['status']).toLowerCase();
-    return status == 'challan_created' ||
+    return status == 'packed' ||
+        status == 'challan_created' ||
         status == 'ready' ||
+        status == 'shipped' ||
         status == 'in_transit';
   }
 
