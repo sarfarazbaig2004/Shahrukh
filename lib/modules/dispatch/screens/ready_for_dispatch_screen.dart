@@ -29,9 +29,14 @@ class _ReadyForDispatchScreenState extends State<ReadyForDispatchScreen> {
   bool _isReady(Map<String, dynamic> data) {
     final status = _text(data['status']).toLowerCase();
     final approvalStatus = _text(data['approvalStatus']).toLowerCase();
-    final dispatchStatus = _text(data['dispatchStatus']).toLowerCase();
+    final dispatchStatus = _text(
+      data['dispatchStatus'],
+      fallback: 'pending',
+    ).toLowerCase();
 
-    if (dispatchStatus == 'challan_created' ||
+    if (dispatchStatus == 'packed' ||
+        dispatchStatus == 'challan_created' ||
+        dispatchStatus == 'shipped' ||
         dispatchStatus == 'in_transit' ||
         dispatchStatus == 'delivered') {
       return false;
@@ -43,7 +48,22 @@ class _ReadyForDispatchScreenState extends State<ReadyForDispatchScreen> {
   Future<void> _createChallan(
     QueryDocumentSnapshot<Map<String, dynamic>> order,
   ) async {
-    final warehouse = TextEditingController(text: 'Main Warehouse');
+    final warehouses = await _service.loadWarehouses(
+      companyId: widget.companyId,
+    );
+
+    if (!mounted) return;
+
+    if (warehouses.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please create at least one active warehouse first.'),
+        ),
+      );
+      return;
+    }
+
+    var selectedWarehouse = warehouses.first;
     final transporter = TextEditingController();
     final vehicle = TextEditingController();
     final lr = TextEditingController();
@@ -60,11 +80,38 @@ class _ReadyForDispatchScreenState extends State<ReadyForDispatchScreen> {
             return AlertDialog(
               title: const Text('Create Dispatch Challan'),
               content: SizedBox(
-                width: 520,
+                width: 560,
                 child: SingleChildScrollView(
                   child: Column(
                     children: [
-                      _field(warehouse, 'Warehouse'),
+                      DropdownButtonFormField<String>(
+                        initialValue: selectedWarehouse.id,
+                        decoration: const InputDecoration(
+                          labelText: 'Warehouse',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: warehouses
+                            .map(
+                              (warehouse) => DropdownMenuItem<String>(
+                                value: warehouse.id,
+                                child: Text(warehouse.name),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: saving
+                            ? null
+                            : (id) {
+                                if (id == null) return;
+                                final matched = warehouses.firstWhere(
+                                  (warehouse) => warehouse.id == id,
+                                  orElse: () => selectedWarehouse,
+                                );
+                                setDialogState(() {
+                                  selectedWarehouse = matched;
+                                });
+                              },
+                      ),
+                      const SizedBox(height: 14),
                       _field(transporter, 'Transporter Name'),
                       _field(vehicle, 'Vehicle Number'),
                       _field(lr, 'LR / Receipt No.'),
@@ -90,7 +137,8 @@ class _ReadyForDispatchScreenState extends State<ReadyForDispatchScreen> {
                                   companyId: widget.companyId,
                                   salesOrderId: order.id,
                                   createdBy: widget.userUid,
-                                  warehouseName: warehouse.text,
+                                  warehouseId: selectedWarehouse.id,
+                                  warehouseName: selectedWarehouse.name,
                                   transporterName: transporter.text,
                                   vehicleNumber: vehicle.text,
                                   lrNumber: lr.text,
@@ -112,7 +160,11 @@ class _ReadyForDispatchScreenState extends State<ReadyForDispatchScreen> {
                           } catch (e) {
                             setDialogState(() => saving = false);
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(e.toString())),
+                              SnackBar(
+                                content: Text(
+                                  e.toString().replaceFirst('Bad state: ', ''),
+                                ),
+                              ),
                             );
                           }
                         },
@@ -132,7 +184,6 @@ class _ReadyForDispatchScreenState extends State<ReadyForDispatchScreen> {
       },
     );
 
-    warehouse.dispose();
     transporter.dispose();
     vehicle.dispose();
     lr.dispose();
@@ -207,6 +258,7 @@ class _ReadyForDispatchScreenState extends State<ReadyForDispatchScreen> {
                           final amount = _toDouble(
                             data['grandTotal'] ?? data['totalAmount'],
                           );
+                          final itemCount = _itemCount(data);
 
                           return ListTile(
                             leading: const Icon(
@@ -219,7 +271,9 @@ class _ReadyForDispatchScreenState extends State<ReadyForDispatchScreen> {
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
-                            subtitle: Text(customer),
+                            subtitle: Text(
+                              '$customer • $itemCount item${itemCount == 1 ? '' : 's'}',
+                            ),
                             trailing: Wrap(
                               spacing: 12,
                               crossAxisAlignment: WrapCrossAlignment.center,
@@ -273,6 +327,12 @@ class _ReadyForDispatchScreenState extends State<ReadyForDispatchScreen> {
         ),
       ),
     );
+  }
+
+  int _itemCount(Map<String, dynamic> data) {
+    final items = data['items'] ?? data['products'];
+    if (items is List) return items.length;
+    return 0;
   }
 
   String _text(Object? value, {String fallback = ''}) {

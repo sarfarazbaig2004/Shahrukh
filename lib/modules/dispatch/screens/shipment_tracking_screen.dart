@@ -74,6 +74,7 @@ class _ShipmentTrackingScreenState extends State<ShipmentTrackingScreen> {
                               vehicleNumber: vehicle.text,
                               lrNumber: lr.text,
                               trackingRemarks: remarks.text,
+                              userUid: widget.userUid,
                             );
 
                             if (!context.mounted) return;
@@ -86,7 +87,7 @@ class _ShipmentTrackingScreenState extends State<ShipmentTrackingScreen> {
                           }
                         },
                   icon: const Icon(Icons.route_outlined),
-                  label: Text(saving ? 'Saving...' : 'Update'),
+                  label: Text(saving ? 'Saving...' : 'Ship / Stock Out'),
                 ),
               ],
             );
