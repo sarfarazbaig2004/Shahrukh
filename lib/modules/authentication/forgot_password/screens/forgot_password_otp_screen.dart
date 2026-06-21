@@ -65,6 +65,10 @@ class _ForgotPasswordOtpScreenState extends State<ForgotPasswordOtpScreen> {
       if (completed == true) {
         Navigator.of(context).pop(true);
       }
+    } on ForgotPasswordException catch (e) {
+      setState(() {
+        _errorMessage = e.message;
+      });
     } on FirebaseFunctionsException catch (e) {
       setState(() {
         _errorMessage = e.message ?? 'Invalid or expired OTP.';
