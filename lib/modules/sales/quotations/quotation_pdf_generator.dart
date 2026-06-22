@@ -516,6 +516,8 @@ class QuotationPdfGenerator {
             _buildLegacyIntro(),
             pw.SizedBox(height: 4),
             _buildLegacyProductsTable(items),
+            pw.SizedBox(height: 8),
+            _buildLegacyAmountSummary(quotation, isInterState, roundOff, items),
             pw.SizedBox(height: 12),
             _buildLegacyTermsAndConditions(quotation, items.length + 1),
             pw.SizedBox(height: 18),
@@ -1065,6 +1067,87 @@ class QuotationPdfGenerator {
         3: pw.FixedColumnWidth(86),
       },
       children: rows,
+    );
+  }
+
+  static double _legacyFallbackSubtotal(List<QuotationLineItem> items) {
+    return items.fold<double>(0, (sum, item) => sum + item.subtotal);
+  }
+
+  static pw.Widget _buildLegacyAmountSummary(
+    Map<String, dynamic> quotation,
+    bool isInterState,
+    double roundOff,
+    List<QuotationLineItem> items,
+  ) {
+    final subtotal = _toDouble(quotation['totalSubtotal']);
+    final itemDiscount = _toDouble(quotation['totalItemDiscount']);
+    final taxableValue = _toDouble(quotation['totalTaxableAmount']);
+    final cgst = _toDouble(quotation['totalCgst']);
+    final sgst = _toDouble(quotation['totalSgst']);
+    final igst = _toDouble(quotation['totalIgst']);
+
+    final fallbackSubtotal = _legacyFallbackSubtotal(items);
+    final effectiveSubtotal = subtotal > 0 ? subtotal : fallbackSubtotal;
+    final effectiveTaxable = taxableValue > 0
+        ? taxableValue
+        : (effectiveSubtotal - itemDiscount);
+
+    final calculatedTotal =
+        effectiveTaxable + (isInterState ? igst : (cgst + sgst)) + roundOff;
+
+    final finalTotal = _toDouble(
+      quotation['finalTotal'] ?? quotation['grandTotal'],
+    );
+    final effectiveTotal = finalTotal > 0 ? finalTotal : calculatedTotal;
+
+    pw.TableRow amountRow(String label, double value, {bool bold = false}) {
+      return pw.TableRow(
+        children: [
+          _legacyTextCell(
+            label,
+            size: bold ? 9.5 : 8.8,
+            bold: bold,
+            alignment: pw.Alignment.centerRight,
+            textAlign: pw.TextAlign.right,
+            padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+          ),
+          _legacyTextCell(
+            _legacyRate(value),
+            size: bold ? 9.5 : 8.8,
+            bold: bold,
+            alignment: pw.Alignment.centerRight,
+            textAlign: pw.TextAlign.right,
+            padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+          ),
+        ],
+      );
+    }
+
+    return pw.Align(
+      alignment: pw.Alignment.centerRight,
+      child: pw.Container(
+        width: 270,
+        child: pw.Table(
+          border: pw.TableBorder.all(color: PdfColors.black, width: 0.55),
+          columnWidths: const {
+            0: pw.FlexColumnWidth(1.15),
+            1: pw.FlexColumnWidth(1),
+          },
+          children: [
+            amountRow('SUB TOTAL', effectiveSubtotal),
+            if (itemDiscount > 0) amountRow('DISCOUNT', -itemDiscount),
+            amountRow('TAXABLE VALUE', effectiveTaxable, bold: true),
+            if (!isInterState) ...[
+              amountRow('CGST', cgst),
+              amountRow('SGST', sgst),
+            ] else
+              amountRow('IGST', igst),
+            if (roundOff != 0) amountRow('ROUND OFF', roundOff),
+            amountRow('GRAND TOTAL', effectiveTotal, bold: true),
+          ],
+        ),
+      ),
     );
   }
 
