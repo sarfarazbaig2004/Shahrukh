@@ -16,11 +16,17 @@ extension _CreateInvitePermissionWidgets on _ScreenCreateInviteState {
     final moduleLabel = formatModuleLabel(moduleKey);
     final selectedCount = _countEnabledActionsInModule(
       moduleKey: moduleKey,
+      isExportImport: isExportImport,
       modulePermissions: modulePermissions,
     );
     final totalCount = _countTotalActionsInModule(
       moduleKey: moduleKey,
+      isExportImport: isExportImport,
       modulePermissions: modulePermissions,
+    );
+    final displayedSubmodules = _displayedPermissionSubmodules(
+      moduleKey: moduleKey,
+      isExportImport: isExportImport,
     );
 
     return Container(
@@ -84,57 +90,49 @@ extension _CreateInvitePermissionWidgets on _ScreenCreateInviteState {
                         onActionChanged(moduleKey, null, action, value),
                   ),
                 ]
-              : (permissionSubmoduleMap[moduleKey] ?? const <String>[])
-                    .where((submoduleKey) {
-                      if (isExportImport) {
-                        if (moduleKey == 'sales') return false;
-                        if (moduleKey == 'crm') {
-                          return submoduleKey == 'customers';
-                        }
-                        if (moduleKey == 'finance') {
-                          return [
-                            'taxInvoice',
-                            'paymentReceived',
-                            'outstanding',
-                            'expenseEntries',
-                          ].contains(submoduleKey);
-                        }
-                        if (moduleKey == 'reports') {
-                          return [
-                            'salesReport',
-                            'customerReport',
-                            'paymentReport',
-                          ].contains(submoduleKey);
-                        }
-                        return false;
-                      }
-                      return true;
-                    })
-                    .map((submoduleKey) {
-                      final submodulePermissions = Map<String, bool>.from(
-                        modulePermissions[submoduleKey] ?? {},
-                      );
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                        ),
-                        child: _buildActionGroup(
-                          title: formatSubmoduleLabel(submoduleKey),
-                          actions: submodulePermissions,
-                          onChanged: (action, value) => onActionChanged(
-                            moduleKey,
-                            submoduleKey,
-                            action,
-                            value,
-                          ),
-                        ),
-                      );
-                    })
-                    .toList(),
+              : displayedSubmodules.isEmpty
+              ? const [
+                  Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Text(
+                      'No submodules are configured for this module.',
+                      style: TextStyle(color: inviteMutedTextColor),
+                    ),
+                  ),
+                ]
+              : displayedSubmodules.map((submoduleKey) {
+                  final storedSubmodulePermissions =
+                      modulePermissions[submoduleKey] is Map
+                      ? Map<String, dynamic>.from(
+                          modulePermissions[submoduleKey] as Map,
+                        )
+                      : const <String, dynamic>{};
+                  final submodulePermissions = <String, bool>{
+                    for (final action
+                        in permissionActionsBySubmodule[submoduleKey] ??
+                            standardCrudActions)
+                      action: storedSubmodulePermissions[action] == true,
+                  };
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: _buildActionGroup(
+                      title: formatSubmoduleLabel(submoduleKey),
+                      actions: submodulePermissions,
+                      onChanged: (action, value) => onActionChanged(
+                        moduleKey,
+                        submoduleKey,
+                        action,
+                        value,
+                      ),
+                    ),
+                  );
+                }).toList(),
         ),
       ),
     );

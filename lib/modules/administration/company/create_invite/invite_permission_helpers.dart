@@ -193,6 +193,7 @@ extension _CreateInvitePermissionHelpers on _ScreenCreateInviteState {
 
   int _countEnabledActionsInModule({
     required String moduleKey,
+    required bool isExportImport,
     required Map<String, dynamic> modulePermissions,
   }) {
     int count = 0;
@@ -204,10 +205,15 @@ extension _CreateInvitePermissionHelpers on _ScreenCreateInviteState {
       return count;
     }
 
-    for (final submoduleValue in modulePermissions.values) {
+    for (final submodule in _displayedPermissionSubmodules(
+      moduleKey: moduleKey,
+      isExportImport: isExportImport,
+    )) {
+      final submoduleValue = modulePermissions[submodule];
       if (submoduleValue is Map) {
-        for (final actionValue in submoduleValue.values) {
-          if (actionValue == true) count++;
+        for (final action
+            in permissionActionsBySubmodule[submodule] ?? standardCrudActions) {
+          if (submoduleValue[action] == true) count++;
         }
       }
     }
@@ -217,6 +223,7 @@ extension _CreateInvitePermissionHelpers on _ScreenCreateInviteState {
 
   int _countTotalActionsInModule({
     required String moduleKey,
+    required bool isExportImport,
     required Map<String, dynamic> modulePermissions,
   }) {
     int count = 0;
@@ -225,12 +232,49 @@ extension _CreateInvitePermissionHelpers on _ScreenCreateInviteState {
       return modulePermissions.length;
     }
 
-    for (final submoduleValue in modulePermissions.values) {
-      if (submoduleValue is Map) {
-        count += submoduleValue.length;
-      }
+    for (final submodule in _displayedPermissionSubmodules(
+      moduleKey: moduleKey,
+      isExportImport: isExportImport,
+    )) {
+      count += (permissionActionsBySubmodule[submodule] ?? standardCrudActions)
+          .length;
     }
 
     return count;
+  }
+
+  List<String> _displayedPermissionSubmodules({
+    required String moduleKey,
+    required bool isExportImport,
+  }) {
+    final submodules = permissionSubmoduleMap[moduleKey] ?? const <String>[];
+
+    if (!isExportImport) {
+      return List<String>.from(submodules);
+    }
+
+    return submodules
+        .where((submoduleKey) {
+          if (moduleKey == PermissionModules.crm) {
+            return submoduleKey == CrmSubmodules.customers;
+          }
+          if (moduleKey == PermissionModules.finance) {
+            return [
+              FinanceSubmodules.taxInvoice,
+              FinanceSubmodules.paymentReceived,
+              FinanceSubmodules.outstanding,
+              FinanceSubmodules.expenseEntries,
+            ].contains(submoduleKey);
+          }
+          if (moduleKey == PermissionModules.reports) {
+            return [
+              ReportsSubmodules.salesReport,
+              ReportsSubmodules.customerReport,
+              ReportsSubmodules.paymentReport,
+            ].contains(submoduleKey);
+          }
+          return false;
+        })
+        .toList(growable: false);
   }
 }

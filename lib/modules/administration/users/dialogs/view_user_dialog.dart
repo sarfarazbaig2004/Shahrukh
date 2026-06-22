@@ -574,6 +574,8 @@ String _moduleLabel(String moduleKey) {
       return 'Dashboard';
     case 'sales':
       return 'Sales';
+    case 'service':
+      return 'Service';
     case 'crm':
       return 'CRM';
     case 'purchase':
@@ -601,6 +603,15 @@ String _submoduleLabel(String key) {
     'salesOrder': 'Sales Order',
     'tasks': 'Tasks',
     'meetings': 'Meetings',
+    'serviceRequests': 'Service Calls',
+    'serviceCalls': 'Service Calls',
+    'serviceVisits': 'Service Visits',
+    'serviceTechnicians': 'Service Technicians',
+    'complaints': 'Complaints',
+    'amc': 'AMC',
+    'installationCommissioning': 'Installation',
+    'installation': 'Installation',
+    'serviceReports': 'Service Reports',
     'customers': 'Customers',
     'contacts': 'Contacts',
     'customerVisits': 'Customer Visits',

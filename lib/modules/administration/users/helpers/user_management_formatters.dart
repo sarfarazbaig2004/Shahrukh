@@ -176,6 +176,26 @@ String permissionLabel(String key) {
     case 'meetings':
       return 'Meetings';
 
+    // Service
+    case 'service':
+      return 'Service';
+    case 'serviceRequests':
+    case 'serviceCalls':
+      return 'Service Calls';
+    case 'serviceVisits':
+      return 'Service Visits';
+    case 'serviceTechnicians':
+      return 'Service Technicians';
+    case 'complaints':
+      return 'Complaints';
+    case 'amc':
+      return 'AMC';
+    case 'installationCommissioning':
+    case 'installation':
+      return 'Installation';
+    case 'serviceReports':
+      return 'Service Reports';
+
     // Inventory
     case 'products':
       return 'Products';

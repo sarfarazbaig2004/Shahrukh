@@ -35,6 +35,8 @@ import 'package:QUIK/modules/reports/sales_report/sales_report_screen.dart';
 
 // Service Sub-Modules
 import 'package:QUIK/modules/service/service_requests/service_request_list_screen.dart';
+import 'package:QUIK/modules/purchase/purchase_bills/purchase_bill_screens.dart';
+import 'package:QUIK/modules/purchase/vendors/screens_vendor_list.dart';
 
 enum ShellPage {
   dashboard,
@@ -1631,6 +1633,30 @@ class _ZohoShellState extends State<ZohoShell> {
                 _selectPage(ShellPage.adminCompanyProfile),
             onOpenAuditLogs: () => _selectPage(ShellPage.adminAuditLogs),
           ),
+        );
+
+      case ShellPage.purchaseVendors:
+        return Padding(
+          padding: const EdgeInsets.all(10),
+          child: PurchaseVendorListScreen(
+            companyId: widget.companyId,
+            userUid: widget.userUid,
+          ),
+        );
+
+      case ShellPage.purchaseOrders:
+        return Padding(
+          padding: const EdgeInsets.all(10),
+          child: PurchaseBillListScreen(
+            companyId: widget.companyId,
+            userUid: widget.userUid,
+          ),
+        );
+
+      case ShellPage.purchaseLedger:
+        return Padding(
+          padding: const EdgeInsets.all(10),
+          child: _moduleLandingPage(activePage),
         );
 
       default:
