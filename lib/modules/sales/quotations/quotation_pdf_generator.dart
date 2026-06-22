@@ -474,71 +474,714 @@ class QuotationPdfGenerator {
       pw.MultiPage(
         pageTheme: pw.PageTheme(
           pageFormat: format,
-          margin: const pw.EdgeInsets.fromLTRB(32, 32, 32, 52),
+          margin: const pw.EdgeInsets.fromLTRB(28, 24, 28, 28),
           buildBackground: (context) => pw.FullPage(
             ignoreMargins: true,
-            child: pw.Container(
-              color: _bgColor,
-              child: pw.Center(
-                child: logoImage != null
-                    ? pw.Opacity(
-                        opacity: 0.075,
-                        child: pw.Image(
-                          logoImage,
-                          width: 310,
-                          fit: pw.BoxFit.contain,
-                        ),
-                      )
-                    : pw.Text(
-                        'memco',
-                        style: pw.TextStyle(
-                          color: PdfColor.fromInt(0xFFF4DADA),
-                          fontSize: 54.6,
-                          fontWeight: pw.FontWeight.bold,
-                          letterSpacing: 3,
-                        ),
-                      ),
-              ),
-            ),
+            child: pw.Container(color: PdfColors.white),
           ),
         ),
+        header: (context) {
+          if (context.pageNumber <= 1) return pw.SizedBox.shrink();
+          return pw.Center(
+            child: pw.Text(
+              '-${context.pageNumber}-',
+              style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+            ),
+          );
+        },
+        footer: (context) {
+          if (context.pageNumber >= context.pagesCount) {
+            return pw.SizedBox.shrink();
+          }
+          return pw.Align(
+            alignment: pw.Alignment.centerRight,
+            child: pw.Text(
+              "Cont'd.....${context.pageNumber + 1}/-",
+              style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+            ),
+          );
+        },
         build: (context) {
           return [
-            _buildEnterpriseHeader(
+            _buildLegacyMemcoHeader(quotation, logoImage),
+            pw.SizedBox(height: 4),
+            _buildLegacyQuotationTitle(),
+            pw.SizedBox(height: 4),
+            _buildLegacyInfoBox(
               quotation,
-              logoImage,
-              isPreview,
-              displayDocumentType,
-            ),
-            pw.SizedBox(height: 12),
-            pw.Container(
-              height: 1.5,
-              width: double.infinity,
-              color: _accentColor,
-            ),
-            pw.SizedBox(height: 18),
-            _buildTwoColumnInfo(
-              quotation,
-              soNumber,
-              quoteNumber,
+              isSO ? soNumber : quoteNumber,
               docDateStr,
-              isSO,
             ),
-            pw.SizedBox(height: 20),
-
-            _buildSubjectBar(subjectStr),
-            pw.SizedBox(height: 20),
-
-            _buildProductsTable(items, isInterState),
+            pw.SizedBox(height: 8),
+            _buildLegacyIntro(),
+            pw.SizedBox(height: 4),
+            _buildLegacyProductsTable(items),
+            pw.SizedBox(height: 12),
+            _buildLegacyTermsAndConditions(quotation, items.length + 1),
             pw.SizedBox(height: 18),
-            _buildBottomSection(quotation, isInterState, roundOff),
+            _buildLegacySignature(quotation),
           ];
         },
-        footer: (context) => _buildPageFooter(context, isSO),
       ),
     );
 
     return doc.save();
+  }
+
+  static String _legacyFirstNonEmpty(
+    Map<String, dynamic> data,
+    List<String> keys, [
+    String fallback = '',
+  ]) {
+    for (final key in keys) {
+      final value = _safeString(data[key]);
+      if (value.isNotEmpty) return value;
+    }
+    return fallback;
+  }
+
+  static String _legacyIndianNumber(num value) {
+    final negative = value < 0;
+    var digits = value.abs().round().toString();
+    if (digits.length <= 3) return '${negative ? '-' : ''}$digits';
+
+    final lastThree = digits.substring(digits.length - 3);
+    var rest = digits.substring(0, digits.length - 3);
+    final parts = <String>[];
+
+    while (rest.length > 2) {
+      parts.insert(0, rest.substring(rest.length - 2));
+      rest = rest.substring(0, rest.length - 2);
+    }
+
+    if (rest.isNotEmpty) parts.insert(0, rest);
+    return '${negative ? '-' : ''}${parts.join(',')},$lastThree';
+  }
+
+  static String _legacyRate(double value) {
+    if (value == 0) return '';
+    return 'Rs.${_legacyIndianNumber(value)}=00';
+  }
+
+  static String _legacyQty(QuotationLineItem item) {
+    final uom = item.uom.trim();
+    if (item.quantity <= 1) {
+      return uom.isEmpty || uom.toLowerCase() == 'nos' ? 'Each' : uom;
+    }
+
+    final qty = item.quantity == item.quantity.roundToDouble()
+        ? item.quantity.round().toString()
+        : item.quantity.toStringAsFixed(2);
+
+    return uom.isEmpty ? qty : '$qty $uom';
+  }
+
+  static pw.TextStyle _legacyStyle({
+    double size = 9,
+    bool bold = false,
+    PdfColor? color,
+  }) {
+    return pw.TextStyle(
+      fontSize: size,
+      color: color ?? PdfColors.black,
+      fontWeight: bold ? pw.FontWeight.bold : null,
+    );
+  }
+
+  static pw.Widget _legacyCell(
+    pw.Widget child, {
+    pw.EdgeInsets padding = const pw.EdgeInsets.symmetric(
+      horizontal: 5,
+      vertical: 3,
+    ),
+    pw.Alignment alignment = pw.Alignment.centerLeft,
+  }) {
+    return pw.Container(alignment: alignment, padding: padding, child: child);
+  }
+
+  static pw.Widget _legacyTextCell(
+    String text, {
+    double size = 9,
+    bool bold = false,
+    PdfColor? color,
+    pw.Alignment alignment = pw.Alignment.centerLeft,
+    pw.TextAlign textAlign = pw.TextAlign.left,
+    pw.EdgeInsets padding = const pw.EdgeInsets.symmetric(
+      horizontal: 5,
+      vertical: 3,
+    ),
+  }) {
+    return _legacyCell(
+      pw.Text(
+        text,
+        style: _legacyStyle(size: size, bold: bold, color: color),
+        textAlign: textAlign,
+      ),
+      alignment: alignment,
+      padding: padding,
+    );
+  }
+
+  static pw.Widget _buildLegacyMemcoHeader(
+    Map<String, dynamic> quotation,
+    pw.ImageProvider? logoImage,
+  ) {
+    final companyName = _legacyFirstNonEmpty(quotation, [
+      'companyName',
+    ], 'Miraj Electrical And Mechanical Company Private Limited');
+    final regAddress = _legacyFirstNonEmpty(
+      quotation,
+      ['companyRegisteredAddress', 'registeredAddress', 'companyAddress'],
+      'Regd Address : A35, Ansa Industrial Estate, Saki Vihar Road, Sakinaka, Mumbai – 400 072',
+    );
+    final salesOffice = _legacyFirstNonEmpty(
+      quotation,
+      ['companySalesOffice', 'salesOffice'],
+      'Sales Office:2, Swastik Chambers, Ground Floor, C. S. T. Road, Chembur, Mumbai – 400 071.',
+    );
+    final phone = _legacyFirstNonEmpty(quotation, [
+      'companyPhone',
+    ], '022–35315586 / 35040498');
+    final email = _legacyFirstNonEmpty(quotation, [
+      'companyEmail',
+    ], 'memcosales@memcoin.com');
+    final gst = _legacyFirstNonEmpty(quotation, [
+      'companyGst',
+      'companyGST',
+      'companyGstin',
+    ], '27AAACM8022D1ZU');
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: [
+        pw.Align(
+          alignment: pw.Alignment.centerRight,
+          child: logoImage != null
+              ? pw.Image(
+                  logoImage,
+                  width: 100,
+                  height: 34,
+                  fit: pw.BoxFit.contain,
+                )
+              : pw.Text(
+                  'memco',
+                  style: pw.TextStyle(
+                    color: PdfColor.fromInt(0xFFE31E24),
+                    fontSize: 22,
+                    fontWeight: pw.FontWeight.bold,
+                    fontStyle: pw.FontStyle.italic,
+                  ),
+                ),
+        ),
+        pw.Text(
+          companyName,
+          textAlign: pw.TextAlign.center,
+          style: pw.TextStyle(
+            color: PdfColor.fromInt(0xFFE31E24),
+            fontSize: 15.5,
+            fontWeight: pw.FontWeight.bold,
+          ),
+        ),
+        pw.SizedBox(height: 2),
+        pw.Text(
+          regAddress,
+          textAlign: pw.TextAlign.center,
+          style: _legacyStyle(size: 8.2),
+        ),
+        pw.Text(
+          salesOffice,
+          textAlign: pw.TextAlign.center,
+          style: _legacyStyle(size: 8.2),
+        ),
+        pw.RichText(
+          textAlign: pw.TextAlign.center,
+          text: pw.TextSpan(
+            style: _legacyStyle(size: 8.2),
+            children: [
+              pw.TextSpan(text: 'Tel No:$phone .E: '),
+              pw.TextSpan(
+                text: email,
+                style: pw.TextStyle(
+                  color: PdfColors.blue,
+                  decoration: pw.TextDecoration.underline,
+                ),
+              ),
+              pw.TextSpan(text: ' *GSTIN:$gst'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  static pw.Widget _buildLegacyQuotationTitle() {
+    return pw.Center(
+      child: pw.Text(
+        'QUOTATION',
+        style: pw.TextStyle(
+          fontSize: 13.5,
+          fontWeight: pw.FontWeight.bold,
+          decoration: pw.TextDecoration.underline,
+          letterSpacing: 1.2,
+        ),
+      ),
+    );
+  }
+
+  static pw.Widget _buildLegacyInfoBox(
+    Map<String, dynamic> quotation,
+    String docNo,
+    String docDate,
+  ) {
+    final customerName = _legacyFirstNonEmpty(quotation, [
+      'customerName',
+      'clientName',
+      'partyName',
+      'billingName',
+      'customerCompanyName',
+    ]);
+    final customerAddress = _legacyFirstNonEmpty(quotation, [
+      'customerAddress',
+      'clientAddress',
+      'billingAddress',
+      'address',
+    ]);
+    final mobile = _legacyFirstNonEmpty(quotation, [
+      'customerPhone',
+      'clientPhone',
+      'mobile',
+      'phone',
+      'contactPhone',
+    ]);
+    final email = _legacyFirstNonEmpty(quotation, [
+      'customerEmail',
+      'clientEmail',
+      'email',
+      'contactEmail',
+    ]);
+    final attention = _legacyFirstNonEmpty(quotation, [
+      'contactPersonName',
+      'contactPerson',
+      'kindAttention',
+      'attention',
+    ]);
+    final customerGst = _legacyFirstNonEmpty(quotation, [
+      'customerGst',
+      'customerGST',
+      'customerGstin',
+      'gstin',
+      'clientGst',
+    ]);
+    final enquiry = _legacyFirstNonEmpty(quotation, [
+      'enquiryNo',
+      'enquiryNumber',
+      'enquiryReference',
+      'reference',
+    ], 'VERBAL');
+    final enquiryDate = _legacyFirstNonEmpty(quotation, [
+      'enquiryDate',
+      'enquiryDateStr',
+      'referenceDate',
+    ]);
+
+    final leftLines = <String>[
+      if (customerName.isNotEmpty) customerName.toUpperCase(),
+      if (customerAddress.isNotEmpty) customerAddress,
+      if (mobile.isNotEmpty) 'Mobile No:  $mobile',
+      if (email.isNotEmpty) 'Email: $email',
+    ];
+
+    return pw.Table(
+      border: pw.TableBorder.all(color: PdfColors.black, width: 0.6),
+      columnWidths: const {
+        0: pw.FlexColumnWidth(1.05),
+        1: pw.FlexColumnWidth(0.95),
+      },
+      children: [
+        pw.TableRow(
+          children: [
+            _legacyCell(
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: leftLines.isEmpty
+                    ? [pw.Text('', style: _legacyStyle(size: 9))]
+                    : leftLines
+                          .map(
+                            (line) => pw.Text(
+                              line,
+                              style: _legacyStyle(
+                                size: line == leftLines.first ? 9.5 : 8.8,
+                                bold: line == leftLines.first,
+                              ),
+                            ),
+                          )
+                          .toList(),
+              ),
+              padding: const pw.EdgeInsets.fromLTRB(6, 4, 6, 4),
+            ),
+            _legacyCell(
+              pw.Table(
+                columnWidths: const {
+                  0: pw.FixedColumnWidth(62),
+                  1: pw.FixedColumnWidth(10),
+                  2: pw.FlexColumnWidth(),
+                },
+                children: [
+                  _legacyInfoRow('NO', docNo),
+                  _legacyInfoRow('DATE', docDate),
+                  _legacyInfoRow('ENQUIRY', enquiry),
+                  _legacyInfoRow('DATE', enquiryDate),
+                ],
+              ),
+              padding: const pw.EdgeInsets.fromLTRB(6, 3, 6, 3),
+            ),
+          ],
+        ),
+        pw.TableRow(
+          children: [
+            _legacyTextCell(
+              'Kind Attention : ${attention.isNotEmpty ? attention : ''}',
+              size: 8.8,
+              bold: true,
+              padding: const pw.EdgeInsets.fromLTRB(6, 3, 6, 3),
+            ),
+            _legacyTextCell(
+              'GST NO. : ${customerGst.isNotEmpty ? customerGst : ''}',
+              size: 8.8,
+              padding: const pw.EdgeInsets.fromLTRB(6, 3, 6, 3),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  static pw.TableRow _legacyInfoRow(String label, String value) {
+    return pw.TableRow(
+      children: [
+        pw.Text(label, style: _legacyStyle(size: 9.2, bold: true)),
+        pw.Text(':', style: _legacyStyle(size: 9.2, bold: true)),
+        pw.Text(value, style: _legacyStyle(size: 9.2, bold: true)),
+      ],
+    );
+  }
+
+  static pw.Widget _buildLegacyIntro() {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text('Dear Sir,', style: _legacyStyle(size: 8.8)),
+        pw.Padding(
+          padding: const pw.EdgeInsets.only(left: 20, top: 2),
+          child: pw.Text(
+            'In response to your valued enquiry, we have pleasure in submitting our Quotation as under and feel sure you will find the same to be competitive and be pleased to favour us with your valued order.',
+            style: _legacyStyle(size: 8.6, bold: true),
+            textAlign: pw.TextAlign.justify,
+          ),
+        ),
+      ],
+    );
+  }
+
+  static List<String> _legacyDescriptionLines(QuotationLineItem item) {
+    final description = _cleanPdfText(item.description);
+    if (description.isEmpty) return <String>[];
+
+    return description
+        .split(RegExp(r'\r?\n'))
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+  }
+
+  static pw.Widget _legacyProductDescription(
+    QuotationLineItem item,
+    int index,
+  ) {
+    final lines = _legacyDescriptionLines(item);
+
+    return pw.Padding(
+      padding: const pw.EdgeInsets.fromLTRB(5, 4, 5, 4),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            '${index + 1}). ${item.name}',
+            style: _legacyStyle(size: 9.3),
+          ),
+          if (lines.isNotEmpty) pw.SizedBox(height: 5),
+          if (lines.isNotEmpty)
+            pw.Table(
+              border: pw.TableBorder.all(color: PdfColors.black, width: 0.35),
+              columnWidths: const {
+                0: pw.FlexColumnWidth(1.05),
+                1: pw.FlexColumnWidth(1.25),
+              },
+              children: lines.map((line) {
+                final split = line.contains(':')
+                    ? line.split(RegExp(r':\s*'))
+                    : line.contains('-')
+                    ? line.split(RegExp(r'\s+-\s+'))
+                    : <String>[line];
+
+                if (split.length >= 2) {
+                  return pw.TableRow(
+                    children: [
+                      _legacyTextCell(
+                        split.first.trim(),
+                        size: 8.2,
+                        padding: const pw.EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 2,
+                        ),
+                      ),
+                      _legacyTextCell(
+                        split.sublist(1).join(' ').trim(),
+                        size: 8.2,
+                        padding: const pw.EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 2,
+                        ),
+                      ),
+                    ],
+                  );
+                }
+
+                return pw.TableRow(
+                  children: [
+                    _legacyTextCell(
+                      line,
+                      size: 8.2,
+                      padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 2,
+                      ),
+                    ),
+                    _legacyTextCell(
+                      '',
+                      size: 8.2,
+                      padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 2,
+                      ),
+                    ),
+                  ],
+                );
+              }).toList(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _buildLegacyProductsTable(List<QuotationLineItem> items) {
+    final rows = <pw.TableRow>[
+      pw.TableRow(
+        children: [
+          _legacyTextCell(
+            'Sr\nNo.',
+            size: 9,
+            bold: true,
+            alignment: pw.Alignment.center,
+            textAlign: pw.TextAlign.center,
+          ),
+          _legacyTextCell(
+            'DESCRIPTION',
+            size: 9.5,
+            bold: true,
+            alignment: pw.Alignment.center,
+            textAlign: pw.TextAlign.center,
+          ),
+          _legacyTextCell(
+            'QTY',
+            size: 9.5,
+            bold: true,
+            alignment: pw.Alignment.center,
+            textAlign: pw.TextAlign.center,
+          ),
+          _legacyTextCell(
+            'RATE\nEACH',
+            size: 9.5,
+            bold: true,
+            alignment: pw.Alignment.center,
+            textAlign: pw.TextAlign.center,
+          ),
+        ],
+      ),
+    ];
+
+    if (items.isEmpty) {
+      rows.add(
+        pw.TableRow(
+          children: [
+            _legacyTextCell('1).', size: 9, alignment: pw.Alignment.topCenter),
+            _legacyTextCell('', size: 9),
+            _legacyTextCell('', size: 9),
+            _legacyTextCell('', size: 9),
+          ],
+        ),
+      );
+    } else {
+      rows.addAll(
+        List.generate(items.length, (index) {
+          final item = items[index];
+          return pw.TableRow(
+            verticalAlignment: pw.TableCellVerticalAlignment.middle,
+            children: [
+              _legacyTextCell(
+                '${index + 1}).',
+                size: 9,
+                alignment: pw.Alignment.topCenter,
+                textAlign: pw.TextAlign.center,
+                padding: const pw.EdgeInsets.only(top: 5),
+              ),
+              _legacyProductDescription(item, index),
+              _legacyTextCell(
+                _legacyQty(item),
+                size: 9,
+                bold: true,
+                alignment: pw.Alignment.center,
+                textAlign: pw.TextAlign.center,
+              ),
+              _legacyTextCell(
+                _legacyRate(item.unitPrice),
+                size: 9.2,
+                bold: true,
+                alignment: pw.Alignment.center,
+                textAlign: pw.TextAlign.center,
+              ),
+            ],
+          );
+        }),
+      );
+    }
+
+    return pw.Table(
+      border: pw.TableBorder.all(color: PdfColors.black, width: 0.6),
+      columnWidths: const {
+        0: pw.FixedColumnWidth(44),
+        1: pw.FlexColumnWidth(),
+        2: pw.FixedColumnWidth(56),
+        3: pw.FixedColumnWidth(86),
+      },
+      children: rows,
+    );
+  }
+
+  static List<Map<String, String>> _legacyTermsRows(
+    Map<String, dynamic> quotation,
+  ) {
+    final terms = quotation['dynamicTerms'];
+    final rows = <Map<String, String>>[];
+
+    if (terms is List && terms.isNotEmpty) {
+      for (final term in terms) {
+        if (term is Map) {
+          final title = _safeString(term['title']);
+          final value = _cleanPdfText(_safeString(term['value']));
+          if (title.isNotEmpty || value.isNotEmpty) {
+            rows.add({'title': title, 'value': value});
+          }
+        }
+      }
+    }
+
+    if (rows.isEmpty) {
+      rows.addAll([
+        {'title': 'ADD Packing Charges', 'value': '@ 2.5% + GST @18%'},
+        {'title': 'ADD', 'value': 'GST @18%'},
+        {'title': 'Warrantee', 'value': 'For 12 Months'},
+        {'title': 'Payment', 'value': '100% Advance.'},
+        {'title': 'Inspection', 'value': 'At our Mumbai Works.'},
+        {'title': 'Transportation', 'value': 'Extra at actual.'},
+        {'title': 'Validity', 'value': 'For 10 Days.'},
+      ]);
+    }
+
+    return rows;
+  }
+
+  static pw.Widget _buildLegacyTermsAndConditions(
+    Map<String, dynamic> quotation,
+    int number,
+  ) {
+    final rows = _legacyTermsRows(quotation);
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          '$number). TERMS & CONDITIONS',
+          style: pw.TextStyle(
+            fontSize: 11,
+            fontWeight: pw.FontWeight.bold,
+            letterSpacing: 0.8,
+          ),
+        ),
+        pw.SizedBox(height: 8),
+        pw.Table(
+          border: pw.TableBorder.all(color: PdfColors.black, width: 0.55),
+          columnWidths: const {
+            0: pw.FlexColumnWidth(1.05),
+            1: pw.FlexColumnWidth(1),
+          },
+          children: rows.map((row) {
+            return pw.TableRow(
+              children: [
+                _legacyTextCell(
+                  row['title'] ?? '',
+                  size: 9.4,
+                  padding: const pw.EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2.5,
+                  ),
+                ),
+                _legacyTextCell(
+                  row['value'] ?? '',
+                  size: 9.4,
+                  padding: const pw.EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2.5,
+                  ),
+                ),
+              ],
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  static pw.Widget _buildLegacySignature(Map<String, dynamic> quotation) {
+    final companyName = _legacyFirstNonEmpty(quotation, [
+      'companyName',
+    ], 'MIRAJ ELECTRICAL & MECHANICAL COMPANY PRIVATE LIMITED').toUpperCase();
+    final sigName = _legacyFirstNonEmpty(quotation, [
+      'signatureName',
+    ], 'SARFARAZ BAIG').toUpperCase();
+    final sigDesignation = _legacyFirstNonEmpty(quotation, [
+      'signatureDesignation',
+    ], 'C.E.O.').toUpperCase();
+    final sigPhone = _legacyFirstNonEmpty(quotation, [
+      'signaturePhone',
+    ], '90829 07433');
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          'FOR $companyName,',
+          style: _legacyStyle(size: 10.2, bold: true),
+        ),
+        pw.SizedBox(height: 12),
+        pw.Text(sigName, style: _legacyStyle(size: 10.2, bold: true)),
+        pw.Text(sigDesignation, style: _legacyStyle(size: 9.3, bold: true)),
+        pw.Text(
+          'Mobile No.$sigPhone',
+          style: _legacyStyle(size: 9.3, bold: true),
+        ),
+      ],
+    );
   }
 
   static pw.Widget _buildEnterpriseHeader(
