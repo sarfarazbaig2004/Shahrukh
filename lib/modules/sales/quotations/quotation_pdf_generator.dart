@@ -474,7 +474,7 @@ class QuotationPdfGenerator {
       pw.MultiPage(
         pageTheme: pw.PageTheme(
           pageFormat: format,
-          margin: const pw.EdgeInsets.all(32),
+          margin: const pw.EdgeInsets.fromLTRB(32, 32, 32, 52),
           buildBackground: (context) => pw.FullPage(
             ignoreMargins: true,
             child: pw.Container(
@@ -482,17 +482,17 @@ class QuotationPdfGenerator {
               child: pw.Center(
                 child: logoImage != null
                     ? pw.Opacity(
-                        opacity: 0.045,
+                        opacity: 0.075,
                         child: pw.Image(
                           logoImage,
-                          width: 260,
+                          width: 310,
                           fit: pw.BoxFit.contain,
                         ),
                       )
                     : pw.Text(
                         'memco',
                         style: pw.TextStyle(
-                          color: PdfColor.fromInt(0xFFFAEEEE),
+                          color: PdfColor.fromInt(0xFFF4DADA),
                           fontSize: 54.6,
                           fontWeight: pw.FontWeight.bold,
                           letterSpacing: 3,
@@ -1363,7 +1363,12 @@ class QuotationPdfGenerator {
 
     final signatureCard = _buildCard(
       child: pw.Padding(
-        padding: const pw.EdgeInsets.only(left: 4, right: 4, top: 2, bottom: 4),
+        padding: const pw.EdgeInsets.only(
+          left: 8,
+          right: 8,
+          top: 18,
+          bottom: 10,
+        ),
         child: pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.end,
           children: [
@@ -1441,12 +1446,12 @@ class QuotationPdfGenerator {
               ),
             ],
           ),
-          pw.SizedBox(height: 28),
+          pw.SizedBox(height: 52),
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.end,
             children: [pw.Container(width: 305, child: signatureCard)],
           ),
-          pw.SizedBox(height: 18),
+          pw.SizedBox(height: 24),
         ],
       ),
     );
@@ -1454,7 +1459,7 @@ class QuotationPdfGenerator {
 
   static pw.Widget _buildPageFooter(pw.Context context, bool isSO) {
     return pw.Container(
-      margin: const pw.EdgeInsets.only(top: 20),
+      margin: const pw.EdgeInsets.only(top: 24),
       padding: const pw.EdgeInsets.only(top: 12),
       decoration: pw.BoxDecoration(
         border: pw.Border(top: pw.BorderSide(color: _borderColor, width: 1)),
