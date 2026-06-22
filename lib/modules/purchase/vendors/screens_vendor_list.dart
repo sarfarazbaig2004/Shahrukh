@@ -166,7 +166,7 @@ class _PurchaseVendorListScreenState extends State<PurchaseVendorListScreen> {
               DataColumn(label: Text('GST No')),
               DataColumn(label: Text('PAN No')),
               DataColumn(label: Text('Vendor Category')),
-              DataColumn(label: Text('Credit Days'), numeric: true),
+              DataColumn(label: Text('Payment Terms')),
               DataColumn(label: Text('Status')),
               DataColumn(label: Text('Actions')),
             ],
@@ -188,7 +188,7 @@ class _PurchaseVendorListScreenState extends State<PurchaseVendorListScreen> {
                       DataCell(Text(_dash(vendor.gstNo))),
                       DataCell(Text(_dash(vendor.panNo))),
                       DataCell(Text(vendor.vendorCategory)),
-                      DataCell(Text('${vendor.creditDays}')),
+                      DataCell(Text(_dash(vendor.effectivePaymentTerms))),
                       DataCell(_statusChip(vendor.isActive)),
                       DataCell(_actions(vendor)),
                     ],
@@ -236,6 +236,11 @@ class _PurchaseVendorListScreenState extends State<PurchaseVendorListScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text('${_dash(vendor.city)}  ·  GST ${_dash(vendor.gstNo)}'),
+                const SizedBox(height: 4),
+                Text(
+                  'Payment Terms: ${_dash(vendor.effectivePaymentTerms)}',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
                 Align(
                   alignment: Alignment.centerRight,
                   child: _actions(vendor),
@@ -252,6 +257,11 @@ class _PurchaseVendorListScreenState extends State<PurchaseVendorListScreen> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        IconButton(
+          tooltip: 'View vendor',
+          onPressed: () => _viewVendor(vendor),
+          icon: const Icon(Icons.visibility_outlined),
+        ),
         IconButton(
           tooltip: 'Edit vendor',
           onPressed: () => _openVendor(vendor),
@@ -343,6 +353,12 @@ class _PurchaseVendorListScreenState extends State<PurchaseVendorListScreen> {
     );
   }
 
+  Future<void> _viewVendor(VendorModel vendor) {
+    return Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => VendorDetailsScreen(vendor: vendor)),
+    );
+  }
+
   Future<void> _toggleStatus(VendorModel vendor) async {
     await _service.setVendorActive(
       companyId: widget.companyId,
@@ -355,6 +371,175 @@ class _PurchaseVendorListScreenState extends State<PurchaseVendorListScreen> {
       SnackBar(
         content: Text(
           '${vendor.vendorName} ${vendor.isActive ? 'deactivated' : 'activated'}.',
+        ),
+      ),
+    );
+  }
+}
+
+class VendorDetailsScreen extends StatelessWidget {
+  const VendorDetailsScreen({super.key, required this.vendor});
+
+  final VendorModel vendor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Vendor Details')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1000),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 54,
+                          height: 54,
+                          decoration: BoxDecoration(
+                            color: zBlueSoft,
+                            borderRadius: BorderRadius.circular(kAppRadiusMd),
+                          ),
+                          child: const Icon(
+                            Icons.business_outlined,
+                            color: zBlue,
+                            size: 28,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                vendor.vendorName,
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${_dash(vendor.vendorCode)} • ${vendor.vendorCategory}',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                        _VendorDetailsStatus(active: vendor.isActive),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _detailsSection(context, 'Vendor Information', [
+                  ('Contact Person', vendor.contactPerson),
+                  ('Mobile', vendor.mobile),
+                  ('Alternate Mobile', vendor.alternateMobile),
+                  ('Email', vendor.email),
+                  ('Website', vendor.website),
+                  ('GSTIN', vendor.gstNo),
+                  ('PAN', vendor.panNo),
+                  ('Address', vendor.fullAddress),
+                ]),
+                _detailsSection(context, 'Payment Terms', [
+                  ('Selected Terms', vendor.paymentTerms),
+                  ('Effective Terms', vendor.effectivePaymentTerms),
+                  if (vendor.paymentTerms == 'Custom')
+                    ('Custom Terms', vendor.customPaymentTerms),
+                ]),
+                _detailsSection(context, 'Business Details', [
+                  ('Items Supplied', vendor.itemsSupplied),
+                  ('MSME Status', vendor.msmeStatus),
+                  ('MSME No', vendor.msmeNo),
+                  ('Opening Balance', vendor.openingBalance.toStringAsFixed(2)),
+                ]),
+                _detailsSection(context, 'Bank Details', [
+                  ('Account Name', vendor.bankAccountName),
+                  ('Bank Name', vendor.bankName),
+                  ('Account Number', vendor.accountNumber),
+                  ('IFSC', vendor.ifscCode),
+                  ('Branch', vendor.branchName),
+                ]),
+                if (vendor.remarks.trim().isNotEmpty)
+                  _detailsSection(context, 'Remarks', [
+                    ('Notes', vendor.remarks),
+                  ]),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _detailsSection(
+    BuildContext context,
+    String title,
+    List<(String, String)> rows,
+  ) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: Theme.of(context).textTheme.titleMedium),
+            const Divider(height: 24),
+            Wrap(
+              spacing: 24,
+              runSpacing: 18,
+              children: rows
+                  .map(
+                    (row) => SizedBox(
+                      width: 280,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            row.$1,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _dash(row.$2),
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _VendorDetailsStatus extends StatelessWidget {
+  const _VendorDetailsStatus({required this.active});
+
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: active ? zSuccessSoft : zDangerSoft,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        active ? 'Active' : 'Inactive',
+        style: TextStyle(
+          color: active ? zSuccess : zDanger,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );

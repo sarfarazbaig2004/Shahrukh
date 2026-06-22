@@ -12,6 +12,18 @@ const List<String> purchaseVendorCategories = [
   'Other',
 ];
 
+const List<String> vendorPaymentTermsOptions = [
+  'Advance',
+  'Immediate',
+  '7 Days',
+  '15 Days',
+  '30 Days',
+  '45 Days',
+  '60 Days',
+  '90 Days',
+  'Custom',
+];
+
 class VendorModel {
   const VendorModel({
     this.id = '',
@@ -36,6 +48,8 @@ class VendorModel {
     required this.vendorCategory,
     required this.itemsSupplied,
     required this.creditDays,
+    required this.paymentTerms,
+    required this.customPaymentTerms,
     required this.openingBalance,
     required this.isActive,
     required this.bankAccountName,
@@ -72,6 +86,8 @@ class VendorModel {
   final String vendorCategory;
   final String itemsSupplied;
   final int creditDays;
+  final String paymentTerms;
+  final String customPaymentTerms;
   final double openingBalance;
   final bool isActive;
   final String bankAccountName;
@@ -85,8 +101,29 @@ class VendorModel {
   final String createdBy;
   final String updatedBy;
 
+  String get effectivePaymentTerms => paymentTerms == 'Custom'
+      ? customPaymentTerms.trim()
+      : paymentTerms.trim();
+
+  String get fullAddress {
+    return [
+      addressLine1,
+      addressLine2,
+      city,
+      state,
+      pincode,
+      country,
+    ].where((part) => part.trim().isNotEmpty).join(', ');
+  }
+
   factory VendorModel.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? <String, dynamic>{};
+    final creditDays = _integer(data['creditDays']);
+    final storedTerms = _text(data['paymentTerms']);
+    final derivedTerms = storedTerms.isNotEmpty
+        ? storedTerms
+        : _termsFromCreditDays(creditDays);
+
     return VendorModel(
       id: doc.id,
       companyId: _text(data['companyId']),
@@ -109,7 +146,20 @@ class VendorModel {
       msmeNo: _text(data['msmeNo']),
       vendorCategory: _text(data['vendorCategory'], fallback: 'Other'),
       itemsSupplied: _text(data['itemsSupplied']),
-      creditDays: _integer(data['creditDays']),
+      creditDays: creditDays,
+      paymentTerms: vendorPaymentTermsOptions.contains(derivedTerms)
+          ? derivedTerms
+          : 'Custom',
+      customPaymentTerms:
+          storedTerms.isNotEmpty &&
+              !vendorPaymentTermsOptions.contains(storedTerms)
+          ? storedTerms
+          : _text(
+              data['customPaymentTerms'],
+              fallback: derivedTerms == 'Custom' && creditDays > 0
+                  ? '$creditDays Days'
+                  : '',
+            ),
       openingBalance: _number(data['openingBalance']),
       isActive: data['isActive'] != false,
       bankAccountName: _text(data['bankAccountName']),
@@ -143,12 +193,16 @@ class VendorModel {
       'pincode': pincode.trim(),
       'country': country.trim(),
       'gstNo': gstNo.trim().toUpperCase(),
+      'gstin': gstNo.trim().toUpperCase(),
       'panNo': panNo.trim().toUpperCase(),
+      'pan': panNo.trim().toUpperCase(),
       'msmeStatus': msmeStatus,
       'msmeNo': msmeNo.trim().toUpperCase(),
       'vendorCategory': vendorCategory,
       'itemsSupplied': itemsSupplied.trim(),
       'creditDays': creditDays,
+      'paymentTerms': paymentTerms,
+      'customPaymentTerms': customPaymentTerms.trim(),
       'openingBalance': openingBalance,
       'isActive': isActive,
       'bankAccountName': bankAccountName.trim(),
@@ -159,6 +213,12 @@ class VendorModel {
       'remarks': remarks.trim(),
     };
   }
+}
+
+String _termsFromCreditDays(int creditDays) {
+  if (creditDays <= 0) return 'Immediate';
+  final option = '$creditDays Days';
+  return vendorPaymentTermsOptions.contains(option) ? option : 'Custom';
 }
 
 String _text(dynamic value, {String fallback = ''}) {

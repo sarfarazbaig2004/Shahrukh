@@ -65,9 +65,9 @@ enum ShellPage {
   crmCommunication,
 
   purchaseVendors,
+  purchaseQuotations,
   purchaseOrders,
-  purchaseGrn,
-  purchaseLedger,
+  purchaseBills,
 
   inventoryProducts,
   inventoryStockSummary,
@@ -153,12 +153,12 @@ extension ShellPageX on ShellPage {
 
       case ShellPage.purchaseVendors:
         return 'Vendors';
+      case ShellPage.purchaseQuotations:
+        return 'Purchase Quotations';
       case ShellPage.purchaseOrders:
+        return 'Purchase Orders';
+      case ShellPage.purchaseBills:
         return 'Purchase Bills';
-      case ShellPage.purchaseGrn:
-        return 'GRN / Material Receipt';
-      case ShellPage.purchaseLedger:
-        return 'Vendor Ledger';
 
       case ShellPage.inventoryProducts:
         return 'Products';
@@ -270,12 +270,12 @@ extension ShellPageX on ShellPage {
         return Icons.chat_bubble_outline;
       case ShellPage.purchaseVendors:
         return Icons.business_outlined;
+      case ShellPage.purchaseQuotations:
+        return Icons.request_quote_outlined;
       case ShellPage.purchaseOrders:
-        return Icons.shopping_cart_outlined;
-      case ShellPage.purchaseGrn:
-        return Icons.inventory_outlined;
-      case ShellPage.purchaseLedger:
-        return Icons.menu_book_outlined;
+        return Icons.shopping_cart_checkout_outlined;
+      case ShellPage.purchaseBills:
+        return Icons.receipt_long_outlined;
       case ShellPage.inventoryProducts:
         return Icons.inventory_2_outlined;
       case ShellPage.inventoryStockSummary:
@@ -572,12 +572,12 @@ class _ZohoShellState extends State<ZohoShell> {
       // Purchase
       case ShellPage.purchaseVendors:
         return _hasPermission('purchase', 'vendors');
+      case ShellPage.purchaseQuotations:
+        return _hasPermission('purchase', 'purchaseQuotations');
       case ShellPage.purchaseOrders:
         return _hasPermission('purchase', 'purchaseOrders');
-      case ShellPage.purchaseGrn:
-        return _hasPermission('purchase', 'grnMaterialReceipt');
-      case ShellPage.purchaseLedger:
-        return _hasPermission('purchase', 'vendorLedger');
+      case ShellPage.purchaseBills:
+        return _hasPermission('purchase', 'purchaseBills');
 
       // Inventory
       case ShellPage.inventoryProducts:
@@ -691,9 +691,9 @@ class _ZohoShellState extends State<ZohoShell> {
         icon: Icons.shopping_cart_outlined,
         children: [
           ShellPage.purchaseVendors,
+          ShellPage.purchaseQuotations,
           ShellPage.purchaseOrders,
-          ShellPage.purchaseGrn,
-          ShellPage.purchaseLedger,
+          ShellPage.purchaseBills,
         ],
       ),
       SidebarGroup(
@@ -1645,6 +1645,11 @@ class _ZohoShellState extends State<ZohoShell> {
         );
 
       case ShellPage.purchaseOrders:
+        return SalesOrderListScreen(
+            companyId: widget.companyId,
+          );
+
+      case ShellPage.purchaseBills:
         return Padding(
           padding: const EdgeInsets.all(10),
           child: PurchaseBillListScreen(
@@ -1653,11 +1658,6 @@ class _ZohoShellState extends State<ZohoShell> {
           ),
         );
 
-      case ShellPage.purchaseLedger:
-        return Padding(
-          padding: const EdgeInsets.all(10),
-          child: _moduleLandingPage(activePage),
-        );
 
       default:
         return Padding(

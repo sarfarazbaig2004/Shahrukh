@@ -26,6 +26,7 @@ class _AddVendorScreenState extends State<AddVendorScreen> {
   final Map<String, TextEditingController> _fields = {};
   String _category = purchaseVendorCategories.first;
   String _msmeStatus = 'Not Registered';
+  String _paymentTerms = '30 Days';
   bool _isActive = true;
   bool _saving = false;
 
@@ -56,6 +57,7 @@ class _AddVendorScreenState extends State<AddVendorScreen> {
       'msmeNo': vendor.msmeNo,
       'itemsSupplied': vendor.itemsSupplied,
       'creditDays': vendor.creditDays.toString(),
+      'customPaymentTerms': vendor.customPaymentTerms,
       'openingBalance': vendor.openingBalance.toStringAsFixed(2),
       'bankAccountName': vendor.bankAccountName,
       'bankName': vendor.bankName,
@@ -71,6 +73,9 @@ class _AddVendorScreenState extends State<AddVendorScreen> {
         ? vendor.vendorCategory
         : 'Other';
     _msmeStatus = vendor.msmeStatus;
+    _paymentTerms = vendorPaymentTermsOptions.contains(vendor.paymentTerms)
+        ? vendor.paymentTerms
+        : 'Custom';
     _isActive = vendor.isActive;
   }
 
@@ -193,6 +198,23 @@ class _AddVendorScreenState extends State<AddVendorScreen> {
                         onChanged: (value) => setState(() => _isActive = value),
                       ),
                     ),
+                  ]),
+                  _section('Payment terms', Icons.schedule_outlined, [
+                    _dropdown(
+                      'Payment Terms',
+                      _paymentTerms,
+                      vendorPaymentTermsOptions,
+                      (value) =>
+                          setState(() => _paymentTerms = value ?? '30 Days'),
+                    ),
+                    if (_paymentTerms == 'Custom')
+                      _field(
+                        'customPaymentTerms',
+                        'Custom Payment Terms',
+                        width: 520,
+                        required: true,
+                        hint: '20% Advance + 80% Before Dispatch',
+                      ),
                   ]),
                   _section('Bank details', Icons.account_balance_outlined, [
                     _field('bankAccountName', 'Account Name'),
@@ -320,7 +342,13 @@ class _AddVendorScreenState extends State<AddVendorScreen> {
         msmeNo: _controller('msmeNo').text,
         vendorCategory: _category,
         itemsSupplied: _controller('itemsSupplied').text,
-        creditDays: int.tryParse(_controller('creditDays').text) ?? 0,
+        creditDays:
+            int.tryParse(_controller('creditDays').text) ??
+            _creditDaysFromTerms(_paymentTerms),
+        paymentTerms: _paymentTerms,
+        customPaymentTerms: _paymentTerms == 'Custom'
+            ? _controller('customPaymentTerms').text
+            : '',
         openingBalance:
             double.tryParse(_controller('openingBalance').text) ?? 0,
         isActive: _isActive,
@@ -355,4 +383,9 @@ class _AddVendorScreenState extends State<AddVendorScreen> {
       if (mounted) setState(() => _saving = false);
     }
   }
+}
+
+int _creditDaysFromTerms(String paymentTerms) {
+  final match = RegExp(r'^(\d+)\s+Days$').firstMatch(paymentTerms);
+  return int.tryParse(match?.group(1) ?? '') ?? 0;
 }
