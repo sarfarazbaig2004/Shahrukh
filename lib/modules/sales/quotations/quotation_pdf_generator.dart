@@ -1195,7 +1195,7 @@ class QuotationPdfGenerator {
       mainAxisAlignment: pw.MainAxisAlignment.end,
       children: [
         pw.Container(
-          width: 270,
+          width: 240,
           decoration: pw.BoxDecoration(
             color: _cardBgColor,
             borderRadius: pw.BorderRadius.circular(12),
@@ -1365,9 +1365,9 @@ class QuotationPdfGenerator {
 
     final signatureCard = _buildCard(
       child: pw.Padding(
-        padding: const pw.EdgeInsets.fromLTRB(18, 22, 18, 16),
+        padding: const pw.EdgeInsets.fromLTRB(18, 18, 18, 14),
         child: pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.end,
+          crossAxisAlignment: pw.CrossAxisAlignment.center,
           children: [
             if (companyName.isNotEmpty)
               pw.Text(
@@ -1377,7 +1377,7 @@ class QuotationPdfGenerator {
                   fontWeight: pw.FontWeight.bold,
                   color: _primaryColor,
                 ),
-                textAlign: pw.TextAlign.right,
+                textAlign: pw.TextAlign.center,
               ),
             pw.SizedBox(height: 46),
             pw.Container(width: 145, height: 1, color: _borderColor),
@@ -1432,7 +1432,7 @@ class QuotationPdfGenerator {
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               pw.Expanded(flex: 6, child: termsCard),
-              pw.SizedBox(width: 30),
+              pw.SizedBox(width: 18),
               pw.Expanded(
                 flex: 4,
                 child: _buildTotalSummaryCard(
@@ -1443,12 +1443,12 @@ class QuotationPdfGenerator {
               ),
             ],
           ),
-          pw.SizedBox(height: 64),
-          pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.end,
-            children: [pw.Container(width: 330, child: signatureCard)],
+          pw.SizedBox(height: 42),
+          pw.Align(
+            alignment: pw.Alignment.center,
+            child: pw.Container(width: 290, child: signatureCard),
           ),
-          pw.SizedBox(height: 24),
+          pw.SizedBox(height: 16),
         ],
       ),
     );
@@ -1544,7 +1544,7 @@ class QuotationPreviewScreen extends StatelessWidget {
     const headerBgColor = Color(0xFFE5E7EB);
     const headerBorderColor = Color(0xFFD1D5DB);
     const headerTextColor = Color(0xFF2B2B2B);
-    const viewerBgColor = Color(0xFFF8FAFC);
+    const viewerBgColor = Color(0xFFE5E7EB);
 
     return Scaffold(
       backgroundColor: viewerBgColor,
@@ -1592,45 +1592,63 @@ class QuotationPreviewScreen extends StatelessWidget {
           ),
         ),
       ),
-      body: Theme(
-        data: Theme.of(context).copyWith(
-          scaffoldBackgroundColor: viewerBgColor,
-          primaryColor: headerBgColor,
-          appBarTheme: const AppBarTheme(
-            backgroundColor: headerBgColor,
-            foregroundColor: headerTextColor,
-            elevation: 0,
-            centerTitle: true,
-            iconTheme: IconThemeData(color: headerTextColor),
-            actionsIconTheme: IconThemeData(color: headerTextColor),
-            titleTextStyle: TextStyle(
-              color: headerTextColor,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final previewWidth = constraints.maxWidth >= 1500
+              ? 780.0
+              : constraints.maxWidth >= 1300
+              ? 720.0
+              : constraints.maxWidth >= 1100
+              ? 660.0
+              : constraints.maxWidth >= 900
+              ? 600.0
+              : constraints.maxWidth - 32;
+
+          return Container(
+            color: viewerBgColor,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            child: Theme(
+              data: Theme.of(context).copyWith(
+                scaffoldBackgroundColor: viewerBgColor,
+                primaryColor: headerBgColor,
+                appBarTheme: const AppBarTheme(
+                  backgroundColor: headerBgColor,
+                  foregroundColor: headerTextColor,
+                  elevation: 0,
+                  centerTitle: true,
+                  iconTheme: IconThemeData(color: headerTextColor),
+                  actionsIconTheme: IconThemeData(color: headerTextColor),
+                  titleTextStyle: TextStyle(
+                    color: headerTextColor,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                iconTheme: const IconThemeData(color: headerTextColor),
+                colorScheme: Theme.of(context).colorScheme.copyWith(
+                  primary: headerTextColor,
+                  surface: headerBgColor,
+                  onSurface: headerTextColor,
+                ),
+              ),
+              child: PdfPreview(
+                build: (format) =>
+                    QuotationPdfGenerator.buildPdf(format, quotation, items),
+                initialPageFormat: PdfPageFormat.a4,
+                canChangeOrientation: false,
+                canChangePageFormat: false,
+                allowPrinting: true,
+                allowSharing: true,
+                pdfFileName: '${displayDocumentType}_$docNumber.pdf'.replaceAll(
+                  ' ',
+                  '_',
+                ),
+                scrollViewDecoration: const BoxDecoration(color: viewerBgColor),
+                maxPageWidth: previewWidth,
+              ),
             ),
-          ),
-          iconTheme: const IconThemeData(color: headerTextColor),
-          colorScheme: Theme.of(context).colorScheme.copyWith(
-            primary: headerTextColor,
-            surface: headerBgColor,
-            onSurface: headerTextColor,
-          ),
-        ),
-        child: PdfPreview(
-          build: (format) =>
-              QuotationPdfGenerator.buildPdf(format, quotation, items),
-          initialPageFormat: PdfPageFormat.a4,
-          canChangeOrientation: false,
-          canChangePageFormat: false,
-          allowPrinting: true,
-          allowSharing: true,
-          pdfFileName: '${displayDocumentType}_$docNumber.pdf'.replaceAll(
-            ' ',
-            '_',
-          ),
-          scrollViewDecoration: const BoxDecoration(color: viewerBgColor),
-          maxPageWidth: 860,
-        ),
+          );
+        },
       ),
     );
   }
