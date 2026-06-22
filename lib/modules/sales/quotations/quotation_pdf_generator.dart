@@ -1195,10 +1195,10 @@ class QuotationPdfGenerator {
       mainAxisAlignment: pw.MainAxisAlignment.end,
       children: [
         pw.Container(
-          width: 250,
+          width: 270,
           decoration: pw.BoxDecoration(
             color: _cardBgColor,
-            borderRadius: pw.BorderRadius.circular(10),
+            borderRadius: pw.BorderRadius.circular(12),
             border: pw.Border.all(color: _borderColor),
           ),
           child: pw.Column(
@@ -1227,9 +1227,11 @@ class QuotationPdfGenerator {
 
               pw.Container(
                 decoration: pw.BoxDecoration(
-                  color: _primaryColor, // Dark total background
+                  color: PdfColor.fromInt(
+                    0xFF1F2937,
+                  ), // Premium charcoal total background
                   borderRadius: const pw.BorderRadius.vertical(
-                    bottom: pw.Radius.circular(9),
+                    bottom: pw.Radius.circular(12),
                   ),
                 ),
                 padding: const pw.EdgeInsets.symmetric(
@@ -1279,17 +1281,17 @@ class QuotationPdfGenerator {
 
     final termsCard = _buildCard(
       child: pw.Padding(
-        padding: const pw.EdgeInsets.only(left: 4, right: 4, bottom: 4),
+        padding: const pw.EdgeInsets.fromLTRB(12, 12, 12, 12),
         child: pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             pw.Text(
               'TERMS & CONDITIONS',
               style: pw.TextStyle(
-                fontSize: 8.8,
+                fontSize: 11.2,
                 fontWeight: pw.FontWeight.bold,
                 color: _primaryColor,
-                letterSpacing: 0.4,
+                letterSpacing: 0.5,
               ),
             ),
             pw.SizedBox(height: 10),
@@ -1305,14 +1307,14 @@ class QuotationPdfGenerator {
                 final value = _cleanPdfText(_safeString(term['value']));
 
                 return pw.Padding(
-                  padding: const pw.EdgeInsets.only(bottom: 7),
+                  padding: const pw.EdgeInsets.only(bottom: 9),
                   child: pw.Row(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
                       pw.Container(
-                        margin: const pw.EdgeInsets.only(top: 4.5, right: 8),
-                        height: 3,
-                        width: 3,
+                        margin: const pw.EdgeInsets.only(top: 5.5, right: 10),
+                        height: 4,
+                        width: 4,
                         decoration: pw.BoxDecoration(
                           color: _accentColor,
                           shape: pw.BoxShape.circle,
@@ -1326,7 +1328,7 @@ class QuotationPdfGenerator {
                                 pw.TextSpan(
                                   text: '$title: ',
                                   style: pw.TextStyle(
-                                    fontSize: 8.2,
+                                    fontSize: 8.8,
                                     fontWeight: pw.FontWeight.bold,
                                     color: _textMain,
                                   ),
@@ -1334,9 +1336,9 @@ class QuotationPdfGenerator {
                               pw.TextSpan(
                                 text: value,
                                 style: pw.TextStyle(
-                                  fontSize: 8.2,
+                                  fontSize: 8.8,
                                   color: _textMuted,
-                                  lineSpacing: 1.2,
+                                  lineSpacing: 1.6,
                                 ),
                               ),
                             ],
@@ -1363,12 +1365,7 @@ class QuotationPdfGenerator {
 
     final signatureCard = _buildCard(
       child: pw.Padding(
-        padding: const pw.EdgeInsets.only(
-          left: 8,
-          right: 8,
-          top: 18,
-          bottom: 10,
-        ),
+        padding: const pw.EdgeInsets.fromLTRB(18, 22, 18, 16),
         child: pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.end,
           children: [
@@ -1446,10 +1443,10 @@ class QuotationPdfGenerator {
               ),
             ],
           ),
-          pw.SizedBox(height: 52),
+          pw.SizedBox(height: 64),
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.end,
-            children: [pw.Container(width: 305, child: signatureCard)],
+            children: [pw.Container(width: 330, child: signatureCard)],
           ),
           pw.SizedBox(height: 24),
         ],
@@ -1544,44 +1541,80 @@ class QuotationPreviewScreen extends StatelessWidget {
     }
     if (docNumber.isEmpty) docNumber = 'N/A';
 
-    final displayTitle = titleOverride ?? '$displayDocumentType Preview';
-
-    // Premium Corporate Color for the Unified Header
-    const headerBgColor = Color(0xFF111111);
+    const headerBgColor = Color(0xFFE5E7EB);
+    const headerBorderColor = Color(0xFFD1D5DB);
+    const headerTextColor = Color(0xFF2B2B2B);
+    const viewerBgColor = Color(0xFFF8FAFC);
 
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: headerBgColor,
-        // 🔥 FIX: Explicitly set the Back Button and Action Icons to pure white
-        iconTheme: const IconThemeData(color: Colors.white),
-        actionsIconTheme: const IconThemeData(color: Colors.white),
-        title: Text(
-          displayTitle,
-          // 🔥 FIX: Explicitly set the Title Text to pure white
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-            fontSize: 16,
-            letterSpacing: 0.5,
+      backgroundColor: viewerBgColor,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(68),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: headerBgColor,
+            border: Border(
+              bottom: BorderSide(color: headerBorderColor, width: 1),
+            ),
+          ),
+          child: SafeArea(
+            bottom: false,
+            child: SizedBox(
+              height: 68,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  const Center(
+                    child: Text(
+                      'QUOTATION',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 2,
+                        color: headerTextColor,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 4,
+                    child: IconButton(
+                      tooltip: 'Back',
+                      icon: const Icon(
+                        Icons.arrow_back,
+                        color: headerTextColor,
+                      ),
+                      onPressed: () => Navigator.of(context).maybePop(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
-        elevation: 0,
-        centerTitle: false,
       ),
-      // Wrapping in a Theme forces the internal PdfPreview toolbar to blend flawlessly with the AppBar
       body: Theme(
         data: Theme.of(context).copyWith(
-          primaryColor:
-              headerBgColor, // Matches the internal toolbar to the AppBar
+          scaffoldBackgroundColor: viewerBgColor,
+          primaryColor: headerBgColor,
           appBarTheme: const AppBarTheme(
             backgroundColor: headerBgColor,
-            foregroundColor: Colors.white,
-            iconTheme: IconThemeData(color: Colors.white),
-            actionsIconTheme: IconThemeData(color: Colors.white),
+            foregroundColor: headerTextColor,
+            elevation: 0,
+            centerTitle: true,
+            iconTheme: IconThemeData(color: headerTextColor),
+            actionsIconTheme: IconThemeData(color: headerTextColor),
+            titleTextStyle: TextStyle(
+              color: headerTextColor,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-          iconTheme: const IconThemeData(
-            color: Colors.white,
-          ), // Forces toolbar buttons to be visible
+          iconTheme: const IconThemeData(color: headerTextColor),
+          colorScheme: Theme.of(context).colorScheme.copyWith(
+            primary: headerTextColor,
+            surface: headerBgColor,
+            onSurface: headerTextColor,
+          ),
         ),
         child: PdfPreview(
           build: (format) =>
@@ -1595,13 +1628,8 @@ class QuotationPreviewScreen extends StatelessWidget {
             ' ',
             '_',
           ),
-          scrollViewDecoration: const BoxDecoration(
-            color: Color(
-              0xFFF1F5F9,
-            ), // Subtle grey background so the white paper pops
-          ),
-          // maxPageWidth prevents the PDF from rendering too huge on desktop, forcing it to fit nicely
-          maxPageWidth: 800,
+          scrollViewDecoration: const BoxDecoration(color: viewerBgColor),
+          maxPageWidth: 860,
         ),
       ),
     );
