@@ -1,7 +1,4 @@
-// FILE PATH: lib/modules/sales/quotations/create_service_quotation_screen.dart
-
 import 'dart:async';
-import 'dart:developer' as developer;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -12,6 +9,9 @@ import 'package:uuid/uuid.dart';
 import 'package:printing/printing.dart';
 
 import 'service_quotation_pdf_generator.dart';
+import 'models/service_quotation_models.dart' as ext_models;
+import 'widgets/service_items_section.dart';
+import 'widgets/quotation_bottom_action_bar.dart';
 
 const Color primaryColor = Color(0xFF1E3A8A);
 const Color accentColor = Color(0xFF2563EB);
@@ -22,7 +22,7 @@ const Color textMuted = Color(0xFF64748B);
 const String fallbackQuotationSeriesPrefix = 'MEM';
 
 // ===========================================================================
-// MODELS
+// --- 1. UI MODELS & STATE CLASSES ---
 // ===========================================================================
 
 class QuotationTotals {
@@ -55,45 +55,6 @@ class QuotationTotals {
   static const QuotationTotals zero = QuotationTotals();
 }
 
-class VisitChargeItem {
-  final String id;
-  String type;
-  double quantity;
-  double rate;
-  double gstPercent;
-
-  VisitChargeItem({
-    required this.id,
-    this.type = '',
-    this.quantity = 1.0,
-    this.rate = 0.0,
-    this.gstPercent = 18.0,
-  });
-
-  double get amount => quantity * rate;
-
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'type': type,
-      'quantity': quantity,
-      'rate': rate,
-      'gstPercent': gstPercent,
-      'amount': amount,
-    };
-  }
-
-  factory VisitChargeItem.fromMap(Map<String, dynamic> map) {
-    return VisitChargeItem(
-      id: map['id']?.toString() ?? const Uuid().v4(),
-      type: map['type']?.toString() ?? '',
-      quantity: double.tryParse(map['quantity']?.toString() ?? '1.0') ?? 1.0,
-      rate: double.tryParse(map['rate']?.toString() ?? '0.0') ?? 0.0,
-      gstPercent: double.tryParse(map['gstPercent']?.toString() ?? '18.0') ?? 18.0,
-    );
-  }
-}
-
 class TermRow {
   final String id;
   final TextEditingController titleCtrl;
@@ -110,76 +71,124 @@ class TermRow {
   }
 }
 
-class QuotationLineItem {
-  final String id;
-  final String productId;
-  final String name;
-  final String description;
-  final String hsnCode;
-  final double quantity;
-  final String uom;
-  final double unitPrice;
-  final double discountPercent;
-  double cgstPercent;
-  double sgstPercent;
-  double igstPercent;
-  final double availableStock;
+class MachineFormState {
+  final String machineUid;
+  final String? categoryId;
+  final String? subcategoryId;
+  final String? machineType;
+  final String? productId;
 
-  QuotationLineItem({
-    required this.id,
-    required this.productId,
-    required this.name,
-    required this.description,
-    required this.hsnCode,
-    required this.quantity,
-    required this.uom,
-    required this.unitPrice,
-    required this.discountPercent,
-    required this.cgstPercent,
-    required this.sgstPercent,
-    required this.igstPercent,
-    required this.availableStock,
+  final String model;
+  final String serial;
+  final String complaint;
+  final String customerRemarks;
+
+  final String warrantyStatus;
+  final bool isWarranty;
+  final String serviceCategory;
+  final String severity;
+  final List<ext_models.QuotationLineItem> items;
+  final QuotationTotals totals;
+
+  MachineFormState({
+    required this.machineUid,
+    this.categoryId,
+    this.subcategoryId,
+    this.machineType,
+    this.productId,
+    required this.model,
+    required this.serial,
+    required this.complaint,
+    this.customerRemarks = '',
+    required this.warrantyStatus,
+    required this.isWarranty,
+    required this.serviceCategory,
+    required this.severity,
+    this.items = const [],
+    this.totals = QuotationTotals.zero,
   });
 
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'productId': productId,
-      'name': name,
-      'description': description,
-      'hsnCode': hsnCode,
-      'quantity': quantity,
-      'uom': uom,
-      'unitPrice': unitPrice,
-      'discountPercent': discountPercent,
-      'cgstPercent': cgstPercent,
-      'sgstPercent': sgstPercent,
-      'igstPercent': igstPercent,
-      'availableStock': availableStock,
-    };
+  MachineFormState copyWith({
+    String? machineUid,
+    String? categoryId,
+    String? subcategoryId,
+    String? machineType,
+    String? productId,
+    String? model,
+    String? serial,
+    String? complaint,
+    String? customerRemarks,
+    String? warrantyStatus,
+    bool? isWarranty,
+    String? serviceCategory,
+    String? severity,
+    List<ext_models.QuotationLineItem>? items,
+    QuotationTotals? totals,
+  }) {
+    return MachineFormState(
+      machineUid: machineUid ?? this.machineUid,
+      categoryId: categoryId ?? this.categoryId,
+      subcategoryId: subcategoryId ?? this.subcategoryId,
+      machineType: machineType ?? this.machineType,
+      productId: productId ?? this.productId,
+      model: model ?? this.model,
+      serial: serial ?? this.serial,
+      complaint: complaint ?? this.complaint,
+      customerRemarks: customerRemarks ?? this.customerRemarks,
+      warrantyStatus: warrantyStatus ?? this.warrantyStatus,
+      isWarranty: isWarranty ?? this.isWarranty,
+      serviceCategory: serviceCategory ?? this.serviceCategory,
+      severity: severity ?? this.severity,
+      items: items ?? this.items,
+      totals: totals ?? this.totals,
+    );
   }
 
-  factory QuotationLineItem.fromMap(Map<String, dynamic> map) {
-    return QuotationLineItem(
-      id: map['id']?.toString() ?? const Uuid().v4(),
-      productId: map['productId']?.toString() ?? '',
-      name: map['name']?.toString() ?? '',
-      description: map['description']?.toString() ?? '',
-      hsnCode: map['hsnCode']?.toString() ?? '',
-      quantity: double.tryParse(map['quantity']?.toString() ?? '1') ?? 1.0,
-      uom: map['uom']?.toString() ?? 'Nos',
-      unitPrice: double.tryParse(map['unitPrice']?.toString() ?? '0') ?? 0.0,
-      discountPercent: double.tryParse(map['discountPercent']?.toString() ?? '0') ?? 0.0,
-      cgstPercent: double.tryParse(map['cgstPercent']?.toString() ?? '0') ?? 0.0,
-      sgstPercent: double.tryParse(map['sgstPercent']?.toString() ?? '0') ?? 0.0,
-      igstPercent: double.tryParse(map['igstPercent']?.toString() ?? '0') ?? 0.0,
-      availableStock: double.tryParse(map['availableStock']?.toString() ?? '0') ?? 0.0,
+  MachineFormState clearCascade(int level) {
+    return MachineFormState(
+      machineUid: machineUid,
+      categoryId: level <= 1 ? null : categoryId,
+      subcategoryId: level <= 2 ? null : subcategoryId,
+      machineType: level <= 3 ? null : machineType,
+      productId: level <= 4 ? null : productId,
+      model: level <= 4 ? '' : model,
+      serial: serial,
+      complaint: complaint,
+      customerRemarks: customerRemarks,
+      warrantyStatus: warrantyStatus,
+      isWarranty: isWarranty,
+      serviceCategory: serviceCategory,
+      severity: severity,
+      items: items,
+      totals: totals,
     );
+  }
+
+  Map<String, dynamic> toMap(Map<String, Map<String, dynamic>> extrasMap) {
+    return {
+      'machineUid': machineUid,
+      'categoryId': categoryId,
+      'subcategoryId': subcategoryId,
+      'machineType': machineType,
+      'productId': productId,
+      'model': model,
+      'serial': serial,
+      'complaint': complaint,
+      'customerRemarks': customerRemarks,
+      'warrantyStatus': warrantyStatus,
+      'isWarranty': isWarranty,
+      'serviceCategory': serviceCategory,
+      'severity': severity,
+      'items': items.map((e) => {...e.toMap(), ...(extrasMap[e.itemId] ?? {})}).toList(),
+      'machineSubtotal': totals.subtotal,
+      'machineTaxTotal': totals.cgst + totals.sgst + totals.igst,
+      'machineGrandTotal': totals.grandTotal,
+    };
   }
 }
 
 // ===========================================================================
-// MAIN SCREEN
+// --- 2. MAIN SCREEN & INITIALIZATION ---
 // ===========================================================================
 
 class CreateServiceQuotationScreen extends StatefulWidget {
@@ -205,23 +214,33 @@ class CreateServiceQuotationScreen extends StatefulWidget {
 }
 
 class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScreen> {
-  // --- Core Form & State ---
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final ScrollController _scrollController = ScrollController();
+  final Uuid _uuid = const Uuid();
 
+  // Value Notifiers for State Management
   final ValueNotifier<bool> _isLoading = ValueNotifier<bool>(false);
   final ValueNotifier<bool> _isReadOnly = ValueNotifier<bool>(false);
   final ValueNotifier<bool> _visitRequired = ValueNotifier<bool>(false);
   final ValueNotifier<bool> _packingChargesExtra = ValueNotifier<bool>(true);
   final ValueNotifier<bool> _createRevisionFlag = ValueNotifier<bool>(false);
+  final ValueNotifier<int> _nextSequencePreview = ValueNotifier<int>(1);
 
-  final ValueNotifier<List<QuotationLineItem>> _items = ValueNotifier<List<QuotationLineItem>>([]);
-  final ValueNotifier<List<VisitChargeItem>> _visitCharges = ValueNotifier<List<VisitChargeItem>>([]);
+  // Core Business Data
+  late final ValueNotifier<MachineFormState> _machine;
+  final ValueNotifier<List<ext_models.VisitCharge>> _visitCharges = ValueNotifier<List<ext_models.VisitCharge>>([]);
   final ValueNotifier<List<TermRow>> _dynamicTerms = ValueNotifier<List<TermRow>>([]);
-  final ValueNotifier<QuotationTotals> _totals = ValueNotifier<QuotationTotals>(QuotationTotals.zero);
+  final ValueNotifier<QuotationTotals> _globalTotals = ValueNotifier<QuotationTotals>(QuotationTotals.zero);
   final ValueNotifier<Map<String, dynamic>?> _customerInsights = ValueNotifier<Map<String, dynamic>?>(null);
 
-  // --- Context & Meta ---
+  // Expansion Tile Controllers
+  final ExpansionTileController _customerTileCtrl = ExpansionTileController();
+  final ExpansionTileController _machineTileCtrl = ExpansionTileController();
+  final ExpansionTileController _itemsTileCtrl = ExpansionTileController();
+  final ExpansionTileController _financeTileCtrl = ExpansionTileController();
+  final ExpansionTileController _termsTileCtrl = ExpansionTileController();
+
+  // Meta & Context
   String? _companyId;
   String? _currentUserUid;
   String _currentUserRole = 'service';
@@ -242,23 +261,18 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
   String _quotationPrefix = fallbackQuotationSeriesPrefix;
   bool _isInterState = false;
 
-  bool get _isAdminOrManager => ['admin', 'manager', 'director', 'md', 'ceo', 'super_admin']
-      .contains(_currentUserRole.toLowerCase());
+  bool get _isAdminOrManager => ['admin', 'manager', 'director', 'md', 'ceo', 'super_admin'].contains(_currentUserRole.toLowerCase());
 
-  // --- Status Fields ---
   String _approvalStatus = 'Waiting Customer Approval';
   String _quotationStatus = 'Draft';
   String _paymentStatus = 'Pending';
   String _fullExistingQuoteNumber = '';
-  int _nextSequencePreview = 1;
 
-  // --- Date Fields ---
   DateTime _requestDate = DateTime.now().toUtc();
   DateTime _quoteDate = DateTime.now().toUtc();
   DateTime? _nextFollowUpDate;
 
-  // --- Caches ---
-  final Map<String, Map<String, dynamic>> _productCache = {};
+  // Caches & Snapshots
   final Map<String, Map<String, dynamic>> _itemExtras = {};
   List<Map<String, dynamic>> _customerAddresses = [];
   List<Map<String, dynamic>> _customerContacts = [];
@@ -271,9 +285,8 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
 
   String? _linkedServiceRequestId;
   String? _linkedServiceRequestNumber;
-  String _selectedRequestSource = 'Verbal';
+  String _selectedRequestSource = 'Service Request';
 
-  // --- Snapshots ---
   String _customerState = '';
   String _customerPrimaryAddressSnapshot = '';
   String _customerPrimaryCitySnapshot = '';
@@ -282,48 +295,61 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
   String _contactPersonSnapshot = '';
   String _contactEmailSnapshot = '';
   String _contactMobileSnapshot = '';
+  String _contactDesignationSnapshot = '';
 
-  // --- Text Controllers ---
+  // Controllers
   late final List<TextEditingController> _allControllers;
-
   final TextEditingController _clientNameController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _mobileController = TextEditingController();
   final TextEditingController _contactPersonController = TextEditingController();
+  final TextEditingController _contactDesignationController = TextEditingController();
   final TextEditingController _gstController = TextEditingController();
   final TextEditingController _quotationSequenceController = TextEditingController();
   final TextEditingController _serviceRequestNumberController = TextEditingController();
   final TextEditingController _subjectController = TextEditingController();
-  final TextEditingController _machineModelController = TextEditingController();
-  final TextEditingController _machineSerialController = TextEditingController();
-  final TextEditingController _complaintController = TextEditingController();
   final TextEditingController _followUpNotesController = TextEditingController();
   final TextEditingController _serviceRefNoteController = TextEditingController();
   final TextEditingController _signNameController = TextEditingController();
   final TextEditingController _signDesignationController = TextEditingController();
   final TextEditingController _signPhoneController = TextEditingController();
 
-  final Uuid _uuid = const Uuid();
+  FirebaseFirestore get _db => FirebaseFirestore.instance;
+  DocumentReference? get _companyDoc => _companyId != null ? _db.collection('companies').doc(_companyId) : null;
+  CollectionReference? get _quotesColl => _companyDoc?.collection('service_quotations');
+  CollectionReference? get _customersColl => _companyDoc?.collection('customers');
+  CollectionReference? get _productsColl => _companyDoc?.collection('products');
+  CollectionReference? get _requestsColl => _companyDoc?.collection('service_requests');
 
   @override
   void initState() {
     super.initState();
     _allControllers = [
       _clientNameController, _addressController, _emailController, _mobileController,
-      _contactPersonController, _gstController, _quotationSequenceController,
+      _contactPersonController, _contactDesignationController, _gstController, _quotationSequenceController,
       _serviceRequestNumberController, _subjectController,
-      _machineModelController, _machineSerialController, _complaintController,
       _followUpNotesController, _serviceRefNoteController,
       _signNameController, _signDesignationController, _signPhoneController
     ];
 
-    _quotationSequenceController.addListener(() {
-      if (mounted) setState(() {});
-    });
+    _machine = ValueNotifier<MachineFormState>(MachineFormState(
+      machineUid: _uuid.v4(),
+      model: '',
+      serial: '',
+      complaint: '',
+      warrantyStatus: 'Out Of Warranty',
+      isWarranty: false,
+      serviceCategory: 'General',
+      severity: 'Normal',
+    ));
 
     _initializeScreen();
   }
+
+  // ===========================================================================
+  // --- 3. DISPOSE ---
+  // ===========================================================================
 
   @override
   void dispose() {
@@ -335,16 +361,17 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
     _visitRequired.dispose();
     _packingChargesExtra.dispose();
     _createRevisionFlag.dispose();
-    _items.dispose();
+    _machine.dispose();
     _visitCharges.dispose();
     _dynamicTerms.dispose();
-    _totals.dispose();
+    _globalTotals.dispose();
     _customerInsights.dispose();
+    _nextSequencePreview.dispose();
     super.dispose();
   }
 
   // ===========================================================================
-  // INITIALIZATION & DATA LOADING
+  // --- 4. DATA LOADING & CRM ---
   // ===========================================================================
 
   Future<void> _initializeScreen() async {
@@ -359,9 +386,17 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
       } else {
         await _applyServiceRequestSeedIfNeeded();
       }
+
       _calculateTotals();
+
+      if (widget.existingQuotation == null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _customerTileCtrl.expand();
+        });
+      }
+
     } catch (e, st) {
-      developer.log('Initialization Error', error: e, stackTrace: st);
+      debugPrint('Initialization Error: $e\n$st');
       _showSnack('Failed to initialize screen properly.', isError: true);
     } finally {
       if (mounted) _isLoading.value = false;
@@ -372,7 +407,7 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('No logged-in user.');
 
-    final rootUserDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final rootUserDoc = await _db.collection('users').doc(user.uid).get();
     final rootData = rootUserDoc.data() ?? {};
 
     _currentUserUid = user.uid;
@@ -381,8 +416,8 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
         : (rootData['activeCompanyId'] ?? rootData['companyId'] ?? '').toString().trim();
     _currentUserRole = (rootData['role'] ?? 'service').toString().trim();
 
-    if (_companyId != null && _companyId!.isNotEmpty) {
-      final compUserDoc = await FirebaseFirestore.instance.collection('companies').doc(_companyId).collection('users').doc(user.uid).get();
+    if (_companyDoc != null) {
+      final compUserDoc = await _companyDoc!.collection('users').doc(user.uid).get();
       final compData = compUserDoc.exists ? compUserDoc.data() ?? {} : {};
       _currentUserName = (compData['name'] ?? rootData['name'] ?? '').toString().trim();
 
@@ -395,10 +430,10 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
   }
 
   Future<void> _loadCompanyProfile() async {
-    if (_companyId == null || _companyId!.isEmpty) return;
-    final doc = await FirebaseFirestore.instance.collection('companies').doc(_companyId).get();
+    if (_companyDoc == null) return;
+    final doc = await _companyDoc!.get();
     if (!doc.exists) return;
-    final data = doc.data() ?? {};
+    final data = doc.data() as Map<String, dynamic>? ?? {};
 
     _companyName = (data['companyName'] ?? data['name'] ?? '').toString();
     _companyState = (data['state'] ?? '').toString().trim().toLowerCase();
@@ -435,7 +470,7 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
   Future<void> _loadUserSettings() async {
     if (widget.existingQuotation == null) _applyProfessionalDefaultTerms();
     if (_currentUserUid == null) return;
-    final doc = await FirebaseFirestore.instance.collection('quotationSettings').doc(_currentUserUid).get();
+    final doc = await _db.collection('quotationSettings').doc(_currentUserUid).get();
     if (doc.exists && doc.data() != null) {
       _packingChargesExtra.value = doc.data()!['packingChargesExtra'] as bool? ?? true;
     }
@@ -455,27 +490,65 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
     if (_companyId == null) return;
     final financialYear = _getFinancialYearFromDate(_quoteDate);
     try {
-      final counterRef = FirebaseFirestore.instance.collection('companies').doc(_companyId).collection('counters').doc('service_quotation_counter_$financialYear');
+      final counterRef = _companyDoc!.collection('counters').doc('service_quotation_counter_$financialYear');
       final counterDoc = await counterRef.get();
       final currentSequence = ((counterDoc.data()?['sequence'] as num?)?.toInt() ?? 0);
-      setState(() {
-        _nextSequencePreview = currentSequence + 1;
-      });
-    } catch (_) {
-      setState(() => _nextSequencePreview = 1);
+      _nextSequencePreview.value = currentSequence + 1;
+    } catch (e, st) {
+      debugPrint('Sequence fetch error: $e\n$st');
+      _nextSequencePreview.value = 1;
     }
   }
 
   String _getLiveQuoteNumberDisplay() {
+    if (_fullExistingQuoteNumber.isNotEmpty) return _fullExistingQuoteNumber;
     final fy = _getFinancialYearFromDate(_quoteDate);
     String seqStr = _quotationSequenceController.text.trim();
     if (seqStr.isEmpty) {
-      seqStr = _nextSequencePreview.toString().padLeft(3, '0');
+      seqStr = _nextSequencePreview.value.toString().padLeft(3, '0');
     } else {
       int? parsed = int.tryParse(seqStr);
       if (parsed != null) seqStr = parsed.toString().padLeft(3, '0');
     }
     return '$_quotationPrefix/SQ/$seqStr/$fy';
+  }
+
+  DateTime? _parseSafeDate(dynamic value) {
+    if (value == null) return null;
+    if (value is Timestamp) return value.toDate();
+    if (value is String) return DateTime.tryParse(value);
+    return null;
+  }
+
+  String _deriveWarranty(Map<String, dynamic> machine) {
+    final wEnd = _parseSafeDate(machine['warrantyEndDate']);
+    final amcEnd = _parseSafeDate(machine['amcEndDate']);
+    final now = DateTime.now();
+
+    if (amcEnd != null) return amcEnd.isAfter(now) ? 'AMC Active' : 'AMC Expired';
+    if (wEnd != null) return wEnd.isAfter(now) ? 'Under Warranty' : 'Out Of Warranty';
+    return (machine['isWarranty'] == true || machine['isWarranty'] == 'true') ? 'Under Warranty' : 'Out Of Warranty';
+  }
+
+  String _deriveSeverity(Map<String, dynamic> machine) {
+    final priority = (machine['priority'] ?? '').toString();
+    final mStatus = (machine['machineStatus'] ?? '').toString();
+    final cat = (machine['complaintCategory'] ?? machine['serviceCategory'] ?? '').toString().toLowerCase();
+
+    if (priority == 'Critical' || mStatus == 'Breakdown' || mStatus == 'Shutdown') return 'Emergency';
+    if (priority == 'High' || cat.contains('complaint')) return 'Critical';
+    if (priority == 'Medium') return 'Important';
+    return 'Normal';
+  }
+
+  String _getFinancialYearFromDate(DateTime date) {
+    int year = date.year;
+    int month = date.month;
+    if (month >= 4) {
+      return '$year-${(year + 1).toString().substring(2)}';
+    } else {
+      return '${year - 1}-${year.toString().substring(2)}';
+    }
   }
 
   Future<void> _loadExistingQuotation(Map<String, dynamic> data) async {
@@ -490,22 +563,19 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
       _isReadOnly.value = true;
     }
 
-    _quoteDate = (data['quoteDate'] as Timestamp?)?.toDate().toUtc() ?? DateTime.now().toUtc();
+    _quoteDate = _parseSafeDate(data['quoteDate'])?.toUtc() ?? DateTime.now().toUtc();
     _fullExistingQuoteNumber = data['quoteNumber']?.toString() ?? '';
 
     final quoteParts = _fullExistingQuoteNumber.split('/');
     if (quoteParts.length >= 3) {
       _quotationSequenceController.text = quoteParts[2];
     } else {
-      _quotationSequenceController.text = quoteParts.elementAtOrNull(1) ?? '';
+      _quotationSequenceController.text = quoteParts.length > 1 ? quoteParts[1] : '';
     }
 
-    _subjectController.text = data['subject']?.toString() ?? '';
-    _machineModelController.text = data['machineModel']?.toString() ?? '';
-    _machineSerialController.text = data['serialNumber']?.toString() ?? '';
-    _complaintController.text = data['complaintDescription']?.toString() ?? '';
+    _subjectController.text = data['remarks']?.toString() ?? data['subject']?.toString() ?? '';
     _followUpNotesController.text = data['followUpNotes']?.toString() ?? '';
-    _nextFollowUpDate = (data['nextFollowUpDate'] as Timestamp?)?.toDate().toUtc();
+    _nextFollowUpDate = _parseSafeDate(data['nextFollowUpDate'])?.toUtc();
 
     _selectedCustomerId = data['customerId']?.toString();
     _selectedAddressId = data['addressId']?.toString();
@@ -534,12 +604,15 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
       _contactPersonSnapshot = data['contactPerson']?.toString() ?? '';
       _contactEmailSnapshot = data['contactEmail']?.toString() ?? data['clientEmail']?.toString() ?? '';
       _contactMobileSnapshot = data['contactMobile']?.toString() ?? data['clientMobile']?.toString() ?? '';
+      _contactDesignationSnapshot = data['contactDesignation']?.toString() ?? '';
+
       _contactPersonController.text = _contactPersonSnapshot;
       _emailController.text = _contactEmailSnapshot;
       _mobileController.text = _contactMobileSnapshot;
+      _contactDesignationController.text = _contactDesignationSnapshot;
     }
 
-    _clientNameController.text = data['clientName']?.toString() ?? '';
+    _clientNameController.text = data['clientName']?.toString() ?? data['customerName']?.toString() ?? '';
     _gstController.text = data['gstNo']?.toString() ?? '';
     _isInterState = data['isInterState'] as bool? ?? false;
 
@@ -547,21 +620,42 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
     _linkedServiceRequestNumber = data['serviceRequestNumber']?.toString();
     _serviceRequestNumberController.text = _linkedServiceRequestNumber ?? '';
 
-    _selectedRequestSource = data['requestSource']?.toString() ?? 'Verbal';
-    _requestDate = (data['requestDate'] as Timestamp?)?.toDate().toUtc() ?? DateTime.now().toUtc();
+    _selectedRequestSource = data['requestSource']?.toString() ?? data['quotationSource']?.toString() ?? 'Verbal';
+    _requestDate = _parseSafeDate(data['requestDate'])?.toUtc() ?? DateTime.now().toUtc();
     _serviceRefNoteController.text = data['serviceReference']?.toString() ?? '';
 
     _signNameController.text = data['signatureName']?.toString() ?? _signNameController.text;
     _signDesignationController.text = data['signatureDesignation']?.toString() ?? _signDesignationController.text;
     _signPhoneController.text = data['signaturePhone']?.toString() ?? _signPhoneController.text;
 
+    List<ext_models.QuotationLineItem> legacyItems = [];
     if (data['items'] != null && data['items'] is List) {
-      _items.value = await _hydrateItems(data['items'] as List);
+      legacyItems = await _hydrateItems(data['items'] as List);
+    } else if (data['lineItems'] != null && data['lineItems'] is List) {
+      legacyItems = await _hydrateItems(data['lineItems'] as List);
     }
+
+    String loadedModel = data['machineModel']?.toString() ?? '';
+    if (loadedModel.isEmpty && data['machines'] != null && (data['machines'] as List).isNotEmpty) {
+      loadedModel = (data['machines'] as List)[0]['machineModel']?.toString() ?? '';
+    }
+
+    _machine.value = MachineFormState(
+      machineUid: _uuid.v4(),
+      model: loadedModel,
+      serial: data['serialNumber']?.toString() ?? '',
+      complaint: data['complaintDescription']?.toString() ?? '',
+      customerRemarks: '',
+      warrantyStatus: data['warrantyStatus']?.toString() ?? 'Out Of Warranty',
+      isWarranty: data['isWarranty'] == true,
+      serviceCategory: data['serviceCategory'] ?? 'General',
+      severity: data['severity'] ?? 'Normal',
+      items: legacyItems,
+    );
 
     if (data['visitCharges'] != null && data['visitCharges'] is List) {
       _visitCharges.value = (data['visitCharges'] as List)
-          .map((e) => VisitChargeItem.fromMap(Map<String, dynamic>.from(e)))
+          .map((e) => ext_models.VisitCharge.fromMap(Map<String, dynamic>.from(e)))
           .toList();
     }
 
@@ -572,7 +666,6 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
     }
 
     _checkInterState();
-    if (_selectedCustomerId != null) _fetchCustomerInsights(_selectedCustomerId!);
   }
 
   Future<void> _applyServiceRequestSeedIfNeeded() async {
@@ -580,25 +673,18 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
     if (seed == null || seed.isEmpty) return;
 
     _linkedServiceRequestId = seed['id']?.toString() ?? seed['serviceRequestId']?.toString();
-    _linkedServiceRequestNumber = seed['serviceRequestNumber']?.toString() ?? seed['requestNo']?.toString();
+    _linkedServiceRequestNumber = seed['serviceRequestNumber']?.toString() ?? seed['requestNumber']?.toString();
     _serviceRequestNumberController.text = _linkedServiceRequestNumber ?? '';
+    _selectedRequestSource = 'Service Request';
 
-    if (seed['requestDate'] != null && seed['requestDate'] is Timestamp) {
-      _requestDate = (seed['requestDate'] as Timestamp).toDate().toUtc();
-    } else if (seed['createdAt'] != null && seed['createdAt'] is Timestamp) {
-      _requestDate = (seed['createdAt'] as Timestamp).toDate().toUtc();
-    }
+    _requestDate = _parseSafeDate(seed['requestDate'])?.toUtc() ?? _parseSafeDate(seed['createdAt'])?.toUtc() ?? DateTime.now().toUtc();
 
     _clientNameController.text = (seed['customerName'] ?? seed['companyName'] ?? '').toString().trim();
     _contactPersonController.text = (seed['contactPerson'] ?? '').toString().trim();
     _emailController.text = (seed['email'] ?? '').toString().trim();
-    _mobileController.text = (seed['mobile'] ?? '').toString().trim();
+    _mobileController.text = (seed['mobileNumber'] ?? seed['mobile'] ?? '').toString().trim();
     _addressController.text = (seed['address'] ?? '').toString().trim();
-    _gstController.text = (seed['gstNo'] ?? '').toString().trim();
-
-    _machineModelController.text = (seed['machineModel'] ?? '').toString().trim();
-    _machineSerialController.text = (seed['serialNumber'] ?? '').toString().trim();
-    _complaintController.text = (seed['complaintDescription'] ?? '').toString().trim();
+    _gstController.text = (seed['gstNo'] ?? seed['gst'] ?? '').toString().trim();
 
     _selectedCustomerId = seed['customerId']?.toString();
     _customerState = (seed['state'] ?? '').toString().toLowerCase();
@@ -606,7 +692,7 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
     _subjectController.text = (seed['subject'] ?? seed['requestSubject'] ?? 'Quotation for Service/Spares').toString().trim();
 
     final notes = (seed['notes'] ?? seed['description'] ?? seed['serviceReference'] ?? '').toString().trim();
-    final loc = (seed['location'] ?? seed['customerPrimaryCity'] ?? '').toString().trim();
+    final loc = (seed['location'] ?? seed['city'] ?? '').toString().trim();
     List<String> combinedNotes = [];
     if (loc.isNotEmpty) combinedNotes.add("Location: $loc");
     if (notes.isNotEmpty) combinedNotes.add("Notes: $notes");
@@ -617,178 +703,84 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
     }
 
     _checkInterState();
-    if (_selectedCustomerId != null) _fetchCustomerInsights(_selectedCustomerId!);
 
-    final rawItems = seed['items'] ?? seed['products'];
-    if (rawItems != null && rawItems is List) {
-      _items.value = await _hydrateItems(rawItems);
+    List<ext_models.QuotationLineItem> legacyItems = [];
+    if (seed['requiredParts'] != null && seed['requiredParts'] is List) {
+      legacyItems = await _hydrateItems(seed['requiredParts'] as List);
+    } else if (seed['items'] != null && seed['items'] is List) {
+      legacyItems = await _hydrateItems(seed['items'] as List);
+    }
+
+    _machine.value = MachineFormState(
+      machineUid: _uuid.v4(),
+      model: (seed['machineModel'] ?? seed['serviceItemName'] ?? '').toString().trim(),
+      serial: (seed['serialNumber'] ?? '').toString().trim(),
+      complaint: (seed['complaintDescription'] ?? '').toString().trim(),
+      warrantyStatus: _deriveWarranty(seed),
+      isWarranty: seed['isWarranty'] == true || seed['isWarranty'] == 'true',
+      serviceCategory: seed['complaintCategory'] ?? seed['serviceCategory'] ?? 'General',
+      severity: _deriveSeverity(seed),
+      items: legacyItems,
+    );
+
+    if (mounted) {
       _recalculateTaxes();
     }
   }
 
-  // ===========================================================================
-  // DATA HYDRATION, CUSTOMERS & CALCULATIONS
-  // ===========================================================================
-
-  Future<List<QuotationLineItem>> _hydrateItems(List rawItems) async {
-    List<Future<QuotationLineItem?>> tasks = [];
+  Future<List<ext_models.QuotationLineItem>> _hydrateItems(List rawItems) async {
+    List<Future<ext_models.QuotationLineItem?>> tasks = [];
     for (var rawItem in rawItems) {
       if (rawItem is Map) {
         tasks.add(_hydrateSingleItem(Map<String, dynamic>.from(rawItem)));
       }
     }
     final results = await Future.wait(tasks);
-    return results.whereType<QuotationLineItem>().toList();
+    return results.whereType<ext_models.QuotationLineItem>().toList();
   }
 
-  Future<QuotationLineItem?> _hydrateSingleItem(Map<String, dynamic> i) async {
-    String productId = (i['productId'] ?? i['itemId'] ?? '').toString();
-    String name = (i['name'] ?? i['productName'] ?? '').toString();
-    double qty = double.tryParse(i['quantity']?.toString() ?? '1') ?? 1.0;
+  Future<ext_models.QuotationLineItem?> _hydrateSingleItem(Map<String, dynamic> i) async {
+    String productId = (i['productId'] ?? i['partId'] ?? i['itemId'] ?? '').toString();
+    String name = (i['name'] ?? i['itemName'] ?? i['partName'] ?? i['productName'] ?? '').toString();
+    double qty = double.tryParse(i['quantity']?.toString() ?? i['qty']?.toString() ?? '1') ?? 1.0;
     double price = double.tryParse(i['unitPrice']?.toString() ?? i['rate']?.toString() ?? '0') ?? 0.0;
-    double disc = double.tryParse(i['discountPercent']?.toString() ?? '0') ?? 0.0;
+    double disc = double.tryParse(i['discountPercent']?.toString() ?? i['discount']?.toString() ?? '0') ?? 0.0;
     double totalGst = double.tryParse(i['gstPercentage']?.toString() ?? i['tax']?.toString() ?? '18') ?? 18.0;
 
-    final id = (i['id'] ?? _uuid.v4()).toString();
+    final id = (i['id'] ?? i['itemId'] ?? _uuid.v4()).toString();
 
     _itemExtras[id] = {
-      'sku': i['sku'] ?? '',
+      'productId': productId,
+      'sku': i['sku'] ?? i['partNo'] ?? i['partCode'] ?? '',
       'brand': i['brand'] ?? '',
-      'productNature': i['productNature'] ?? 'General',
+      'productNature': i['productNature'] ?? i['itemType'] ?? i['partNature'] ?? 'Spare',
       'baseGst': totalGst,
-      'isScopeItem': i['isScopeItem'] ?? false,
-      'parentId': i['parentId'],
-      'isIncluded': i['isIncluded'] ?? true,
-      'pricingMode': i['pricingMode'] ?? 'Included',
+      'cgstPercent': _isInterState ? 0 : totalGst / 2,
+      'sgstPercent': _isInterState ? 0 : totalGst / 2,
+      'igstPercent': _isInterState ? totalGst : 0,
+      'availableStock': double.tryParse(i['availableStock']?.toString() ?? '0') ?? 0.0,
     };
 
-    return QuotationLineItem(
-      id: id,
-      productId: productId,
-      name: name,
-      description: (i['description'] ?? '').toString(),
+    return ext_models.QuotationLineItem(
+      itemId: id,
+      itemName: name,
+      itemType: _itemExtras[id]!['productNature'] as String,
+      qty: qty,
+      rate: price,
+      discount: disc,
+      amount: (qty * price) * (1 - (disc / 100)),
+      partNo: _itemExtras[id]!['sku'] as String,
       hsnCode: (i['hsnCode'] ?? '').toString(),
-      quantity: qty,
       uom: (i['uom'] ?? 'Nos').toString(),
-      unitPrice: price,
-      discountPercent: disc,
-      cgstPercent: 0,
-      sgstPercent: 0,
-      igstPercent: totalGst,
-      availableStock: 0,
     );
-  }
-
-  void _checkInterState() {
-    _isInterState = _companyState.isNotEmpty && _customerState.isNotEmpty && _companyState != _customerState;
-    _recalculateTaxes();
-  }
-
-  void _recalculateTaxes() {
-    final updatedItems = List<QuotationLineItem>.from(_items.value);
-    for (var item in updatedItems) {
-      final extras = _itemExtras[item.id] ?? {};
-      double totalGst = item.cgstPercent + item.sgstPercent + item.igstPercent;
-      if (totalGst == 0) totalGst = double.tryParse(extras['baseGst']?.toString() ?? '0') ?? 0.0;
-
-      if (totalGst > 0) {
-        if (_isInterState) {
-          item.igstPercent = totalGst;
-          item.cgstPercent = 0.0;
-          item.sgstPercent = 0.0;
-        } else {
-          item.cgstPercent = totalGst / 2;
-          item.sgstPercent = totalGst / 2;
-          item.igstPercent = 0.0;
-        }
-      }
-    }
-    _items.value = updatedItems;
-    _calculateTotals();
-  }
-
-  void _calculateTotals() {
-    double sub = 0.0, itemDisc = 0.0, cgst = 0.0, sgst = 0.0, igst = 0.0;
-    double visitTotalAmt = 0.0;
-
-    for (var item in _items.value) {
-      final extras = _itemExtras[item.id] ?? {};
-      if (extras['isScopeItem'] == true && extras['pricingMode'] == 'Included') continue;
-
-      double amt = item.quantity * item.unitPrice;
-      double dAmt = amt * (item.discountPercent / 100);
-      double taxable = amt - dAmt;
-
-      sub += amt;
-      itemDisc += dAmt;
-      cgst += taxable * (item.cgstPercent / 100);
-      sgst += taxable * (item.sgstPercent / 100);
-      igst += taxable * (item.igstPercent / 100);
-    }
-
-    for (var vc in _visitCharges.value) {
-      double amt = vc.amount;
-      visitTotalAmt += amt;
-      double vCgst = 0.0, vSgst = 0.0, vIgst = 0.0;
-      if (_isInterState) {
-        vIgst = amt * (vc.gstPercent / 100);
-      } else {
-        vCgst = amt * ((vc.gstPercent / 2) / 100);
-        vSgst = amt * ((vc.gstPercent / 2) / 100);
-      }
-      cgst += vCgst;
-      sgst += vSgst;
-      igst += vIgst;
-    }
-
-    double taxableAmt = (sub - itemDisc) + visitTotalAmt;
-    double grandTot = taxableAmt + cgst + sgst + igst;
-    double finalTot = grandTot.roundToDouble();
-    double round = finalTot - grandTot;
-
-    _totals.value = QuotationTotals(
-      subtotal: sub,
-      visitChargesTotal: visitTotalAmt,
-      itemDiscount: itemDisc,
-      taxableAmount: taxableAmt,
-      cgst: cgst,
-      sgst: sgst,
-      igst: igst,
-      grandTotal: grandTot,
-      finalTotal: finalTot,
-      roundOff: round,
-    );
-  }
-
-  Future<void> _fetchCustomerInsights(String custId) async {
-    if (_companyId == null) return;
-    try {
-      final snaps = await FirebaseFirestore.instance
-          .collection('companies')
-          .doc(_companyId)
-          .collection('service_quotations')
-          .where('customerId', isEqualTo: custId)
-          .orderBy('createdAt', descending: true)
-          .get();
-
-      double totalVal = 0;
-      double lastQuote = 0;
-      if (snaps.docs.isNotEmpty) {
-        lastQuote = double.tryParse(snaps.docs.first.data()['finalTotal']?.toString() ?? '0') ?? 0.0;
-        for (var d in snaps.docs) {
-          totalVal += double.tryParse(d.data()['finalTotal']?.toString() ?? '0') ?? 0.0;
-        }
-      }
-      _customerInsights.value = {'count': snaps.docs.length, 'totalValue': totalVal, 'lastQuoteAmount': lastQuote};
-    } catch (_) {}
   }
 
   Future<void> _loadCustomerFromFirestore(String customerId, {bool skipOverrides = false}) async {
-    if (_companyId == null || _companyId!.isEmpty) return;
+    if (_customersColl == null) return;
     try {
-      final doc = await FirebaseFirestore.instance.collection('companies').doc(_companyId).collection('customers').doc(customerId).get();
+      final doc = await _customersColl!.doc(customerId).get();
       if (doc.exists && doc.data() != null) {
-        final data = doc.data()!;
+        final data = doc.data() as Map<String, dynamic>;
         if (!skipOverrides) _selectedCustomerId = customerId;
 
         if (!skipOverrides && _clientNameController.text.trim().isEmpty) {
@@ -824,25 +816,43 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
               _emailController.text = (data['email'] ?? '').toString();
               _mobileController.text = (data['mobile'] ?? data['phone'] ?? '').toString();
               _contactPersonController.text = (data['contactPerson'] ?? data['contactName'] ?? '').toString();
+              _contactDesignationController.text = (data['designation'] ?? '').toString();
 
               _contactEmailSnapshot = _emailController.text.trim();
               _contactMobileSnapshot = _mobileController.text.trim();
               _contactPersonSnapshot = _contactPersonController.text.trim();
+              _contactDesignationSnapshot = _contactDesignationController.text.trim();
             }
-          }
-        } else {
-          if (_selectedAddressId != null && _customerAddresses.isNotEmpty) {
-            try { _selectedAddressData = _customerAddresses.firstWhere((a) => a['id'] == _selectedAddressId); } catch(_) {}
-          }
-          if (_selectedContactId != null && _customerContacts.isNotEmpty) {
-            try { _selectedContactData = _customerContacts.firstWhere((c) => c['id'] == _selectedContactId); } catch(_) {}
           }
         }
 
-        if (mounted) setState(() {});
         if (!skipOverrides) _fetchCustomerInsights(customerId);
       }
-    } catch (_) {}
+    } catch (e, st) {
+      debugPrint('Customer fetch error: $e\n$st');
+    }
+  }
+
+  Future<void> _fetchCustomerInsights(String custId) async {
+    if (_quotesColl == null) return;
+    try {
+      final snaps = await _quotesColl!
+          .where('customerId', isEqualTo: custId)
+          .orderBy('createdAt', descending: true)
+          .get();
+
+      double totalVal = 0;
+      double lastQuote = 0;
+      if (snaps.docs.isNotEmpty) {
+        lastQuote = double.tryParse((snaps.docs.first.data() as Map<String, dynamic>)['finalTotal']?.toString() ?? '0') ?? 0.0;
+        for (var d in snaps.docs) {
+          totalVal += double.tryParse((d.data() as Map<String, dynamic>)['finalTotal']?.toString() ?? '0') ?? 0.0;
+        }
+      }
+      _customerInsights.value = {'count': snaps.docs.length, 'totalValue': totalVal, 'lastQuoteAmount': lastQuote};
+    } catch (e, st) {
+      debugPrint('Insights lookup error: $e\n$st');
+    }
   }
 
   Future<Map<String, dynamic>?> _selectCustomerDialog() async {
@@ -851,7 +861,7 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
     List<Map<String, dynamic>> searchResults = [];
     bool isSearching = false;
 
-    return showDialog<Map<String, dynamic>>(
+    final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
@@ -872,27 +882,29 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
                     searchText = value.trim().toLowerCase();
                     if (debounce?.isActive ?? false) debounce!.cancel();
                     debounce = Timer(const Duration(milliseconds: 500), () async {
+                      if (!ctx.mounted) return;
                       if (searchText.isEmpty) {
                         setDialogState(() { searchResults = []; isSearching = false; });
                         return;
                       }
                       setDialogState(() => isSearching = true);
                       try {
-                        final snap = await FirebaseFirestore.instance
-                            .collection('companies')
-                            .doc(_companyId)
-                            .collection('customers')
+                        if (_customersColl == null) throw Exception("No company context");
+                        final snap = await _customersColl!
                             .where('isActive', isEqualTo: true)
                             .where('searchKeywords', arrayContains: searchText)
                             .limit(30)
                             .get();
 
-                        setDialogState(() {
-                          searchResults = snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
-                          isSearching = false;
-                        });
-                      } catch (e) {
-                        setDialogState(() => isSearching = false);
+                        if (ctx.mounted) {
+                          setDialogState(() {
+                            searchResults = snap.docs.map((d) => {'id': d.id, ...(d.data() as Map<String, dynamic>)}).toList();
+                            isSearching = false;
+                          });
+                        }
+                      } catch (e, st) {
+                        debugPrint('Customer search error: $e\n$st');
+                        if (ctx.mounted) setDialogState(() => isSearching = false);
                       }
                     });
                   },
@@ -914,7 +926,7 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
 
                       return ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: primaryColor.withOpacity(0.1),
+                          backgroundColor: primaryColor.withValues(alpha: 0.1),
                           child: const Icon(Icons.business, color: primaryColor),
                         ),
                         title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
@@ -935,6 +947,8 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
         ),
       ),
     );
+    debounce?.cancel();
+    return result;
   }
 
   void _updateAddressSnapshots(Map<String, dynamic>? address, {bool restoreMode = false}) {
@@ -969,9 +983,11 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
         _contactEmailSnapshot = '';
         _contactMobileSnapshot = '';
         _contactPersonSnapshot = '';
+        _contactDesignationSnapshot = '';
         _contactPersonController.clear();
         _emailController.clear();
         _mobileController.clear();
+        _contactDesignationController.clear();
       }
       return;
     }
@@ -979,6 +995,7 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
     final cName = (contactData['name'] ?? contactData['contactName'] ?? '').toString().trim();
     final cEmail = (contactData['emailNormalized'] ?? contactData['email'] ?? '').toString().trim();
     final cPhone = (contactData['phoneNormalized'] ?? contactData['phone'] ?? contactData['mobile'] ?? '').toString().trim();
+    final cDesig = (contactData['designation'] ?? '').toString().trim();
 
     if (!restoreMode) {
       _contactPersonController.text = cName;
@@ -987,639 +1004,230 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
       _contactEmailSnapshot = cEmail;
       _mobileController.text = cPhone;
       _contactMobileSnapshot = cPhone;
+      _contactDesignationController.text = cDesig;
+      _contactDesignationSnapshot = cDesig;
     } else {
       if (_contactPersonController.text.trim().isEmpty && cName.isNotEmpty) _contactPersonController.text = cName;
       if (_emailController.text.trim().isEmpty && cEmail.isNotEmpty) _emailController.text = cEmail;
       if (_mobileController.text.trim().isEmpty && cPhone.isNotEmpty) _mobileController.text = cPhone;
+      if (_contactDesignationController.text.trim().isEmpty && cDesig.isNotEmpty) _contactDesignationController.text = cDesig;
     }
   }
 
   // ===========================================================================
-  // LINE ITEM MODALS & HIERARCHY
+  // --- 5. MACHINE & ITEMS LOGIC ---
   // ===========================================================================
 
-  String _normalizeNature(String nature) {
-    String lower = nature.toLowerCase().trim();
-    if (lower.contains('accessory')) return 'Accessory';
-    if (lower.contains('spare')) return 'Spare';
-    if (lower.contains('consumable')) return 'Consumable';
-    if (lower.contains('machine')) return 'Machine';
-    return 'General';
+  void _updateMachine(MachineFormState newMachine) {
+    _machine.value = newMachine;
   }
 
-  Future<Map<String, dynamic>?> _selectProductDialog() async {
-    String searchText = '';
-    Timer? debounce;
-    List<Map<String, dynamic>> searchResults = [];
-    bool isSearching = false;
-
-    return showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Select Service/Spares Master', style: TextStyle(color: textDark, fontWeight: FontWeight.bold)),
-          content: SizedBox(
-            width: 700, height: 600,
-            child: Column(
-              children: [
-                TextField(
-                  decoration: InputDecoration(hintText: 'Search by name, SKU, or Code...', prefixIcon: const Icon(Icons.search), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
-                  onChanged: (value) {
-                    searchText = value.trim().toLowerCase();
-                    if (debounce?.isActive ?? false) debounce!.cancel();
-                    debounce = Timer(const Duration(milliseconds: 500), () async {
-                      if (searchText.isEmpty) {
-                        setDialogState(() { searchResults = []; isSearching = false; });
-                        return;
-                      }
-                      setDialogState(() => isSearching = true);
-                      try {
-                        final snap = await FirebaseFirestore.instance
-                            .collection('companies')
-                            .doc(_companyId)
-                            .collection('products')
-                            .where('isActive', isEqualTo: true)
-                            .where('searchKeywords', arrayContains: searchText)
-                            .limit(50)
-                            .get();
-
-                        final filtered = snap.docs.where((doc) {
-                          final data = doc.data();
-                          final n = _normalizeNature(data['productNature']?.toString() ?? '');
-                          return ['Accessory', 'Spare', 'Consumable', 'Service'].contains(n) || n == 'General';
-                        }).map((d) => {'id': d.id, ...d.data()}).toList();
-
-                        setDialogState(() {
-                          searchResults = filtered;
-                          isSearching = false;
-                        });
-                      } catch (e) {
-                        setDialogState(() => isSearching = false);
-                      }
-                    });
-                  },
-                ),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: isSearching
-                      ? const Center(child: CircularProgressIndicator())
-                      : searchResults.isEmpty
-                      ? const Center(child: Text('Type to search Spares/Accessories/Services...', style: TextStyle(color: textMuted)))
-                      : ListView.separated(
-                    itemCount: searchResults.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (context, index) {
-                      final data = searchResults[index];
-                      final stock = double.tryParse(data['stockOnHand']?.toString() ?? data['availableStock']?.toString() ?? data['qty']?.toString() ?? '0') ?? 0;
-                      final nature = _normalizeNature(data['productNature']?.toString() ?? 'General');
-                      final sellingPrice = double.tryParse(data['sellingPrice']?.toString() ?? data['price']?.toString() ?? '0') ?? 0.0;
-                      final gst = data['gstPercentage']?.toString() ?? data['tax']?.toString() ?? '18';
-                      final uom = (data['uom'] ?? 'Nos').toString();
-
-                      Color natureColor = nature == 'Service' ? Colors.indigo : Colors.blue;
-
-                      return ListTile(
-                        leading: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(color: natureColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                            child: Icon(nature == 'Service' ? Icons.build_circle : Icons.inventory_2, color: natureColor, size: 20)),
-                        title: Text(data['name'] ?? 'Unknown', style: const TextStyle(fontWeight: FontWeight.w600)),
-                        subtitle: Text('Price: ₹$sellingPrice | Tax: $gst% | Stock: $stock $uom'),
-                        trailing: (stock <= 0 && nature != 'Service') ? const Icon(Icons.warning, color: Colors.orange) : const Icon(Icons.check_circle, color: Colors.green),
-                        onTap: () {
-                          _productCache[data['id']] = data;
-                          Navigator.pop(context, {'stock': stock, ...data});
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
-        ),
-      ),
-    );
-  }
-
-  void _showAddItemModal([QuotationLineItem? itemToEdit, int? index]) {
-    final formKey = GlobalKey<FormState>();
-    final nameCtrl = TextEditingController(text: itemToEdit?.name ?? '');
-    final descCtrl = TextEditingController(text: itemToEdit?.description ?? '');
-    final hsnCtrl = TextEditingController(text: itemToEdit?.hsnCode ?? '');
-    final qtyCtrl = TextEditingController(text: itemToEdit?.quantity.toString() ?? '1');
-    final priceCtrl = TextEditingController(text: itemToEdit?.unitPrice.toString() ?? '');
-    final uomCtrl = TextEditingController(text: itemToEdit?.uom ?? 'Nos');
-    final discCtrl = TextEditingController(text: itemToEdit?.discountPercent.toString() ?? '0');
-
-    double totalGst = (itemToEdit?.cgstPercent ?? 0) + (itemToEdit?.sgstPercent ?? 0) + (itemToEdit?.igstPercent ?? 0);
-    final gstCtrl = TextEditingController(text: itemToEdit != null ? (totalGst > 0 ? totalGst.toString() : '18') : '18');
-
-    String currentId = itemToEdit?.id ?? _uuid.v4();
-    String productId = itemToEdit?.productId ?? '';
-    double currentStock = itemToEdit?.availableStock ?? 0;
-
-    String sku = _itemExtras[currentId]?['sku']?.toString() ?? '';
-    String productNature = _itemExtras[currentId]?['productNature']?.toString() ?? 'General';
-    List includedProducts = _itemExtras[currentId]?['includedProducts'] as List? ?? [];
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (_) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, top: 24, left: 24, right: 24),
-        child: Form(
-          key: formKey,
-          child: StatefulBuilder(
-            builder: (ctx, setModalState) {
-              return SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Wrap(
-                      alignment: WrapAlignment.spaceBetween,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Text(itemToEdit == null ? 'Add Service/Spare' : 'Edit Item', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textDark)),
-                        TextButton.icon(
-                          icon: const Icon(Icons.inventory_2),
-                          label: const Text('Pick from Master'),
-                          onPressed: () async {
-                            final p = await _selectProductDialog();
-                            if (p != null) {
-                              setModalState(() {
-                                productId = p['id'];
-                                if (nameCtrl.text.isEmpty) nameCtrl.text = p['name'] ?? '';
-                                if (descCtrl.text.isEmpty) descCtrl.text = p['description'] ?? '';
-                                if (hsnCtrl.text.isEmpty) hsnCtrl.text = p['hsnCode'] ?? '';
-                                double pPrice = double.tryParse(p['sellingPrice']?.toString() ?? '0') ?? 0.0;
-                                if (priceCtrl.text.isEmpty || priceCtrl.text == '0') priceCtrl.text = pPrice.toString();
-                                uomCtrl.text = p['uom'] ?? 'Nos';
-                                gstCtrl.text = (p['gstPercentage'] ?? '18').toString();
-                                currentStock = double.tryParse(p['stockOnHand']?.toString() ?? p['availableStock']?.toString() ?? '0') ?? 0.0;
-                                productNature = _normalizeNature(p['productNature'] ?? 'General');
-                                sku = p['sku'] ?? p['itemCode'] ?? '';
-                                includedProducts = p['includedProducts'] as List? ?? [];
-                              });
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    _buildItemTextField(nameCtrl, 'Item Name *', validator: (v) => v!.isEmpty ? 'Required' : null),
-                    _buildItemTextField(hsnCtrl, 'HSN / SAC Code'),
-                    _buildItemTextField(descCtrl, 'Specification / Description', maxLines: null),
-                    Row(
-                      children: [
-                        Expanded(child: _buildItemTextField(qtyCtrl, 'Quantity *', keyboardType: TextInputType.number, validator: (v) => (double.tryParse(v ?? '') ?? 0) <= 0 ? '> 0 required' : null)),
-                        const SizedBox(width: 12),
-                        Expanded(child: _buildItemTextField(uomCtrl, 'UOM')),
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        Expanded(child: _buildItemTextField(priceCtrl, 'Unit Price *', keyboardType: TextInputType.number, validator: (v) => (double.tryParse(v ?? '') ?? -1) < 0 ? 'Invalid' : null)),
-                        const SizedBox(width: 12),
-                        Expanded(child: _buildItemTextField(discCtrl, 'Discount (%)', keyboardType: TextInputType.number, validator: (v) => (double.tryParse(v ?? '') ?? -1) < 0 ? 'Invalid' : null)),
-                      ],
-                    ),
-                    _buildItemTextField(gstCtrl, 'GST (%)', keyboardType: TextInputType.number, validator: (v) {
-                      double? g = double.tryParse(v ?? '');
-                      if (g == null || g < 0 || g > 100) return '0-100 allowed';
-                      return null;
-                    }),
-                    const SizedBox(height: 24),
-                    ElevatedButton(
-                      onPressed: () async {
-                        if (!formKey.currentState!.validate()) return;
-
-                        double inputQty = double.tryParse(qtyCtrl.text) ?? 1;
-
-                        if (productId.isNotEmpty && productNature != 'Service' && inputQty > currentStock) {
-                          bool? proceed = await showDialog<bool>(
-                              context: context,
-                              builder: (ctx) => AlertDialog(
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                title: const Text('Low Stock Warning'),
-                                content: Text('You are adding $inputQty but available stock is only $currentStock. Proceed anyway?'),
-                                actions: [
-                                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                                  FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Proceed')),
-                                ],
-                              )
-                          );
-                          if (proceed != true) return;
-                        }
-
-                        double gstVal = double.tryParse(gstCtrl.text) ?? 18;
-                        double cgst = _isInterState ? 0 : gstVal / 2;
-                        double sgst = _isInterState ? 0 : gstVal / 2;
-                        double igst = _isInterState ? gstVal : 0;
-
-                        final newItem = QuotationLineItem(
-                          id: currentId,
-                          productId: productId,
-                          name: nameCtrl.text,
-                          description: descCtrl.text,
-                          hsnCode: hsnCtrl.text,
-                          quantity: inputQty,
-                          uom: uomCtrl.text.isEmpty ? 'Nos' : uomCtrl.text,
-                          unitPrice: double.tryParse(priceCtrl.text) ?? 0,
-                          discountPercent: double.tryParse(discCtrl.text) ?? 0,
-                          cgstPercent: cgst,
-                          sgstPercent: sgst,
-                          igstPercent: igst,
-                          availableStock: currentStock,
-                        );
-
-                        _itemExtras[currentId] = {
-                          'sku': sku,
-                          'productNature': productNature,
-                          'baseGst': gstVal,
-                          'parentId': null,
-                          'isScopeItem': false,
-                          'includedProducts': includedProducts,
-                        };
-
-                        final updatedList = List<QuotationLineItem>.from(_items.value);
-                        if (index != null) updatedList[index] = newItem; else updatedList.add(newItem);
-                        _items.value = updatedList;
-                        _calculateTotals();
-                        if (mounted) Navigator.pop(context);
-
-                        if (index == null && productId.isNotEmpty) {
-                          _triggerMachineAutomations(newItem, _productCache[productId] ?? {});
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                          backgroundColor: accentColor,
-                          foregroundColor: Colors.white,
-                          minimumSize: const Size(double.infinity, 50),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
-                      ),
-                      child: const Text('Save Item', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showScopeItemModal(String parentId, [QuotationLineItem? itemToEdit]) {
-    final formKey = GlobalKey<FormState>();
-    final nameCtrl = TextEditingController(text: itemToEdit?.name ?? '');
-    final descCtrl = TextEditingController(text: itemToEdit?.description ?? '');
-    final qtyCtrl = TextEditingController(text: itemToEdit?.quantity.toString() ?? '1');
-    final uomCtrl = TextEditingController(text: itemToEdit?.uom ?? 'Nos');
-
-    final childExtras = itemToEdit != null ? (_itemExtras[itemToEdit.id] ?? {}) : {};
-    bool isIncluded = childExtras['isIncluded'] ?? true;
-    String pricingMode = childExtras['pricingMode'] ?? 'Included';
-
-    final priceCtrl = TextEditingController(text: itemToEdit?.unitPrice.toString() ?? '0');
-    final discCtrl = TextEditingController(text: itemToEdit?.discountPercent.toString() ?? '0');
-
-    double totalGst = (itemToEdit?.cgstPercent ?? 0) + (itemToEdit?.sgstPercent ?? 0) + (itemToEdit?.igstPercent ?? 0);
-    if (totalGst == 0 && childExtras['baseGst'] != null) totalGst = double.tryParse(childExtras['baseGst'].toString()) ?? 0.0;
-    final gstCtrl = TextEditingController(text: totalGst > 0 ? totalGst.toString() : '18');
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (_) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, top: 24, left: 24, right: 24),
-        child: Form(
-          key: formKey,
-          child: StatefulBuilder(
-              builder: (ctx, setModalState) {
-                return SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(itemToEdit == null ? 'Add Sub-Item' : 'Edit Sub-Item', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textDark)),
-                      const SizedBox(height: 12),
-                      CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Included in Scope (Print in PDF)', style: TextStyle(fontWeight: FontWeight.w500)),
-                        value: isIncluded,
-                        activeColor: accentColor,
-                        onChanged: (v) => setModalState(() => isIncluded = v ?? true),
-                      ),
-                      const SizedBox(height: 12),
-                      _buildItemTextField(nameCtrl, 'Item Name *', validator: (v) => v!.isEmpty ? 'Required' : null),
-                      _buildItemTextField(descCtrl, 'Description', maxLines: null),
-                      Row(
-                        children: [
-                          Expanded(child: _buildItemTextField(qtyCtrl, 'Quantity', keyboardType: TextInputType.number, validator: (v) => (double.tryParse(v ?? '') ?? 0) <= 0 ? 'Invalid' : null)),
-                          const SizedBox(width: 12),
-                          Expanded(child: _buildItemTextField(uomCtrl, 'UOM')),
-                        ],
-                      ),
-                      DropdownButtonFormField<String>(
-                        value: pricingMode,
-                        decoration: InputDecoration(labelText: 'Pricing Mode', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), isDense: true),
-                        items: const [DropdownMenuItem(value: 'Included', child: Text('Included in Machine Price')), DropdownMenuItem(value: 'Separate', child: Text('Charge Separately'))],
-                        onChanged: (v) => setModalState(() => pricingMode = v!),
-                      ),
-                      const SizedBox(height: 16),
-                      if (pricingMode == 'Separate') ...[
-                        Row(
-                          children: [
-                            Expanded(child: _buildItemTextField(priceCtrl, 'Unit Price', keyboardType: TextInputType.number, validator: (v) => (double.tryParse(v ?? '') ?? -1) < 0 ? 'Invalid' : null)),
-                            const SizedBox(width: 12),
-                            Expanded(child: _buildItemTextField(discCtrl, 'Discount (%)', keyboardType: TextInputType.number, validator: (v) => (double.tryParse(v ?? '') ?? -1) < 0 ? 'Invalid' : null)),
-                          ],
-                        ),
-                        _buildItemTextField(gstCtrl, 'GST (%)', keyboardType: TextInputType.number, validator: (v) {
-                          double? g = double.tryParse(v ?? '');
-                          if (g == null || g < 0 || g > 100) return '0-100 allowed';
-                          return null;
-                        }),
-                      ],
-                      const SizedBox(height: 24),
-                      ElevatedButton(
-                        onPressed: () {
-                          if (!formKey.currentState!.validate()) return;
-
-                          double gstVal = double.tryParse(gstCtrl.text) ?? 18;
-                          double cgst = _isInterState ? 0 : gstVal / 2;
-                          double sgst = _isInterState ? 0 : gstVal / 2;
-                          double igst = _isInterState ? gstVal : 0;
-
-                          final newItem = QuotationLineItem(
-                            id: itemToEdit?.id ?? _uuid.v4(),
-                            productId: itemToEdit?.productId ?? '',
-                            name: nameCtrl.text.trim(),
-                            description: descCtrl.text.trim(),
-                            hsnCode: itemToEdit?.hsnCode ?? '',
-                            quantity: double.tryParse(qtyCtrl.text) ?? 1,
-                            uom: uomCtrl.text.isEmpty ? 'Nos' : uomCtrl.text,
-                            unitPrice: double.tryParse(priceCtrl.text) ?? 0,
-                            discountPercent: pricingMode == 'Separate' ? (double.tryParse(discCtrl.text) ?? 0) : 0,
-                            cgstPercent: cgst,
-                            sgstPercent: sgst,
-                            igstPercent: igst,
-                            availableStock: itemToEdit?.availableStock ?? 0,
-                          );
-
-                          _itemExtras[newItem.id] = {
-                            ...?_itemExtras[newItem.id],
-                            'baseGst': gstVal,
-                            'isScopeItem': true,
-                            'parentId': parentId,
-                            'isIncluded': isIncluded,
-                            'pricingMode': pricingMode,
-                          };
-
-                          final currentItems = List<QuotationLineItem>.from(_items.value);
-                          if (itemToEdit != null) {
-                            int idx = currentItems.indexWhere((i) => i.id == itemToEdit.id);
-                            if (idx >= 0) currentItems[idx] = newItem;
-                          } else {
-                            int parentIdx = currentItems.indexWhere((i) => i.id == parentId);
-                            if (parentIdx >= 0) {
-                              int lastChildIdx = parentIdx;
-                              for (int k = parentIdx + 1; k < currentItems.length; k++) {
-                                if (_itemExtras[currentItems[k].id]?['parentId'] == parentId) lastChildIdx = k;
-                                else break;
-                              }
-                              currentItems.insert(lastChildIdx + 1, newItem);
-                            } else {
-                              currentItems.add(newItem);
-                            }
-                          }
-                          _items.value = currentItems;
-                          _calculateTotals();
-                          Navigator.pop(context);
-                        },
-                        style: ElevatedButton.styleFrom(backgroundColor: accentColor, foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 50), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                        child: const Text('Save Scope Item', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      ),
-                      const SizedBox(height: 24),
-                    ],
-                  ),
-                );
-              }
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _moveScopeItem(String childId, int direction) {
-    int index = _items.value.indexWhere((i) => i.id == childId);
-    if (index < 0) return;
-
-    final child = _items.value[index];
-    final parentId = _itemExtras[childId]?['parentId'];
-    final children = _items.value.where((i) => _itemExtras[i.id]?['parentId'] == parentId).toList();
-    children.sort((a,b) => _items.value.indexOf(a).compareTo(_items.value.indexOf(b)));
-
-    int childListIndex = children.indexWhere((i) => i.id == childId);
-    if (direction == -1 && childListIndex > 0) {
-      final swapWith = children[childListIndex - 1];
-      int swapIndex = _items.value.indexOf(swapWith);
-      final currentList = List<QuotationLineItem>.from(_items.value);
-      currentList[index] = swapWith;
-      currentList[swapIndex] = child;
-      _items.value = currentList;
-    } else if (direction == 1 && childListIndex < children.length - 1) {
-      final swapWith = children[childListIndex + 1];
-      int swapIndex = _items.value.indexOf(swapWith);
-      final currentList = List<QuotationLineItem>.from(_items.value);
-      currentList[index] = swapWith;
-      currentList[swapIndex] = child;
-      _items.value = currentList;
-    }
-  }
-
-  void _onDeleteTopLevelItem(QuotationLineItem item) {
-    final children = _items.value.where((i) => _itemExtras[i.id]?['parentId'] == item.id).toList();
-    if (children.isNotEmpty) {
-      showDialog(
-          context: context,
-          builder: (ctx) => AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: const Text('Delete Linked Items?'),
-              content: const Text('This item has sub-items. Delete them as well?'),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-                TextButton(
-                    onPressed: () {
-                      final currentList = List<QuotationLineItem>.from(_items.value);
-                      for (var c in children) {
-                        _itemExtras[c.id]?['parentId'] = null;
-                        _itemExtras[c.id]?['isScopeItem'] = false;
-                      }
-                      _itemExtras.remove(item.id);
-                      currentList.remove(item);
-                      _items.value = currentList;
-                      _calculateTotals();
-                      Navigator.pop(ctx);
-                    },
-                    child: const Text('Keep Sub-Items')
-                ),
-                FilledButton(
-                    style: FilledButton.styleFrom(backgroundColor: Colors.red),
-                    onPressed: () {
-                      final currentList = List<QuotationLineItem>.from(_items.value);
-                      for (var c in children) {
-                        _itemExtras.remove(c.id);
-                        currentList.remove(c);
-                      }
-                      _itemExtras.remove(item.id);
-                      currentList.remove(item);
-                      _items.value = currentList;
-                      _calculateTotals();
-                      Navigator.pop(ctx);
-                    },
-                    child: const Text('Delete All')
-                )
-              ]
-          )
-      );
-    } else {
-      final currentList = List<QuotationLineItem>.from(_items.value);
-      _itemExtras.remove(item.id);
-      currentList.remove(item);
-      _items.value = currentList;
-      _calculateTotals();
-    }
-  }
-
-  Future<void> _triggerMachineAutomations(QuotationLineItem machine, Map<String, dynamic> extras) async {
-    List included = extras['includedProducts'] as List? ?? [];
-    if (included.isNotEmpty) {
-      bool? addScope = await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: const Text('Scope of Supply Found'),
-              content: Text('This item contains ${included.length} sub-items in its scope. Add them to quotation?'),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Skip')),
-                FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Add All')),
-              ]
-          )
-      );
-      if (addScope == true) await _addIncludedProducts(included, machine.id);
-    }
-  }
-
-  Future<void> _addIncludedProducts(List included, String parentId) async {
-    final currentList = List<QuotationLineItem>.from(_items.value);
-    int insertIdx = currentList.length;
-
-    int parentIdx = currentList.indexWhere((i) => i.id == parentId);
-    if (parentIdx >= 0) {
-      int lastChildIdx = parentIdx;
-      for (int k = parentIdx + 1; k < currentList.length; k++) {
-        if (_itemExtras[currentList[k].id]?['parentId'] == parentId) lastChildIdx = k;
-        else break;
+  void _onItemsChanged(List<ext_models.QuotationLineItem> extItems) {
+    List<ext_models.QuotationLineItem> newInternalItems = [];
+    for (var ext in extItems) {
+      final existingMatches = _machine.value.items.where((i) => i.itemId == ext.itemId);
+      final existing = existingMatches.isNotEmpty ? existingMatches.first : null;
+      if (existing != null) {
+        newInternalItems.add(existing.copyWith(
+          qty: ext.qty,
+          rate: ext.rate,
+          discount: ext.discount,
+        ));
+        _itemExtras[existing.itemId] ??= {};
+        _itemExtras[existing.itemId]!['productNature'] = ext.itemType;
+      } else {
+        newInternalItems.add(ext_models.QuotationLineItem(
+          itemId: ext.itemId.isNotEmpty ? ext.itemId : _uuid.v4(),
+          itemName: ext.itemName,
+          itemType: ext.itemType,
+          qty: ext.qty,
+          rate: ext.rate,
+          discount: ext.discount,
+          amount: (ext.qty * ext.rate) * (1 - (ext.discount / 100)),
+          partNo: ext.partNo,
+          hsnCode: ext.hsnCode,
+          uom: ext.uom ?? 'Nos',
+        ));
+        _itemExtras[newInternalItems.last.itemId] = {
+          'productNature': ext.itemType,
+          'sku': ext.partNo,
+          'baseGst': 18.0,
+          'cgstPercent': _isInterState ? 0 : 9,
+          'sgstPercent': _isInterState ? 0 : 9,
+          'igstPercent': _isInterState ? 18 : 0,
+        };
       }
-      insertIdx = lastChildIdx + 1;
     }
 
-    for (var inc in included) {
-      String pId = '';
-      double incQty = 1.0;
-      String incName = '';
-      if (inc is String) pId = inc;
-      else if (inc is Map) {
-        pId = (inc['productId'] ?? inc['id'] ?? '').toString();
-        incQty = double.tryParse(inc['quantity']?.toString() ?? '1') ?? 1.0;
-        incName = (inc['name'] ?? '').toString();
-      }
+    _machine.value = _machine.value.copyWith(items: newInternalItems);
+    _recalculateTaxes();
+  }
 
-      if (pId.isEmpty && incName.isEmpty) continue;
-
-      Map<String, dynamic> pData = {};
-      if (pId.isNotEmpty) {
-        final cachedData = await _getProductData(pId);
-        if (cachedData != null) pData = cachedData;
-      }
-
-      String finalName = (pData['name'] ?? incName).toString();
-      if (finalName.isEmpty) continue;
-
-      double finalGst = double.tryParse(pData['gstPercentage']?.toString() ?? '18') ?? 18.0;
-      double cgst = 0, sgst = 0, igst = 0;
-      if (finalGst > 0) {
-        if (_isInterState) igst = finalGst;
-        else { cgst = finalGst / 2; sgst = finalGst / 2; }
-      }
-
-      final newItem = QuotationLineItem(
-        id: _uuid.v4(),
-        productId: pId,
-        name: finalName,
-        description: (pData['description'] ?? '').toString(),
-        hsnCode: (pData['hsnCode'] ?? '').toString(),
-        quantity: incQty,
-        uom: (pData['uom'] ?? 'Nos').toString(),
-        unitPrice: double.tryParse(pData['sellingPrice']?.toString() ?? '0') ?? 0.0,
-        discountPercent: 0,
-        cgstPercent: cgst,
-        sgstPercent: sgst,
-        igstPercent: igst,
-        availableStock: 0,
-      );
-
-      _itemExtras[newItem.id] = {
-        'baseGst': finalGst,
-        'isScopeItem': true,
-        'parentId': parentId,
-        'isIncluded': true,
-        'pricingMode': 'Included',
-      };
-
-      currentList.insert(insertIdx++, newItem);
-    }
-
-    _items.value = currentList;
+  void _onVisitChargesChanged(List<ext_models.VisitCharge> updatedCharges) {
+    _visitCharges.value = updatedCharges;
     _calculateTotals();
   }
 
-  Future<Map<String, dynamic>?> _getProductData(String productId) async {
-    if (_companyId == null || productId.isEmpty) return null;
-    if (_productCache.containsKey(productId)) return _productCache[productId];
-    try {
-      final doc = await FirebaseFirestore.instance.collection('companies').doc(_companyId).collection('products').doc(productId).get();
-      if (doc.exists && doc.data() != null) {
-        _productCache[productId] = {'id': doc.id, ...doc.data()!};
-        return _productCache[productId];
-      }
-    } catch (_) {}
-    return null;
+  // ===========================================================================
+  // --- 6. CALCULATIONS ---
+  // ===========================================================================
+
+  Map<String, double> _calculateGstSplits(double totalGst) {
+    if (_isInterState) {
+      return {'cgst': 0.0, 'sgst': 0.0, 'igst': totalGst};
+    } else {
+      return {'cgst': totalGst / 2, 'sgst': totalGst / 2, 'igst': 0.0};
+    }
   }
 
+  void _checkInterState() {
+    _isInterState = _companyState.isNotEmpty && _customerState.isNotEmpty && _companyState != _customerState;
+    _recalculateTaxes();
+  }
+
+  void _recalculateTaxes() {
+    final currentMachine = _machine.value;
+    for (var item in currentMachine.items) {
+      final extras = _itemExtras[item.itemId] ?? {};
+      double totalGst = (double.tryParse(extras['cgstPercent']?.toString() ?? '0') ?? 0.0) +
+          (double.tryParse(extras['sgstPercent']?.toString() ?? '0') ?? 0.0) +
+          (double.tryParse(extras['igstPercent']?.toString() ?? '0') ?? 0.0);
+
+      if (totalGst == 0) totalGst = double.tryParse(extras['baseGst']?.toString() ?? '0') ?? 0.0;
+
+      if (totalGst > 0) {
+        final splits = _calculateGstSplits(totalGst);
+        extras['cgstPercent'] = splits['cgst']!;
+        extras['sgstPercent'] = splits['sgst']!;
+        extras['igstPercent'] = splits['igst']!;
+      }
+      _itemExtras[item.itemId] = extras;
+    }
+
+    // Trigger total calculation naturally
+    _machine.value = currentMachine.copyWith();
+    _calculateTotals();
+  }
+
+  void _calculateTotals() {
+    double globalSub = 0.0, globalItemDisc = 0.0, globalCgst = 0.0, globalSgst = 0.0, globalIgst = 0.0;
+    double visitTotalAmt = 0.0;
+
+    final currentMachine = _machine.value;
+    double mSub = 0, mDisc = 0, mCgst = 0, mSgst = 0, mIgst = 0;
+
+    for (var item in currentMachine.items) {
+      double amt = item.qty * item.rate;
+      double dAmt = amt * (item.discount / 100);
+      double taxable = amt - dAmt;
+
+      mSub += amt;
+      mDisc += dAmt;
+
+      final extras = _itemExtras[item.itemId] ?? {};
+      double cgstP = double.tryParse(extras['cgstPercent']?.toString() ?? '0') ?? 0.0;
+      double sgstP = double.tryParse(extras['sgstPercent']?.toString() ?? '0') ?? 0.0;
+      double igstP = double.tryParse(extras['igstPercent']?.toString() ?? '0') ?? 0.0;
+
+      mCgst += taxable * (cgstP / 100);
+      mSgst += taxable * (sgstP / 100);
+      mIgst += taxable * (igstP / 100);
+    }
+
+    double mTaxable = mSub - mDisc;
+    double mGrand = mTaxable + mCgst + mSgst + mIgst;
+
+    final mTotals = QuotationTotals(
+        subtotal: mSub,
+        itemDiscount: mDisc,
+        taxableAmount: mTaxable,
+        cgst: mCgst, sgst: mSgst, igst: mIgst,
+        grandTotal: mGrand
+    );
+
+    _machine.value = currentMachine.copyWith(totals: mTotals);
+
+    globalSub += mSub;
+    globalItemDisc += mDisc;
+    globalCgst += mCgst;
+    globalSgst += mSgst;
+    globalIgst += mIgst;
+
+    for (var vc in _visitCharges.value) {
+      double amt = vc.amount;
+      visitTotalAmt += amt;
+
+      const double gstP = 18.0; // Standard GST for visit charges
+      final splits = _calculateGstSplits(gstP);
+
+      globalCgst += amt * (splits['cgst']! / 100);
+      globalSgst += amt * (splits['sgst']! / 100);
+      globalIgst += amt * (splits['igst']! / 100);
+    }
+
+    double taxableAmt = (globalSub - globalItemDisc) + visitTotalAmt;
+    double grandTot = taxableAmt + globalCgst + globalSgst + globalIgst;
+    double finalTot = grandTot.roundToDouble();
+    double round = finalTot - grandTot;
+
+    _globalTotals.value = QuotationTotals(
+      subtotal: globalSub,
+      visitChargesTotal: visitTotalAmt,
+      itemDiscount: globalItemDisc,
+      taxableAmount: taxableAmt,
+      cgst: globalCgst,
+      sgst: globalSgst,
+      igst: globalIgst,
+      grandTotal: grandTot,
+      finalTotal: finalTot,
+      roundOff: round,
+    );
+  }
+
+  int get _totalItemsCount => _machine.value.items.length + _visitCharges.value.length;
+
   // ===========================================================================
-  // SAVING & VALIDATION
+  // --- 7. SAVE LOGIC ---
   // ===========================================================================
+
+  bool _isCustomerComplete() {
+    return _selectedCustomerId != null || _clientNameController.text.trim().isNotEmpty;
+  }
+
+  bool _isMachineComplete() {
+    return _machine.value.model.isNotEmpty;
+  }
+
+  bool _isItemsComplete() {
+    return _machine.value.items.isNotEmpty || _visitCharges.value.isNotEmpty;
+  }
 
   bool _validateBeforeSave() {
     if (_isReadOnly.value) {
       _showSnack('Document is locked for editing.', isError: true);
       return false;
     }
-    if (!_formKey.currentState!.validate()) {
-      _showSnack('Please fill all required fields.', isError: true);
+    if (!_isCustomerComplete()) {
+      _showSnack('Please complete Customer Information.', isError: true);
+      _customerTileCtrl.expand();
       return false;
     }
-    if (_items.value.isEmpty && _visitCharges.value.isEmpty) {
-      _showSnack('Add at least one service item or visit charge.', isError: true);
+    if (_contactPersonController.text.trim().isEmpty) {
+      _showSnack('Contact Person is required.', isError: true);
+      _customerTileCtrl.expand();
       return false;
     }
+    if (!_isMachineComplete()) {
+      _showSnack('Please specify a Machine Model.', isError: true);
+      _machineTileCtrl.expand();
+      return false;
+    }
+    if (!_isItemsComplete()) {
+      _showSnack('Add at least one service item or charge.', isError: true);
+      _itemsTileCtrl.expand();
+      return false;
+    }
+
     final reqDate = DateTime(_requestDate.year, _requestDate.month, _requestDate.day);
     final qDate = DateTime(_quoteDate.year, _quoteDate.month, _quoteDate.day);
     if (qDate.isBefore(reqDate)) {
@@ -1629,23 +1237,13 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
     return true;
   }
 
-  String _getFinancialYearFromDate(DateTime date) {
-    final localDate = date.toLocal();
-    final startYear = localDate.month >= 4 ? localDate.year : localDate.year - 1;
-    final startYY = startYear.toString().substring(2);
-    final endYY = (startYear + 1).toString().substring(2);
-    return '$startYY-$endYY';
-  }
-
   String _quoteNumberRegistryId(String quoteNumber) {
     return quoteNumber.replaceAll('/', '_').replaceAll(RegExp(r'[^A-Z0-9_-]'), '');
   }
 
   Future<void> _ensureExistingQuoteNumberIsUnique(String quoteNumber) async {
-    final snap = await FirebaseFirestore.instance
-        .collection('companies')
-        .doc(_companyId)
-        .collection('service_quotations')
+    if (_quotesColl == null) return;
+    final snap = await _quotesColl!
         .where('quoteNumber', isEqualTo: quoteNumber)
         .limit(2)
         .get();
@@ -1658,23 +1256,23 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
     _isLoading.value = true;
 
     try {
-      final db = FirebaseFirestore.instance;
+      final db = _db;
       final bool isUpdate = widget.quotationId != null;
       final bool isRevision = isUpdate && _createRevisionFlag.value;
 
+      if (_quotesColl == null) throw Exception("Company context lost.");
+
       final docRef = (isUpdate && !isRevision)
-          ? db.collection('companies').doc(_companyId).collection('service_quotations').doc(widget.quotationId)
-          : db.collection('companies').doc(_companyId).collection('service_quotations').doc();
+          ? _quotesColl!.doc(widget.quotationId)
+          : _quotesColl!.doc();
 
       final financialYear = _getFinancialYearFromDate(_quoteDate);
       String manualSequenceStr = _quotationSequenceController.text.trim();
       int? manualSequence;
 
-      bool autoAdjusted = false;
-
       if (manualSequenceStr.isNotEmpty) {
         manualSequence = int.tryParse(manualSequenceStr);
-        if (manualSequence == null) throw Exception('Invalid sequence number format. Must be digits only.');
+        if (manualSequence == null) throw Exception('Invalid sequence number format.');
         await _ensureExistingQuoteNumberIsUnique('$_quotationPrefix/SQ/${manualSequence.toString().padLeft(3, '0')}/$financialYear');
       }
 
@@ -1698,84 +1296,7 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
         payload['parentQuotationId'] = isRevision ? widget.quotationId : null;
       }
 
-      await db.runTransaction((tx) async {
-        int? sequenceToSync;
-        final counterRef = db.collection('companies').doc(_companyId).collection('counters').doc('service_quotation_counter_$financialYear');
-        final counterDoc = await tx.get(counterRef);
-        final currentSequence = ((counterDoc.data()?['sequence'] as num?)?.toInt() ?? 0);
-
-        String safeQuoteNumber = '';
-        final allowedReservations = { docRef.id, if (widget.quotationId != null) widget.quotationId! };
-
-        if (isRevision) {
-          safeQuoteNumber = _fullExistingQuoteNumber; // inherit old string
-          payload['quoteNumber'] = safeQuoteNumber;
-          payload['financialYear'] = safeQuoteNumber.split('/').last;
-        } else {
-          if (manualSequence == null) {
-            int nextSequence = currentSequence + 1;
-            while(true) {
-              safeQuoteNumber = '$_quotationPrefix/SQ/${nextSequence.toString().padLeft(3, '0')}/$financialYear';
-              final numberRef = db.collection('companies').doc(_companyId).collection('service_quotation_numbers').doc(_quoteNumberRegistryId(safeQuoteNumber));
-              final numberDocSnap = await tx.get(numberRef);
-              final reservedFor = numberDocSnap.data()?['quotationId']?.toString();
-
-              if (!numberDocSnap.exists || (reservedFor == null) || allowedReservations.contains(reservedFor)) {
-                sequenceToSync = nextSequence;
-                if (nextSequence > currentSequence + 1) autoAdjusted = true;
-                break;
-              }
-              nextSequence++;
-            }
-          } else {
-            safeQuoteNumber = '$_quotationPrefix/SQ/${manualSequence.toString().padLeft(3, '0')}/$financialYear';
-            if (manualSequence > currentSequence) sequenceToSync = manualSequence;
-
-            final numberRef = db.collection('companies').doc(_companyId).collection('service_quotation_numbers').doc(_quoteNumberRegistryId(safeQuoteNumber));
-            final numberDocSnap = await tx.get(numberRef);
-            final reservedFor = numberDocSnap.data()?['quotationId']?.toString();
-
-            if (numberDocSnap.exists && reservedFor != null && reservedFor.isNotEmpty && !allowedReservations.contains(reservedFor)) {
-              throw Exception('This quotation number already exists.');
-            }
-          }
-
-          final numberRef = db.collection('companies').doc(_companyId).collection('service_quotation_numbers').doc(_quoteNumberRegistryId(safeQuoteNumber));
-          final numberDocSnapshot = await tx.get(numberRef);
-
-          payload['quoteNumber'] = safeQuoteNumber;
-          payload['financialYear'] = safeQuoteNumber.split('/').last;
-
-          tx.set(numberRef, {
-            'quoteNumber': safeQuoteNumber,
-            'quotationId': docRef.id,
-            'companyId': _companyId,
-            'sequence': manualSequence ?? sequenceToSync,
-            'financialYear': payload['financialYear'],
-            'prefix': _quotationPrefix,
-            'updatedAt': FieldValue.serverTimestamp(),
-            if (!numberDocSnapshot.exists) 'createdAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-
-          if (sequenceToSync != null) {
-            tx.set(counterRef, {'sequence': sequenceToSync, 'prefix': _quotationPrefix, 'financialYear': financialYear, 'updatedAt': FieldValue.serverTimestamp()}, SetOptions(merge: true));
-          }
-        }
-
-        if (isRevision) {
-          final oldRef = db.collection('companies').doc(_companyId).collection('service_quotations').doc(widget.quotationId);
-          tx.set(oldRef, {'isLatest': false, 'updatedAt': FieldValue.serverTimestamp(), 'updatedBy': _currentUserUid}, SetOptions(merge: true));
-        }
-
-        tx.set(docRef, payload, SetOptions(merge: true));
-
-        // Mark Service Request Quoted
-        final resolvedReqId = _linkedServiceRequestId;
-        if (resolvedReqId != null && resolvedReqId.isNotEmpty) {
-          final reqRef = db.collection('companies').doc(_companyId).collection('service_requests').doc(resolvedReqId);
-          tx.set(reqRef, {'status': 'Quoted', 'quotationId': docRef.id}, SetOptions(merge: true));
-        }
-      });
+      bool autoAdjusted = await _executeSaveTransaction(db, docRef, payload, isRevision, manualSequence, financialYear);
 
       if (!_isReadOnly.value) {
         await db.collection('quotationSettings').doc(_currentUserUid).set({
@@ -1792,32 +1313,129 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
         }
         Navigator.pop(context, true);
       }
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('Save Failed: $e\n$st');
       _showSnack('Save Failed: ${e.toString().replaceAll('Exception: ', '')}', isError: true);
     } finally {
       if (mounted) _isLoading.value = false;
     }
   }
 
+  Future<bool> _executeSaveTransaction(FirebaseFirestore db, DocumentReference docRef, Map<String, dynamic> payload, bool isRevision, int? manualSequence, String financialYear) async {
+    bool autoAdjusted = false;
+    await db.runTransaction((tx) async {
+      int? sequenceToSync;
+      final counterRef = _companyDoc!.collection('counters').doc('service_quotation_counter_$financialYear');
+      final counterDoc = await tx.get(counterRef);
+      final currentSequence = ((counterDoc.data()?['sequence'] as num?)?.toInt() ?? 0);
+
+      String safeQuoteNumber = '';
+      final allowedReservations = { docRef.id, if (widget.quotationId != null) widget.quotationId! };
+
+      if (isRevision) {
+        safeQuoteNumber = _fullExistingQuoteNumber;
+        payload['quoteNumber'] = safeQuoteNumber;
+        payload['financialYear'] = safeQuoteNumber.split('/').last;
+      } else {
+        if (manualSequence == null) {
+          int nextSequence = currentSequence + 1;
+          for (int attempt = 0; attempt < 10000; attempt++) {
+            safeQuoteNumber = '$_quotationPrefix/SQ/${nextSequence.toString().padLeft(3, '0')}/$financialYear';
+            final numberRef = _companyDoc!.collection('service_quotation_numbers').doc(_quoteNumberRegistryId(safeQuoteNumber));
+            final numberDocSnap = await tx.get(numberRef);
+            final reservedFor = numberDocSnap.data()?['quotationId']?.toString();
+
+            if (!numberDocSnap.exists || (reservedFor == null) || allowedReservations.contains(reservedFor)) {
+              sequenceToSync = nextSequence;
+              if (nextSequence > currentSequence + 1) autoAdjusted = true;
+              break;
+            }
+            nextSequence++;
+          }
+        } else {
+          safeQuoteNumber = '$_quotationPrefix/SQ/${manualSequence.toString().padLeft(3, '0')}/$financialYear';
+          if (manualSequence > currentSequence) sequenceToSync = manualSequence;
+
+          final numberRef = _companyDoc!.collection('service_quotation_numbers').doc(_quoteNumberRegistryId(safeQuoteNumber));
+          final numberDocSnap = await tx.get(numberRef);
+          final reservedFor = numberDocSnap.data()?['quotationId']?.toString();
+
+          if (numberDocSnap.exists && reservedFor != null && reservedFor.isNotEmpty && !allowedReservations.contains(reservedFor)) {
+            throw Exception('This quotation number already exists.');
+          }
+        }
+
+        final numberRef = _companyDoc!.collection('service_quotation_numbers').doc(_quoteNumberRegistryId(safeQuoteNumber));
+        final numberDocSnapshot = await tx.get(numberRef);
+
+        payload['quoteNumber'] = safeQuoteNumber;
+        payload['financialYear'] = safeQuoteNumber.split('/').last;
+
+        tx.set(numberRef, {
+          'quoteNumber': safeQuoteNumber,
+          'quotationId': docRef.id,
+          'companyId': _companyId,
+          'sequence': manualSequence ?? sequenceToSync,
+          'financialYear': payload['financialYear'],
+          'prefix': _quotationPrefix,
+          'updatedAt': FieldValue.serverTimestamp(),
+          if (!numberDocSnapshot.exists) 'createdAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+
+        if (sequenceToSync != null) {
+          tx.set(counterRef, {'sequence': sequenceToSync, 'prefix': _quotationPrefix, 'financialYear': financialYear, 'updatedAt': FieldValue.serverTimestamp()}, SetOptions(merge: true));
+        }
+      }
+
+      if (isRevision && widget.quotationId != null) {
+        final oldRef = _quotesColl!.doc(widget.quotationId);
+        tx.set(oldRef, {'isLatest': false, 'updatedAt': FieldValue.serverTimestamp(), 'updatedBy': _currentUserUid}, SetOptions(merge: true));
+      }
+
+      tx.set(docRef, payload, SetOptions(merge: true));
+    });
+    return autoAdjusted;
+  }
+
+  Map<String, dynamic> _buildLegacyPayload(MachineFormState? machine) {
+    return {
+      'machineModel': machine?.model ?? '',
+      'serialNumber': machine?.serial ?? '',
+      'complaintDescription': machine?.complaint ?? '',
+      'warrantyStatus': machine?.warrantyStatus ?? '',
+      'serviceCategory': machine?.serviceCategory ?? '',
+      'severity': machine?.severity ?? '',
+    };
+  }
+
   Map<String, dynamic> _buildQuotationData(String docId) {
+    final machineState = _machine.value;
+    final machinesData = [machineState.toMap(_itemExtras)];
+    final flatItems = machineState.items.map((e) => {...e.toMap(), ...(_itemExtras[e.itemId] ?? {})}).toList();
+
     return {
       'id': docId,
       'companyId': _companyId,
       'subject': _subjectController.text.trim(),
+      'remarks': _subjectController.text.trim(),
       'quoteDate': Timestamp.fromDate(_quoteDate),
       'status': _quotationStatus,
       'approvalStatus': _approvalStatus,
       'paymentStatus': _paymentStatus,
       'visitRequired': _visitRequired.value,
-      'machineModel': _machineModelController.text.trim(),
-      'serialNumber': _machineSerialController.text.trim(),
-      'complaintDescription': _complaintController.text.trim(),
+
+      ..._buildLegacyPayload(machineState),
+
+      'machines': machinesData,
+      'machineCount': 1,
+
       'customerId': _selectedCustomerId,
       'addressId': _selectedAddressId,
       'contactId': _selectedContactId,
       'addressSnapshot': _selectedAddressData,
       'contactSnapshot': _selectedContactData,
       'clientName': _clientNameController.text.trim(),
+      'customerName': _clientNameController.text.trim(),
       'clientAddress': _addressController.text.trim(),
       'addressLine': _addressController.text.trim().isNotEmpty ? _addressController.text.trim() : _customerPrimaryAddressSnapshot,
       'city': _customerPrimaryCitySnapshot,
@@ -1826,31 +1444,42 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
       'clientEmail': _emailController.text.trim(),
       'clientMobile': _mobileController.text.trim(),
       'contactPerson': _contactPersonController.text.trim().isNotEmpty ? _contactPersonController.text.trim() : _contactPersonSnapshot,
+      'contactDesignation': _contactDesignationController.text.trim().isNotEmpty ? _contactDesignationController.text.trim() : _contactDesignationSnapshot,
       'contactEmail': _emailController.text.trim().isNotEmpty ? _emailController.text.trim() : _contactEmailSnapshot,
       'contactMobile': _mobileController.text.trim().isNotEmpty ? _mobileController.text.trim() : _contactMobileSnapshot,
       'gstNo': _gstController.text.trim(),
       'isInterState': _isInterState,
       'customerState': _customerState,
+      'contactPersonId': _selectedContactId,
+
       'serviceRequestId': _linkedServiceRequestId ?? '',
       'serviceRequestNumber': _serviceRequestNumberController.text.trim(),
       'requestSource': _selectedRequestSource,
+      'quotationSource': _selectedRequestSource == 'Service Request' ? 'Service Request' : 'Manual',
       'requestDate': Timestamp.fromDate(_requestDate),
       'serviceReference': _serviceRefNoteController.text.trim(),
       'nextFollowUpDate': _nextFollowUpDate != null ? Timestamp.fromDate(_nextFollowUpDate!) : null,
       'followUpNotes': _followUpNotesController.text.trim(),
-      'totalSubtotal': _totals.value.subtotal,
-      'totalVisitCharges': _totals.value.visitChargesTotal,
-      'totalTaxableAmount': _totals.value.taxableAmount,
-      'totalCgst': _totals.value.cgst,
-      'totalSgst': _totals.value.sgst,
-      'totalIgst': _totals.value.igst,
-      'grandTotal': _totals.value.grandTotal,
-      'finalTotal': _totals.value.finalTotal,
-      'roundOff': _totals.value.roundOff,
+
+      'totalSubtotal': _globalTotals.value.subtotal,
+      'subtotal': _globalTotals.value.subtotal,
+      'totalVisitCharges': _globalTotals.value.visitChargesTotal,
+      'totalTaxableAmount': _globalTotals.value.taxableAmount,
+      'totalCgst': _globalTotals.value.cgst,
+      'totalSgst': _globalTotals.value.sgst,
+      'totalIgst': _globalTotals.value.igst,
+      'taxAmount': _globalTotals.value.cgst + _globalTotals.value.sgst + _globalTotals.value.igst,
+      'grandTotal': _globalTotals.value.grandTotal,
+      'finalTotal': _globalTotals.value.finalTotal,
+      'roundOff': _globalTotals.value.roundOff,
+
       'dynamicTerms': _dynamicTerms.value.map((e) => {'id': e.id, 'title': e.titleCtrl.text.trim(), 'value': e.valueCtrl.text.trim()}).toList(),
       'packingChargesExtra': _packingChargesExtra.value,
-      'items': _items.value.map((e) => {...e.toMap(), ...(_itemExtras[e.id] ?? {})}).toList(),
+      'dispatchRequired': _packingChargesExtra.value,
+      'items': flatItems,
+      'lineItems': flatItems,
       'visitCharges': _visitCharges.value.map((e) => e.toMap()).toList(),
+
       'signatureName': _signNameController.text.trim(),
       'signatureDesignation': _signDesignationController.text.trim(),
       'signaturePhone': _signPhoneController.text.trim(),
@@ -1861,12 +1490,170 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
     };
   }
 
-  void _showSnack(String message, {bool isError = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: isError ? Colors.red : Colors.green));
+  ext_models.ServiceQuotationModel _buildExternalModel() {
+    return ext_models.ServiceQuotationModel(
+      quotationId: widget.quotationId ?? '',
+      quotationNumber: _fullExistingQuoteNumber.isNotEmpty ? _fullExistingQuoteNumber : _getLiveQuoteNumberDisplay(),
+      requestId: _linkedServiceRequestId ?? '',
+      requestNumber: _serviceRequestNumberController.text,
+      visitId: '',
+      visitNumber: '',
+      customerId: _selectedCustomerId ?? '',
+      customerName: _clientNameController.text.isNotEmpty ? _clientNameController.text : 'Unknown',
+      quotationType: _selectedRequestSource,
+      quotationSource: _selectedRequestSource,
+      billingType: _isInterState ? 'IGST' : 'CGST/SGST',
+      followUpAction: '',
+      dispatchRequired: _packingChargesExtra.value,
+      installationRequired: false,
+      visitRequired: _visitRequired.value,
+      status: _quotationStatus,
+      paymentStatus: _paymentStatus,
+      approvalStatus: _approvalStatus,
+      subtotal: _globalTotals.value.subtotal,
+      discount: _globalTotals.value.itemDiscount,
+      taxAmount: _globalTotals.value.cgst + _globalTotals.value.sgst + _globalTotals.value.igst,
+      grandTotal: _globalTotals.value.grandTotal,
+      remarks: _subjectController.text,
+      machines: [
+        ext_models.QuotationMachine(
+            machineId: _machine.value.productId ?? _machine.value.machineUid,
+            machineName: _machine.value.model,
+            machineModel: _machine.value.model,
+            serialNumber: _machine.value.serial,
+            warrantyStatus: _machine.value.warrantyStatus
+        )
+      ],
+      lineItems: _machine.value.items,
+      visitCharges: _visitCharges.value,
+      attachments: [],
+    );
   }
 
   // ===========================================================================
-  // UI BUILDERS
+  // --- 8. PDF LOGIC ---
+  // ===========================================================================
+
+  Map<String, dynamic> _buildPreviewData() {
+    final firstMachine = _machine.value;
+
+    return {
+      'quoteNumber': _getLiveQuoteNumberDisplay(),
+      'quoteDateStr': '${_quoteDate.day.toString().padLeft(2, '0')}/${_quoteDate.month.toString().padLeft(2, '0')}/${_quoteDate.year}',
+      'version': _currentVersion.toString(),
+      'approvalStatus': _approvalStatus,
+      'paymentStatus': _paymentStatus,
+      'serviceRequestNumber': _serviceRequestNumberController.text.trim(),
+      'subject': _subjectController.text.trim(),
+      'remarks': _subjectController.text.trim(),
+
+      ..._buildLegacyPayload(firstMachine),
+
+      'clientName': _clientNameController.text.trim(),
+      'customerName': _clientNameController.text.trim(),
+      'clientAddress': _addressController.text.trim(),
+      'clientEmail': _emailController.text.trim(),
+      'clientMobile': _mobileController.text.trim(),
+      'contactPerson': _contactPersonController.text.trim(),
+      'gstNo': _gstController.text.trim(),
+      'customerState': _customerState,
+      'isInterState': _isInterState,
+      'addressSnapshot': _selectedAddressData,
+      'contactSnapshot': _selectedContactData,
+
+      'totalSubtotal': _globalTotals.value.subtotal,
+      'subtotal': _globalTotals.value.subtotal,
+      'totalVisitCharges': _globalTotals.value.visitChargesTotal,
+      'totalTaxableAmount': _globalTotals.value.taxableAmount,
+      'totalCgst': _globalTotals.value.cgst,
+      'totalSgst': _globalTotals.value.sgst,
+      'totalIgst': _globalTotals.value.igst,
+      'taxAmount': _globalTotals.value.cgst + _globalTotals.value.sgst + _globalTotals.value.igst,
+      'grandTotal': _globalTotals.value.grandTotal,
+      'finalTotal': _globalTotals.value.finalTotal,
+
+      'dynamicTerms': _dynamicTerms.value.map((e) => {'id': e.id, 'title': e.titleCtrl.text.trim(), 'value': e.valueCtrl.text.trim()}).toList(),
+      'packingChargesExtra': _packingChargesExtra.value,
+      'dispatchRequired': _packingChargesExtra.value,
+      'visitCharges': _visitCharges.value.map((e) => e.toMap()).toList(),
+
+      'companyName': _companyName,
+      'companyAddress': _companyAddress,
+      'companyPhone': _companyPhone,
+      'companyEmail': _companyEmail,
+      'companyWebsite': _companyWebsite,
+      'companyGst': _companyGst,
+      'companyCin': _companyCin,
+      'companyPan': _companyPan,
+      'companyBankDetails': _companyBankDetails,
+      'companyLogoUrl': _companyLogoUrl,
+      'signatureName': _signNameController.text.trim(),
+      'signatureDesignation': _signDesignationController.text.trim(),
+      'signaturePhone': _signPhoneController.text.trim(),
+    };
+  }
+
+  void _previewPdf() {
+    bool hasAnyItem = _visitCharges.value.isNotEmpty || _machine.value.items.isNotEmpty;
+    if (!hasAnyItem) { _showSnack('Add items before previewing.', isError: true); return; }
+
+    final items = _machine.value.items;
+
+    Navigator.push(context, MaterialPageRoute(builder: (_) => Scaffold(
+      appBar: AppBar(
+        title: const Text('Quotation Preview', style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.white,
+        foregroundColor: textDark,
+        elevation: 1,
+      ),
+      body: PdfPreview(
+        build: (format) => ServiceQuotationPdfGenerator.generateServiceQuotationPdf(_buildPreviewData(), items),
+        allowPrinting: true,
+        allowSharing: true,
+        canChangeOrientation: false,
+        canChangePageFormat: false,
+        canDebug: false,
+      ),
+    )));
+  }
+
+  // ===========================================================================
+  // --- 9. HELPERS (Action Callbacks) ---
+  // ===========================================================================
+
+  void _showSnack(String message, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red : Colors.green,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _openRequest() {
+    if (_linkedServiceRequestId != null && _linkedServiceRequestId!.isNotEmpty) {
+      _showSnack('Opening Linked Request: $_linkedServiceRequestId');
+    } else {
+      _showSnack('No linked request available.', isError: true);
+    }
+  }
+
+  void _openVisit() {
+    _showSnack('Opening Visit record...');
+  }
+
+  void _duplicateQuotation() {
+    _showSnack('Duplication module triggered...');
+  }
+
+  void _deleteQuotation() {
+    _showSnack('Soft delete scheduled...');
+  }
+
+  // ===========================================================================
+  // --- 10. UI BUILDERS ---
   // ===========================================================================
 
   @override
@@ -1882,13 +1669,7 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
         title: Text(widget.quotationId != null ? 'Edit Service Quotation' : 'New Service Quotation', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         actions: [
           TextButton.icon(
-            onPressed: () {
-              if (_items.value.isEmpty && _visitCharges.value.isEmpty) { _showSnack('Add items before previewing.', isError: true); return; }
-              Navigator.push(context, MaterialPageRoute(builder: (_) => QuotationPreviewScreen(
-                quotation: _buildPreviewData(),
-                items: _items.value.map((e) => QuotationLineItem.fromMap(Map<String,dynamic>.from(e.toMap()..addAll(_itemExtras[e.id] ?? {})))).toList(),
-              )));
-            },
+            onPressed: _previewPdf,
             icon: const Icon(Icons.picture_as_pdf_outlined),
             label: const Text('Preview'),
             style: TextButton.styleFrom(foregroundColor: primaryColor, textStyle: const TextStyle(fontWeight: FontWeight.w600)),
@@ -1910,38 +1691,36 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _buildReadOnlyBanner(),
-                          _buildHeaderCard(),
+                          _buildReadOnlyBannerIfNecessary(),
+                          _buildTopSummaryCard(),
                           const SizedBox(height: 16),
-                          _buildCustomerSection(),
-                          const SizedBox(height: 16),
-                          _buildEquipmentSection(),
-                          const SizedBox(height: 16),
-                          _buildItemsSection(),
-                          const SizedBox(height: 16),
-                          _buildVisitChargesSection(),
-                          const SizedBox(height: 16),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(flex: 5, child: _buildTermsSection()),
-                              const SizedBox(width: 16),
-                              Expanded(flex: 4, child: _buildSummarySection()),
-                            ],
-                          ),
+
+                          _buildCustomerExpansionTile(),
+                          const SizedBox(height: 12),
+
+                          _buildMachineExpansionTile(),
+                          const SizedBox(height: 12),
+
+                          _buildItemsExpansionTile(),
+                          const SizedBox(height: 12),
+
+                          _buildFinancialExpansionTile(),
+                          const SizedBox(height: 12),
+
+                          _buildTermsExpansionTile(),
                           const SizedBox(height: 40),
                         ],
                       ),
                     ),
                   ),
                 ),
-                _buildBottomButtons(),
+                _buildBottomActionBar(),
               ],
             ),
             ValueListenableBuilder<bool>(
               valueListenable: _isLoading,
               builder: (context, loading, child) {
-                return loading ? Container(color: Colors.white.withOpacity(0.7), child: const Center(child: CircularProgressIndicator())) : const SizedBox.shrink();
+                return loading ? Container(color: Colors.white.withValues(alpha: 0.7), child: const Center(child: CircularProgressIndicator())) : const SizedBox.shrink();
               },
             )
           ],
@@ -1950,7 +1729,7 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
     );
   }
 
-  Widget _buildReadOnlyBanner() {
+  Widget _buildReadOnlyBannerIfNecessary() {
     return ValueListenableBuilder<bool>(
       valueListenable: _isReadOnly,
       builder: (context, readOnly, _) {
@@ -1971,659 +1750,405 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
     );
   }
 
-  Widget _buildHeaderCard() {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: borderLight)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: _buildSectionHeader('Quotation Details', Icons.receipt_long, 'Basic information and quotation numbering'),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(color: accentColor.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
-                  child: Text(_getLiveQuoteNumberDisplay(), style: const TextStyle(fontWeight: FontWeight.bold, color: accentColor, fontSize: 16, letterSpacing: 0.5)),
-                )
-              ],
-            ),
-            const SizedBox(height: 20),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildTopSummaryCard() {
+    return ValueListenableBuilder<MachineFormState>(
+        valueListenable: _machine,
+        builder: (context, machineState, _) {
+          return ValueListenableBuilder<QuotationTotals>(
+              valueListenable: _globalTotals,
+              builder: (context, totals, _) {
+                final customerName = _clientNameController.text.isNotEmpty ? _clientNameController.text : 'Unknown Customer';
+                final machineModel = machineState.model.isNotEmpty ? machineState.model : 'No Machine Selected';
+                final int count = _totalItemsCount;
+
+                return Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: primaryColor.withValues(alpha: 0.2)),
+                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 8, offset: const Offset(0, 4))],
+                  ),
+                  child: Row(
                     children: [
-                      const Text('Quotation Number', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textMuted)),
-                      const SizedBox(height: 6),
                       Container(
-                        decoration: BoxDecoration(
-                          border: Border.all(color: borderLight),
-                          borderRadius: BorderRadius.circular(8),
-                          color: _isReadOnly.value ? Colors.grey.shade50 : Colors.white,
-                        ),
-                        child: Row(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(color: primaryColor.withValues(alpha: 0.1), shape: BoxShape.circle),
+                        child: const Icon(Icons.request_quote_rounded, color: primaryColor, size: 28),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                              decoration: const BoxDecoration(color: Color(0xFFF1F5F9), borderRadius: BorderRadius.horizontal(left: Radius.circular(8))),
-                              child: Text('$_quotationPrefix/SQ/', style: const TextStyle(fontWeight: FontWeight.w600, color: textMuted)),
-                            ),
-                            Expanded(
-                              child: TextFormField(
-                                controller: _quotationSequenceController,
-                                keyboardType: TextInputType.number,
-                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                                readOnly: _isReadOnly.value,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(fontWeight: FontWeight.bold),
-                                decoration: const InputDecoration(
-                                  hintText: 'Auto',
-                                  border: InputBorder.none,
-                                  isDense: true,
-                                  contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-                                ),
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                              decoration: const BoxDecoration(color: Color(0xFFF1F5F9), borderRadius: BorderRadius.horizontal(right: Radius.circular(8))),
-                              child: Text('/${_getFinancialYearFromDate(_quoteDate)}', style: const TextStyle(fontWeight: FontWeight.w600, color: textMuted)),
-                            ),
+                            Text(customerName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textDark)),
+                            const SizedBox(height: 4),
+                            Text('$machineModel • $count Items', style: const TextStyle(color: textMuted, fontSize: 13)),
                           ],
                         ),
                       ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text('₹${totals.grandTotal.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.green)),
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(12)),
+                            child: Text(_quotationStatus, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue.shade700)),
+                          )
+                        ],
+                      )
                     ],
                   ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: InkWell(
-                    onTap: _isReadOnly.value ? null : () async {
-                      final d = await showDatePicker(context: context, initialDate: _quoteDate, firstDate: _requestDate, lastDate: DateTime(2100));
-                      if (d != null) setState(() => _quoteDate = d);
-                    },
-                    child: InputDecorator(
-                      decoration: InputDecoration(
-                        labelText: 'Quote Date', labelStyle: const TextStyle(fontWeight: FontWeight.w500, color: textMuted),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: borderLight)),
-                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: borderLight)),
-                        filled: true, fillColor: _isReadOnly.value ? Colors.grey.shade50 : Colors.white, isDense: true,
+                );
+              }
+          );
+        }
+    );
+  }
+
+  Widget _buildSectionExpansionTile({
+    required ExpansionTileController controller,
+    required String title,
+    required IconData icon,
+    required bool isComplete,
+    required Widget child,
+    VoidCallback? onNext,
+  }) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: borderLight)),
+      child: ExpansionTile(
+        controller: controller,
+        maintainState: true,
+        shape: const Border(),
+        collapsedShape: const Border(),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        leading: Icon(icon, color: isComplete ? Colors.green : accentColor),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textDark)),
+        trailing: isComplete
+            ? const Icon(Icons.check_circle, color: Colors.green)
+            : const Icon(Icons.expand_more, color: textMuted),
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(20).copyWith(top: 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                child,
+                if (onNext != null) ...[
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton(
+                      onPressed: onNext,
+                      style: FilledButton.styleFrom(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
-                      child: Text(DateFormat('dd MMM yyyy').format(_quoteDate), style: const TextStyle(fontWeight: FontWeight.w500)),
+                      child: const Text('Next'),
                     ),
-                  ),
-                ),
+                  )
+                ]
               ],
             ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(child: _buildItemTextField(_serviceRequestNumberController, 'Service Request Number', hint: 'SR/001')),
-                const SizedBox(width: 16),
-                Expanded(child: _buildItemTextField(_subjectController, 'Subject Line (Optional)')),
-              ],
-            )
-          ],
-        ),
+          )
+        ],
       ),
     );
   }
 
-  Widget _buildCustomerSection() {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: borderLight)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
+  Widget _buildCustomerExpansionTile() {
+    return _buildSectionExpansionTile(
+        controller: _customerTileCtrl,
+        title: '1. Customer Information',
+        icon: Icons.business,
+        isComplete: _isCustomerComplete(),
+        onNext: () {
+          _customerTileCtrl.collapse();
+          _machineTileCtrl.expand();
+        },
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: _buildSectionHeader('Customer Details', Icons.business, 'Billing and contact information'),
+            if (!_isReadOnly.value)
+              Align(
+                alignment: Alignment.centerRight,
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    final c = await _selectCustomerDialog();
+                    if (c != null && c['id'] != null) await _loadCustomerFromFirestore(c['id']);
+                  },
+                  icon: const Icon(Icons.search, size: 16), label: const Text('CRM Lookup', style: TextStyle(fontWeight: FontWeight.w600)),
+                  style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), foregroundColor: primaryColor),
                 ),
-                if (!_isReadOnly.value)
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      final c = await _selectCustomerDialog();
-                      if (c != null && c['id'] != null) await _loadCustomerFromFirestore(c['id']);
-                    },
-                    icon: const Icon(Icons.search, size: 16), label: const Text('CRM Lookup', style: TextStyle(fontWeight: FontWeight.w600)),
-                    style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), foregroundColor: primaryColor),
-                  )
-              ],
-            ),
+              ),
             const SizedBox(height: 16),
-            ValueListenableBuilder<Map<String, dynamic>?>(
-                valueListenable: _customerInsights,
-                builder: (context, insights, _) {
-                  if (insights == null) return const SizedBox.shrink();
-                  return Container(
-                    padding: const EdgeInsets.all(12), margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFBFDBFE))),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        Column(children: [Text('Total Quotes', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.blue.shade800)), const SizedBox(height: 2), Text('${insights['count']}', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue.shade900))]),
-                        Column(children: [Text('Last Quote', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.blue.shade800)), const SizedBox(height: 2), Text('₹${insights['lastQuoteAmount']}', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue.shade900))]),
-                        Column(children: [Text('Lifetime Value', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.blue.shade800)), const SizedBox(height: 2), Text('₹${insights['totalValue']}', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue.shade900))]),
-                      ],
-                    ),
-                  );
-                }
-            ),
-
             _buildItemTextField(_clientNameController, 'Company Name *', validator: (v) => v!.isEmpty ? 'Required' : null),
-
-            if (_customerAddresses.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: ValueListenableBuilder<bool>(
-                  valueListenable: _isReadOnly,
-                  builder: (context, readOnly, _) => DropdownButtonFormField<String>(
-                    value: _selectedAddressId,
-                    decoration: InputDecoration(
-                      labelText: 'Select Address', labelStyle: const TextStyle(fontWeight: FontWeight.w500, color: textMuted),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: borderLight)),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: borderLight)),
-                      filled: true,
-                      fillColor: readOnly ? Colors.grey.shade50 : Colors.white,
-                      isDense: true,
-                    ),
-                    items: _customerAddresses.map((a) {
-                      final label = (a['addressLabel'] ?? a['label'] ?? a['addressLine'] ?? a['combinedAddress'] ?? 'Address').toString();
-                      return DropdownMenuItem(
-                        value: a['id']?.toString(),
-                        child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w500)),
-                      );
-                    }).toList(),
-                    onChanged: readOnly ? null : (val) {
-                      if (val == null) return;
-                      final addr = _customerAddresses.firstWhere((a) => a['id'] == val);
-                      setState(() {
-                        _selectedAddressId = val;
-                        _selectedAddressData = addr;
-                        _updateAddressSnapshots(addr);
-                      });
-                    },
-                  ),
-                ),
-              ),
-
-            if (_customerContacts.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: ValueListenableBuilder<bool>(
-                  valueListenable: _isReadOnly,
-                  builder: (context, readOnly, _) => DropdownButtonFormField<String>(
-                    value: _selectedContactId,
-                    decoration: InputDecoration(
-                      labelText: 'Select Contact Person', labelStyle: const TextStyle(fontWeight: FontWeight.w500, color: textMuted),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: borderLight)),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: borderLight)),
-                      filled: true,
-                      fillColor: readOnly ? Colors.grey.shade50 : Colors.white,
-                      isDense: true,
-                    ),
-                    items: _customerContacts.map((c) {
-                      final label = (c['name'] ?? c['contactName'] ?? 'Contact').toString();
-                      return DropdownMenuItem(
-                        value: c['id']?.toString(),
-                        child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w500)),
-                      );
-                    }).toList(),
-                    onChanged: readOnly ? null : (val) {
-                      if (val == null) return;
-                      final contact = _customerContacts.firstWhere((c) => c['id'] == val);
-                      setState(() {
-                        _selectedContactId = val;
-                        _selectedContactData = contact;
-                        _updateContactSnapshots(contact);
-                      });
-                    },
-                  ),
-                ),
-              ),
-
             Row(
               children: [
-                Expanded(child: _buildItemTextField(_contactPersonController, 'Contact Person')),
+                Expanded(child: _buildItemTextField(_contactPersonController, 'Contact Person *', validator: (v) => v!.isEmpty ? 'Required' : null)),
                 const SizedBox(width: 16),
-                Expanded(child: _buildItemTextField(_mobileController, 'Mobile')),
+                Expanded(child: _buildItemTextField(_contactDesignationController, 'Designation')),
               ],
             ),
             Row(
               children: [
+                Expanded(child: _buildItemTextField(_mobileController, 'Mobile')),
+                const SizedBox(width: 16),
                 Expanded(child: _buildItemTextField(_emailController, 'Email ID')),
+              ],
+            ),
+            Row(
+              children: [
+                Expanded(child: _buildItemTextField(_addressController, 'Billing Address', maxLines: 2)),
                 const SizedBox(width: 16),
                 Expanded(child: _buildItemTextField(_gstController, 'GSTIN')),
               ],
             ),
-            _buildItemTextField(_addressController, 'Billing Address', maxLines: 2),
           ],
-        ),
-      ),
+        )
     );
   }
 
-  Widget _buildEquipmentSection() {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: borderLight)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildSectionHeader('Equipment Details', Icons.precision_manufacturing, 'Machine info & service requirements'),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(child: _buildItemTextField(_machineModelController, 'Machine Model')),
-                const SizedBox(width: 16),
-                Expanded(child: _buildItemTextField(_machineSerialController, 'Serial Number')),
-              ],
-            ),
-            _buildItemTextField(_complaintController, 'Complaint / Fault Description', maxLines: 2),
-            Container(
-              margin: const EdgeInsets.only(top: 8),
-              decoration: BoxDecoration(border: Border.all(color: borderLight), borderRadius: BorderRadius.circular(8), color: Colors.white),
-              child: ValueListenableBuilder<bool>(
-                valueListenable: _visitRequired,
-                builder: (context, visitReq, _) {
-                  return SwitchListTile(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    title: const Text('Engineer Visit Required?', style: TextStyle(fontWeight: FontWeight.w600, color: textDark)),
-                    subtitle: const Text('Toggle if an on-site visit is needed for this service.', style: TextStyle(fontSize: 12, color: textMuted)),
-                    value: visitReq,
-                    activeColor: accentColor,
-                    onChanged: _isReadOnly.value ? null : (v) => _visitRequired.value = v,
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildItemsSection() {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: borderLight)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: _buildSectionHeader('Service Charges & Spares', Icons.inventory_2_outlined, 'Add services or select spares from inventory'),
-                ),
-                ValueListenableBuilder<bool>(
-                  valueListenable: _isReadOnly,
-                  builder: (ctx, readOnly, _) => readOnly ? const SizedBox.shrink() : ElevatedButton.icon(
-                    onPressed: _showAddItemModal,
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Add Item', style: TextStyle(fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(backgroundColor: accentColor, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            ValueListenableBuilder<List<QuotationLineItem>>(
-              valueListenable: _items,
-              builder: (context, items, _) {
-                if (items.isEmpty) return Container(
-                  padding: const EdgeInsets.all(32),
-                  decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: borderLight, style: BorderStyle.solid)),
-                  child: const Center(child: Text('No service items or spares added yet.', style: TextStyle(color: textMuted, fontWeight: FontWeight.w500))),
-                );
-
-                final topLevelItems = items.where((i) => _itemExtras[i.id]?['parentId'] == null).toList();
-
-                return ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: topLevelItems.length,
-                  itemBuilder: (ctx, i) {
-                    final item = topLevelItems[i];
-                    final children = items.where((c) => _itemExtras[c.id]?['parentId'] == item.id).toList();
-                    children.sort((a,b) => items.indexOf(a).compareTo(items.indexOf(b)));
-
-                    int actualIndex = items.indexOf(item);
-                    final nature = _itemExtras[item.id]?['productNature']?.toString() ?? 'General';
-                    final isService = nature == 'Service';
-
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      decoration: BoxDecoration(border: Border.all(color: borderLight), borderRadius: BorderRadius.circular(12), color: Colors.white),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                            leading: CircleAvatar(backgroundColor: isService ? Colors.indigo.shade50 : Colors.blue.shade50, child: Icon(isService ? Icons.build_circle : Icons.inventory_2, color: isService ? Colors.indigo : Colors.blue, size: 20)),
-                            title: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold, color: textDark)),
-                            subtitle: Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Text('${item.quantity} ${item.uom}  •  Rate: ₹${item.unitPrice}  •  Tax: ${item.cgstPercent+item.sgstPercent+item.igstPercent}%', style: const TextStyle(color: textMuted, fontWeight: FontWeight.w500)),
-                            ),
-                            trailing: ValueListenableBuilder<bool>(
-                              valueListenable: _isReadOnly,
-                              builder: (ctx, readOnly, _) => readOnly ? const SizedBox.shrink() : Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(icon: const Icon(Icons.edit_outlined, color: Colors.blue), onPressed: () => _showAddItemModal(item, actualIndex), tooltip: 'Edit', splashRadius: 20),
-                                  IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red), onPressed: () => _onDeleteTopLevelItem(item), tooltip: 'Delete', splashRadius: 20),
-                                ],
-                              ),
-                            ),
-                          ),
-                          if (children.isNotEmpty)
-                            Container(
-                              margin: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(8), border: Border.all(color: borderLight)),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      const Text('Scope of Supply / Sub-Items', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: textMuted)),
-                                      ValueListenableBuilder<bool>(
-                                        valueListenable: _isReadOnly,
-                                        builder: (ctx, readOnly, _) => readOnly ? const SizedBox.shrink() : InkWell(
-                                          onTap: () => _showScopeItemModal(item.id),
-                                          child: const Row(children: [Icon(Icons.add, size: 14, color: accentColor), SizedBox(width: 4), Text('Add Sub-Item', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: accentColor))]),
-                                        ),
-                                      )
-                                    ],
-                                  ),
-                                  const Divider(height: 16, color: borderLight),
-                                  ...children.map((child) {
-                                    final childExtras = _itemExtras[child.id] ?? {};
-                                    final pricingMode = childExtras['pricingMode'] ?? 'Included';
-                                    return Padding(
-                                      padding: const EdgeInsets.symmetric(vertical: 6),
-                                      child: Row(
-                                        children: [
-                                          Icon(Icons.subdirectory_arrow_right, size: 16, color: Colors.grey.shade400),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: Text('${child.name} (${child.quantity} ${child.uom})', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: textDark)),
-                                          ),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                            decoration: BoxDecoration(color: pricingMode == 'Included' ? Colors.green.shade50 : Colors.blue.shade50, borderRadius: BorderRadius.circular(4)),
-                                            child: Text(pricingMode == 'Included' ? 'Included' : '₹${child.unitPrice}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: pricingMode == 'Included' ? Colors.green.shade700 : Colors.blue.shade700)),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          ValueListenableBuilder<bool>(
-                                              valueListenable: _isReadOnly,
-                                              builder: (ctx, readOnly, _) => readOnly ? const SizedBox.shrink() : Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  InkWell(onTap: () => _moveScopeItem(child.id, -1), child: const Padding(padding: EdgeInsets.all(4), child: Icon(Icons.arrow_upward, size: 14, color: textMuted))),
-                                                  InkWell(onTap: () => _moveScopeItem(child.id, 1), child: const Padding(padding: EdgeInsets.all(4), child: Icon(Icons.arrow_downward, size: 14, color: textMuted))),
-                                                  InkWell(onTap: () => _showScopeItemModal(item.id, child), child: const Padding(padding: EdgeInsets.all(4), child: Icon(Icons.edit_outlined, size: 14, color: Colors.blue))),
-                                                  InkWell(onTap: () {
-                                                    final currentItems = List<QuotationLineItem>.from(_items.value);
-                                                    _itemExtras.remove(child.id);
-                                                    currentItems.remove(child);
-                                                    _items.value = currentItems;
-                                                    _calculateTotals();
-                                                  }, child: const Padding(padding: EdgeInsets.all(4), child: Icon(Icons.delete_outline, size: 14, color: Colors.red))),
-                                                ],
-                                              )
-                                          )
-                                        ],
-                                      ),
-                                    );
-                                  }).toList()
-                                ],
-                              ),
-                            )
-                        ],
-                      ),
-                    );
-                  },
-                );
+  Widget _buildMachineExpansionTile() {
+    return ValueListenableBuilder<MachineFormState>(
+        valueListenable: _machine,
+        builder: (context, machineState, _) {
+          return _buildSectionExpansionTile(
+              controller: _machineTileCtrl,
+              title: '2. Machine Information',
+              icon: Icons.precision_manufacturing,
+              isComplete: _isMachineComplete(),
+              onNext: () {
+                _machineTileCtrl.collapse();
+                _itemsTileCtrl.expand();
               },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildVisitChargesSection() {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: borderLight)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: _buildSectionHeader('Engineer Visit Charges', Icons.commute_outlined, 'Log boarding, lodging, transport expenses'),
-                ),
-                ValueListenableBuilder<bool>(
-                  valueListenable: _isReadOnly,
-                  builder: (ctx, readOnly, _) => readOnly ? const SizedBox.shrink() : ElevatedButton.icon(
-                    onPressed: () {
-                      final current = List<VisitChargeItem>.from(_visitCharges.value);
-                      current.add(VisitChargeItem(id: _uuid.v4()));
-                      _visitCharges.value = current;
-                    },
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Add Expense', style: TextStyle(fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: textDark, side: const BorderSide(color: borderLight), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            ValueListenableBuilder<List<VisitChargeItem>>(
-              valueListenable: _visitCharges,
-              builder: (context, visitCharges, _) {
-                if (visitCharges.isEmpty) return Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: borderLight, style: BorderStyle.solid)),
-                  child: const Center(child: Text('No visit expenses added.', style: TextStyle(color: textMuted, fontWeight: FontWeight.w500))),
-                );
-
-                return Container(
-                  decoration: BoxDecoration(border: Border.all(color: borderLight), borderRadius: BorderRadius.circular(8)),
-                  child: Column(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        decoration: const BoxDecoration(color: Color(0xFFF8FAFC), borderRadius: BorderRadius.vertical(top: Radius.circular(8)), border: Border(bottom: BorderSide(color: borderLight))),
-                        child: const Row(
-                          children: [
-                            Expanded(flex: 3, child: Text('Expense Type', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: textMuted))),
-                            Expanded(flex: 1, child: Text('Qty', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: textMuted))),
-                            Expanded(flex: 2, child: Text('Rate', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: textMuted))),
-                            Expanded(flex: 1, child: Text('GST %', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: textMuted))),
-                            Expanded(flex: 2, child: Text('Amount', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: textMuted), textAlign: TextAlign.right)),
-                            SizedBox(width: 48), // Action spacer
-                          ],
-                        ),
-                      ),
-                      ...visitCharges.asMap().entries.map((entry) {
-                        int idx = entry.key;
-                        VisitChargeItem vc = entry.value;
-
-                        return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(border: idx != visitCharges.length - 1 ? const Border(bottom: BorderSide(color: borderLight)) : null),
-                          child: Row(
-                            children: [
-                              Expanded(flex: 3, child: TextFormField(
-                                initialValue: vc.type,
-                                readOnly: _isReadOnly.value,
-                                decoration: const InputDecoration(hintText: 'e.g. Lodging', border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.zero),
-                                style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
-                                onChanged: (v) { vc.type = v; _calculateTotals(); },
-                              )),
-                              const SizedBox(width: 8),
-                              Expanded(flex: 1, child: TextFormField(
-                                initialValue: vc.quantity.toString(),
-                                readOnly: _isReadOnly.value,
-                                keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.zero),
-                                style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
-                                onChanged: (v) { vc.quantity = double.tryParse(v) ?? 1; _calculateTotals(); },
-                              )),
-                              const SizedBox(width: 8),
-                              Expanded(flex: 2, child: TextFormField(
-                                initialValue: vc.rate.toString(),
-                                readOnly: _isReadOnly.value,
-                                keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.zero),
-                                style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
-                                onChanged: (v) { vc.rate = double.tryParse(v) ?? 0; _calculateTotals(); },
-                              )),
-                              const SizedBox(width: 8),
-                              Expanded(flex: 1, child: TextFormField(
-                                initialValue: vc.gstPercent.toString(),
-                                readOnly: _isReadOnly.value,
-                                keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.zero),
-                                style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
-                                onChanged: (v) { vc.gstPercent = double.tryParse(v) ?? 18; _calculateTotals(); },
-                              )),
-                              const SizedBox(width: 8),
-                              Expanded(flex: 2, child: Text('₹${vc.amount.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14), textAlign: TextAlign.right)),
-                              SizedBox(
-                                width: 48,
-                                child: ValueListenableBuilder<bool>(
-                                    valueListenable: _isReadOnly,
-                                    builder: (ctx, readOnly, _) => readOnly ? const SizedBox.shrink() : IconButton(
-                                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                                      onPressed: () {
-                                        final current = List<VisitChargeItem>.from(_visitCharges.value);
-                                        current.removeAt(idx);
-                                        _visitCharges.value = current;
-                                        _calculateTotals();
-                                      },
-                                    )
-                                ),
-                              )
-                            ],
-                          ),
-                        );
-                      }).toList()
+                      Expanded(child: _buildCategoryDropdown(machineState)),
+                      const SizedBox(width: 16),
+                      Expanded(child: _buildSubcategoryDropdown(machineState)),
                     ],
                   ),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSummarySection() {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: borderLight)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text('Summary', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textDark)),
-            const Divider(height: 24, color: borderLight),
-            ValueListenableBuilder<QuotationTotals>(
-              valueListenable: _totals,
-              builder: (context, totals, _) {
-                return Column(
-                  children: [
-                    _calcRow('Subtotal (Items)', totals.subtotal),
-                    if (totals.itemDiscount > 0) _calcRow('Item Discount', -totals.itemDiscount, color: Colors.red.shade700),
-                    if (totals.visitChargesTotal > 0) _calcRow('Visit Charges', totals.visitChargesTotal),
-                    const Divider(height: 16, color: borderLight),
-                    _calcRow('Taxable Value', totals.taxableAmount, bold: true, color: textDark),
-                    const SizedBox(height: 8),
-                    if (!_isInterState) ...[
-                      _calcRow('CGST', totals.cgst, color: textMuted),
-                      _calcRow('SGST', totals.sgst, color: textMuted),
-                    ] else
-                      _calcRow('IGST', totals.igst, color: textMuted),
-                    if (totals.roundOff != 0) _calcRow('Round Off', totals.roundOff, color: textMuted),
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12), border: Border.all(color: borderLight)),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('GRAND TOTAL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textDark)),
-                          Text('₹${totals.finalTotal.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: primaryColor)),
-                        ],
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(child: _buildMachineTypeDropdown(machineState)),
+                      const SizedBox(width: 16),
+                      Expanded(child: _buildMachineModelDropdown(machineState)),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          initialValue: machineState.serial,
+                          readOnly: _isReadOnly.value,
+                          decoration: InputDecoration(
+                            labelText: 'Serial Number', labelStyle: const TextStyle(fontWeight: FontWeight.w500, color: textMuted),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: borderLight)),
+                            isDense: true, filled: true, fillColor: _isReadOnly.value ? Colors.grey.shade50 : Colors.white,
+                          ),
+                          onChanged: (v) => _updateMachine(machineState.copyWith(serial: v)),
+                        ),
                       ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: machineState.warrantyStatus,
+                            decoration: InputDecoration(
+                              labelText: 'Warranty Status', labelStyle: const TextStyle(fontWeight: FontWeight.w500, color: textMuted),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: borderLight)),
+                              isDense: true, filled: true, fillColor: _isReadOnly.value ? Colors.grey.shade50 : Colors.white,
+                            ),
+                            items: ['Under Warranty', 'Out Of Warranty', 'AMC Active', 'AMC Expired']
+                                .map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(fontSize: 14))))
+                                .toList(),
+                            onChanged: _isReadOnly.value ? null : (v) {
+                              if (v != null) {
+                                _updateMachine(machineState.copyWith(
+                                    warrantyStatus: v,
+                                    isWarranty: v == 'Under Warranty' || v == 'AMC Active'
+                                ));
+                              }
+                            },
+                          )
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    initialValue: machineState.complaint,
+                    readOnly: _isReadOnly.value,
+                    maxLines: 2,
+                    decoration: InputDecoration(
+                      labelText: 'Complaint / Requirement', labelStyle: const TextStyle(fontWeight: FontWeight.w500, color: textMuted),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: borderLight)),
+                      isDense: true, filled: true, fillColor: _isReadOnly.value ? Colors.grey.shade50 : Colors.white,
                     ),
-                  ],
+                    onChanged: (v) => _updateMachine(machineState.copyWith(complaint: v)),
+                  ),
+                ],
+              )
+          );
+        }
+    );
+  }
+
+  Widget _buildItemsExpansionTile() {
+    return ValueListenableBuilder<MachineFormState>(
+        valueListenable: _machine,
+        builder: (context, machineState, _) {
+          return ValueListenableBuilder<List<ext_models.VisitCharge>>(
+              valueListenable: _visitCharges,
+              builder: (context, vCharges, _) {
+                return _buildSectionExpansionTile(
+                  controller: _itemsTileCtrl,
+                  title: '3. Items',
+                  icon: Icons.build_circle_outlined,
+                  isComplete: _isItemsComplete(),
+                  onNext: () {
+                    _itemsTileCtrl.collapse();
+                    _financeTileCtrl.expand();
+                  },
+                  child: ServiceItemsSection(
+                    companyId: _companyId,
+                    selectedMachineModel: machineState.model,
+                    machineSerialNumber: machineState.serial,
+                    machineWarrantyStatus: machineState.warrantyStatus,
+                    lineItems: machineState.items,
+                    visitCharges: vCharges,
+                    onItemsChanged: _onItemsChanged,
+                    onVisitChargesChanged: _onVisitChargesChanged,
+                    isReadOnly: _isReadOnly.value,
+                  ),
                 );
+              }
+          );
+        }
+    );
+  }
+
+  Widget _buildFinancialExpansionTile() {
+    return ValueListenableBuilder<QuotationTotals>(
+        valueListenable: _globalTotals,
+        builder: (context, totals, _) {
+          return _buildSectionExpansionTile(
+              controller: _financeTileCtrl,
+              title: '4. Financial Summary',
+              icon: Icons.account_balance_wallet,
+              isComplete: true, // Auto computes
+              onNext: () {
+                _financeTileCtrl.collapse();
+                _termsTileCtrl.expand();
               },
-            ),
-          ],
-        ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                        color: Colors.white,
+                        border: Border.all(color: borderLight),
+                        borderRadius: BorderRadius.circular(12)
+                    ),
+                    child: Column(
+                      children: [
+                        _buildSummaryRowItem('Items Total', totals.subtotal),
+                        _buildSummaryRowItem('Charges Total', totals.visitChargesTotal),
+                        _buildSummaryRowItem('Discount', -totals.itemDiscount, isDeduction: true),
+                        const Divider(height: 24, thickness: 1),
+                        _buildSummaryRowItem('Taxable Amount', totals.taxableAmount, isBold: true),
+                        if (totals.cgst > 0) _buildSummaryRowItem('CGST', totals.cgst),
+                        if (totals.sgst > 0) _buildSummaryRowItem('SGST', totals.sgst),
+                        if (totals.igst > 0) _buildSummaryRowItem('IGST', totals.igst),
+                        _buildSummaryRowItem('Round Off', totals.roundOff),
+                        const Divider(height: 24, thickness: 1),
+                        _buildSummaryRowItem('Grand Total', totals.finalTotal, isGrandTotal: true),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ValueListenableBuilder<bool>(
+                      valueListenable: _packingChargesExtra,
+                      builder: (context, val, _) => SwitchListTile(
+                        title: const Text('Packing & Forwarding Extra', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                        subtitle: const Text('Add remark that packing & transport are extra at actuals', style: TextStyle(fontSize: 12, color: textMuted)),
+                        value: val,
+                        activeColor: primaryColor,
+                        contentPadding: EdgeInsets.zero,
+                        onChanged: _isReadOnly.value ? null : (newVal) => _packingChargesExtra.value = newVal,
+                      )
+                  ),
+                  const SizedBox(height: 8),
+                  _buildItemTextField(
+                      _subjectController,
+                      'Remarks (Optional)',
+                      maxLines: 2,
+                      hint: 'Additional notes or remarks...'
+                  ),
+                ],
+              )
+          );
+        }
+    );
+  }
+
+  Widget _buildSummaryRowItem(String label, double amount, {bool isBold = false, bool isGrandTotal = false, bool isDeduction = false}) {
+    if (amount == 0 && !isGrandTotal && !isBold) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+              label,
+              style: TextStyle(
+                  fontSize: isGrandTotal ? 16 : 13,
+                  fontWeight: (isBold || isGrandTotal) ? FontWeight.bold : FontWeight.normal,
+                  color: isGrandTotal ? textDark : textMuted
+              )
+          ),
+          Text(
+              '${isDeduction ? '-' : ''}₹${amount.abs().toStringAsFixed(2)}',
+              style: TextStyle(
+                  fontSize: isGrandTotal ? 18 : 13,
+                  fontWeight: (isBold || isGrandTotal) ? FontWeight.bold : FontWeight.w600,
+                  color: isGrandTotal ? Colors.green : (isDeduction ? Colors.red : textDark)
+              )
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildTermsSection() {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: borderLight)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
+  Widget _buildTermsExpansionTile() {
+    return _buildSectionExpansionTile(
+        controller: _termsTileCtrl,
+        title: '5. Terms & Conditions',
+        icon: Icons.gavel_outlined,
+        isComplete: true,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: _buildSectionHeader('Terms & Conditions', Icons.gavel_outlined, 'Standard business terms'),
-                ),
-                ValueListenableBuilder<bool>(
-                    valueListenable: _isReadOnly,
-                    builder: (ctx, readOnly, _) => readOnly ? const SizedBox.shrink() : OutlinedButton.icon(
-                      onPressed: () {
-                        final currentTerms = List<TermRow>.from(_dynamicTerms.value);
-                        currentTerms.add(TermRow(id: _uuid.v4()));
-                        _dynamicTerms.value = currentTerms;
-                      },
-                      icon: const Icon(Icons.add, size: 16),
-                      label: const Text('Add Term', style: TextStyle(fontWeight: FontWeight.w600)),
-                      style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), foregroundColor: textDark, side: const BorderSide(color: borderLight)),
-                    )
+            ValueListenableBuilder<bool>(
+                valueListenable: _isReadOnly,
+                builder: (ctx, readOnly, _) => readOnly ? const SizedBox.shrink() : OutlinedButton.icon(
+                  onPressed: () {
+                    final currentTerms = List<TermRow>.from(_dynamicTerms.value);
+                    currentTerms.add(TermRow(id: _uuid.v4()));
+                    _dynamicTerms.value = currentTerms;
+                  },
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Add Term', style: TextStyle(fontWeight: FontWeight.w600)),
+                  style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), foregroundColor: textDark, side: const BorderSide(color: borderLight)),
                 )
-              ],
             ),
             const SizedBox(height: 16),
             ValueListenableBuilder<List<TermRow>>(
@@ -2719,66 +2244,68 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
               },
             ),
           ],
-        ),
-      ),
+        )
     );
   }
 
-  Widget _buildBottomButtons() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      decoration: const BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: borderLight)), boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, -1))]),
-      child: SafeArea(
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            ValueListenableBuilder<QuotationTotals>(
-              valueListenable: _totals,
-              builder: (ctx, totals, _) => Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildBottomActionBar() {
+    return ValueListenableBuilder<MachineFormState>(
+        valueListenable: _machine,
+        builder: (ctx, _, __) => ValueListenableBuilder<QuotationTotals>(
+            valueListenable: _globalTotals,
+            builder: (ctx, ___, ____) => Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('Final Total', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textMuted)),
-                  Text('₹ ${totals.finalTotal.toStringAsFixed(2)}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: textDark)),
-                ],
-              ),
-            ),
-            Row(
-              children: [
-                if (widget.quotationId != null)
-                  ValueListenableBuilder<bool>(
-                    valueListenable: _createRevisionFlag,
-                    builder: (ctx, isRev, _) => Container(
-                      margin: const EdgeInsets.only(right: 16),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.orange.shade200)),
+                  if (widget.quotationId != null)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
                       child: Row(
-                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          Text('Save as Revision', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.orange.shade900)),
-                          Switch(value: isRev, activeColor: Colors.orange.shade600, onChanged: _isReadOnly.value ? null : (v) => _createRevisionFlag.value = v),
+                          ValueListenableBuilder<bool>(
+                            valueListenable: _createRevisionFlag,
+                            builder: (ctx, isRev, _) => Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.orange.shade200)),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text('Save as Revision', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.orange.shade900)),
+                                  Switch(value: isRev, activeColor: Colors.orange.shade600, onChanged: _isReadOnly.value ? null : (v) => _createRevisionFlag.value = v),
+                                ],
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                  ),
-                ValueListenableBuilder<bool>(
-                  valueListenable: _isReadOnly,
-                  builder: (ctx, readOnly, _) => FilledButton.icon(
-                    onPressed: readOnly ? null : _saveQuotation,
-                    icon: const Icon(Icons.check_circle_outline),
-                    label: const Text('Save Quotation', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                    style: FilledButton.styleFrom(backgroundColor: primaryColor, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                  ),
-                ),
-              ],
+                  QuotationBottomActionBar(
+                    quotation: _buildExternalModel(),
+                    onSaveDraft: () {
+                      _quotationStatus = 'Draft';
+                      _saveQuotation();
+                    },
+                    onSendQuote: () {
+                      _quotationStatus = 'Sent';
+                      _saveQuotation();
+                    },
+                    onPreviewPdf: _previewPdf,
+                    onRefresh: _initializeScreen,
+                    onOpenRequest: _openRequest,
+                    onOpenVisit: _openVisit,
+                    onDuplicate: _duplicateQuotation,
+                    onDelete: _deleteQuotation,
+                  )
+                ]
             )
-          ],
-        ),
-      ),
+        )
     );
   }
 
-  // --- Helpers ---
+  // ===========================================================================
+  // --- 11. UI COMPONENT HELPERS ---
+  // ===========================================================================
+
   Widget _buildItemTextField(TextEditingController controller, String label, {TextInputType keyboardType = TextInputType.text, String? Function(String?)? validator, int? maxLines = 1, String? hint, Function(String)? onChanged, bool readOnlyOverride = false, List<TextInputFormatter>? inputFormatters}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -2815,116 +2342,135 @@ class _CreateServiceQuotationScreenState extends State<CreateServiceQuotationScr
     );
   }
 
-  Widget _buildSectionHeader(String title, IconData icon, String subtitle) {
-    return Row(
-      children: [
-        Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: accentColor.withOpacity(0.1), borderRadius: BorderRadius.circular(10)), child: Icon(icon, color: accentColor, size: 22)),
-        const SizedBox(width: 16),
-        Expanded(child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textDark)),
-            Text(subtitle, style: const TextStyle(fontSize: 13, color: textMuted, fontWeight: FontWeight.w500)),
-          ],
-        )),
-      ],
+  Widget _buildCategoryDropdown(MachineFormState machine) {
+    return StreamBuilder<QuerySnapshot>(
+        stream: _companyDoc?.collection('inventory_categories').where('isActive', isEqualTo: true).snapshots(),
+        builder: (ctx, snap) {
+          List<DropdownMenuItem<String>> items = [];
+          if (snap.hasData) {
+            items = snap.data!.docs.map((doc) => DropdownMenuItem(value: doc.id, child: Text((doc['name'] ?? '').toString(), style: const TextStyle(fontSize: 14)))).toList();
+          }
+
+          if (machine.categoryId != null && !items.any((e) => e.value == machine.categoryId)) {
+            items.insert(0, DropdownMenuItem(value: machine.categoryId, child: const Text('Unknown Category')));
+          }
+
+          return DropdownButtonFormField<String>(
+            value: machine.categoryId,
+            decoration: InputDecoration(
+              labelText: 'Category', labelStyle: const TextStyle(fontWeight: FontWeight.w500, color: textMuted),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: borderLight)),
+              isDense: true, filled: true, fillColor: _isReadOnly.value ? Colors.grey.shade50 : Colors.white,
+            ),
+            items: items.isEmpty ? null : items,
+            onChanged: _isReadOnly.value ? null : (val) {
+              _updateMachine(machine.clearCascade(1).copyWith(categoryId: val));
+            },
+          );
+        }
     );
   }
 
-  Widget _calcRow(String label, double amount, {bool bold = false, double size = 14, Color? color}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: TextStyle(fontWeight: bold ? FontWeight.bold : FontWeight.w600, fontSize: size, color: color ?? textMuted)),
-          Text('₹${amount.toStringAsFixed(2)}', style: TextStyle(fontWeight: bold ? FontWeight.w900 : FontWeight.bold, fontSize: size, color: color ?? textDark)),
-        ],
-      ),
+  Widget _buildSubcategoryDropdown(MachineFormState machine) {
+    return StreamBuilder<QuerySnapshot>(
+        stream: machine.categoryId != null ? _companyDoc?.collection('inventory_categories').doc(machine.categoryId).collection('subcategories').where('isActive', isEqualTo: true).snapshots() : null,
+        builder: (ctx, snap) {
+          List<DropdownMenuItem<String>> items = [];
+          if (snap.hasData) {
+            items = snap.data!.docs.map((doc) => DropdownMenuItem(value: doc.id, child: Text((doc['name'] ?? '').toString(), style: const TextStyle(fontSize: 14)))).toList();
+          }
+
+          if (machine.subcategoryId != null && !items.any((e) => e.value == machine.subcategoryId)) {
+            items.insert(0, DropdownMenuItem(value: machine.subcategoryId, child: const Text('Unknown Subcategory')));
+          }
+
+          return DropdownButtonFormField<String>(
+            value: machine.subcategoryId,
+            decoration: InputDecoration(
+              labelText: 'Subcategory', labelStyle: const TextStyle(fontWeight: FontWeight.w500, color: textMuted),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: borderLight)),
+              isDense: true, filled: true, fillColor: _isReadOnly.value ? Colors.grey.shade50 : Colors.white,
+            ),
+            items: machine.categoryId == null ? null : items,
+            onChanged: _isReadOnly.value ? null : (val) {
+              _updateMachine(machine.clearCascade(2).copyWith(subcategoryId: val));
+            },
+          );
+        }
     );
   }
 
-  Map<String, dynamic> _buildPreviewData() {
-    return {
-      'quoteNumber': _getLiveQuoteNumberDisplay(),
-      'quoteDateStr': '${_quoteDate.day.toString().padLeft(2, '0')}/${_quoteDate.month.toString().padLeft(2, '0')}/${_quoteDate.year}',
-      'version': _currentVersion.toString(),
-      'approvalStatus': _approvalStatus,
-      'paymentStatus': _paymentStatus,
-      'serviceRequestNumber': _serviceRequestNumberController.text.trim(),
-      'subject': _subjectController.text.trim(),
-      'machineModel': _machineModelController.text.trim(),
-      'serialNumber': _machineSerialController.text.trim(),
-      'complaintDescription': _complaintController.text.trim(),
-      'clientName': _clientNameController.text.trim(),
-      'clientAddress': _addressController.text.trim(),
-      'clientEmail': _emailController.text.trim(),
-      'clientMobile': _mobileController.text.trim(),
-      'contactPerson': _contactPersonController.text.trim(),
-      'gstNo': _gstController.text.trim(),
-      'customerState': _customerState,
-      'isInterState': _isInterState,
-      'addressSnapshot': _selectedAddressData,
-      'contactSnapshot': _selectedContactData,
-      'totalSubtotal': _totals.value.subtotal,
-      'totalVisitCharges': _totals.value.visitChargesTotal,
-      'totalTaxableAmount': _totals.value.taxableAmount,
-      'totalCgst': _totals.value.cgst,
-      'totalSgst': _totals.value.sgst,
-      'totalIgst': _totals.value.igst,
-      'grandTotal': _totals.value.grandTotal,
-      'finalTotal': _totals.value.finalTotal,
-      'dynamicTerms': _dynamicTerms.value.map((e) => {'id': e.id, 'title': e.titleCtrl.text.trim(), 'value': e.valueCtrl.text.trim()}).toList(),
-      'packingChargesExtra': _packingChargesExtra.value,
-      'visitCharges': _visitCharges.value.map((e) => e.toMap()).toList(),
-      'companyName': _companyName,
-      'companyAddress': _companyAddress,
-      'companyPhone': _companyPhone,
-      'companyEmail': _companyEmail,
-      'companyWebsite': _companyWebsite,
-      'companyGst': _companyGst,
-      'companyCin': _companyCin,
-      'companyPan': _companyPan,
-      'companyBankDetails': _companyBankDetails,
-      'companyLogoUrl': _companyLogoUrl,
-      'signatureName': _signNameController.text.trim(),
-      'signatureDesignation': _signDesignationController.text.trim(),
-      'signaturePhone': _signPhoneController.text.trim(),
-    };
+  Widget _buildMachineTypeDropdown(MachineFormState machine) {
+    return StreamBuilder<QuerySnapshot>(
+        stream: _companyDoc?.collection('inventory_machine_types').where('isActive', isEqualTo: true).snapshots(),
+        builder: (ctx, snap) {
+          List<DropdownMenuItem<String>> items = [];
+          if (snap.hasData) {
+            items = snap.data!.docs.map((doc) => DropdownMenuItem(value: (doc['name'] ?? '').toString(), child: Text((doc['name'] ?? '').toString(), style: const TextStyle(fontSize: 14)))).toList();
+          }
+
+          if (machine.machineType != null && !items.any((e) => e.value == machine.machineType)) {
+            items.insert(0, DropdownMenuItem(value: machine.machineType, child: Text(machine.machineType!)));
+          }
+
+          return DropdownButtonFormField<String>(
+            value: machine.machineType,
+            decoration: InputDecoration(
+              labelText: 'Machine Type / Series', labelStyle: const TextStyle(fontWeight: FontWeight.w500, color: textMuted),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: borderLight)),
+              isDense: true, filled: true, fillColor: _isReadOnly.value ? Colors.grey.shade50 : Colors.white,
+            ),
+            items: items.isEmpty ? null : items,
+            onChanged: _isReadOnly.value ? null : (val) {
+              _updateMachine(machine.clearCascade(3).copyWith(machineType: val));
+            },
+          );
+        }
+    );
   }
-}
 
-// ===========================================================================
-// PREVIEW SCREEN
-// ===========================================================================
+  Widget _buildMachineModelDropdown(MachineFormState machine) {
+    Stream<QuerySnapshot>? queryStream;
 
-class QuotationPreviewScreen extends StatelessWidget {
-  final Map<String, dynamic> quotation;
-  final List<QuotationLineItem> items;
+    if (machine.categoryId != null && machine.subcategoryId != null && machine.machineType != null) {
+      queryStream = _companyDoc?.collection('products')
+          .where('isActive', isEqualTo: true)
+          .where('productNatureLower', isEqualTo: 'machine')
+          .where('categoryId', isEqualTo: machine.categoryId)
+          .where('subcategoryId', isEqualTo: machine.subcategoryId)
+          .where('machineType', isEqualTo: machine.machineType)
+          .snapshots();
+    }
 
-  const QuotationPreviewScreen({
-    super.key,
-    required this.quotation,
-    required this.items,
-  });
+    return StreamBuilder<QuerySnapshot>(
+        stream: queryStream,
+        builder: (ctx, snap) {
+          List<DropdownMenuItem<String>> items = [];
+          if (snap.hasData) {
+            items = snap.data!.docs.map((doc) => DropdownMenuItem(value: doc.id, child: Text((doc['name'] ?? '').toString(), style: const TextStyle(fontSize: 14)))).toList();
+          }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Quotation Preview', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        foregroundColor: textDark,
-        elevation: 1,
-      ),
-      body: PdfPreview(
-        build: (format) => ServiceQuotationPdfGenerator.generateServiceQuotationPdf(quotation, items),
-        allowPrinting: true,
-        allowSharing: true,
-        canChangeOrientation: false,
-        canChangePageFormat: false,
-        canDebug: false,
-      ),
+          if (machine.productId != null && !items.any((e) => e.value == machine.productId)) {
+            items.insert(0, DropdownMenuItem(value: machine.productId, child: Text(machine.model.isNotEmpty ? machine.model : 'Unknown Model')));
+          }
+
+          return DropdownButtonFormField<String>(
+            value: machine.productId,
+            decoration: InputDecoration(
+              labelText: 'Machine Model *', labelStyle: const TextStyle(fontWeight: FontWeight.w500, color: textMuted),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: borderLight)),
+              isDense: true, filled: true, fillColor: _isReadOnly.value ? Colors.grey.shade50 : Colors.white,
+            ),
+            items: queryStream == null ? null : items,
+            onChanged: _isReadOnly.value ? null : (val) {
+              if (val != null && snap.hasData) {
+                final selectedDoc = snap.data!.docs.firstWhere((d) => d.id == val);
+                final modelName = (selectedDoc['name'] ?? '').toString();
+                _updateMachine(machine.copyWith(productId: val, model: modelName));
+              }
+            },
+          );
+        }
     );
   }
 }

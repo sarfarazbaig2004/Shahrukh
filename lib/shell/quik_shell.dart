@@ -1432,6 +1432,8 @@ class _ZohoShellState extends State<ZohoShell> {
           padding: const EdgeInsets.all(10),
           child: ServiceTechnicianListScreen(
             companyId: widget.companyId,
+            currentUserUid: widget.userUid,
+            currentUserName: _resolvedEmployeeName(),
           ),
         );
 
@@ -1440,6 +1442,8 @@ class _ZohoShellState extends State<ZohoShell> {
           padding: const EdgeInsets.all(10),
           child: ServiceQuotationListScreen(
             companyId: widget.companyId,
+            currentUserUid: widget.userUid,
+            currentUserName: _resolvedEmployeeName(),
           ),
         );
 
