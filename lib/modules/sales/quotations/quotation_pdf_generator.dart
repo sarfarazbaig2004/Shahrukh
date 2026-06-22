@@ -1367,7 +1367,7 @@ class QuotationPdfGenerator {
       child: pw.Padding(
         padding: const pw.EdgeInsets.fromLTRB(18, 18, 18, 14),
         child: pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.center,
+          crossAxisAlignment: pw.CrossAxisAlignment.end,
           children: [
             if (companyName.isNotEmpty)
               pw.Text(
@@ -1377,7 +1377,7 @@ class QuotationPdfGenerator {
                   fontWeight: pw.FontWeight.bold,
                   color: _primaryColor,
                 ),
-                textAlign: pw.TextAlign.center,
+                textAlign: pw.TextAlign.right,
               ),
             pw.SizedBox(height: 46),
             pw.Container(width: 145, height: 1, color: _borderColor),
@@ -1443,12 +1443,12 @@ class QuotationPdfGenerator {
               ),
             ],
           ),
-          pw.SizedBox(height: 42),
+          pw.SizedBox(height: 86),
           pw.Align(
-            alignment: pw.Alignment.center,
-            child: pw.Container(width: 290, child: signatureCard),
+            alignment: pw.Alignment.centerRight,
+            child: pw.Container(width: 285, child: signatureCard),
           ),
-          pw.SizedBox(height: 16),
+          pw.SizedBox(height: 6),
         ],
       ),
     );
