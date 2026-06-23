@@ -111,12 +111,12 @@ class _ScreensStockInListState extends State<ScreensStockInList> {
                             child: products.isEmpty
                                 ? const _EmptyProductsState()
                                 : SingleChildScrollView(
-                                    child: Column(
-                                      children: [
-                                        for (var i = 0; i < _items.length; i++) _itemRow(i, products),
-                                      ],
-                                    ),
-                                  ),
+                              child: Column(
+                                children: [
+                                  for (var i = 0; i < _items.length; i++) _itemRow(i, products),
+                                ],
+                              ),
+                            ),
                           ),
                         ],
                       ),
