@@ -1,7 +1,21 @@
+// FILE PATH: lib/modules/service/technicians/add_service_technician_screen.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+
+// ==========================================
+// ENTERPRISE HELPERS & SAFETY PARSERS
+// ==========================================
+String _safeString(dynamic val) => (val ?? '').toString().trim();
+
+int _safeInt(dynamic val) {
+  if (val == null) return 0;
+  if (val is int) return val;
+  if (val is double) return val.toInt();
+  return int.tryParse(val.toString()) ?? 0;
+}
 
 class AddServiceTechnicianScreen extends StatefulWidget {
   final String companyId;
@@ -16,8 +30,7 @@ class AddServiceTechnicianScreen extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<AddServiceTechnicianScreen> createState() =>
-      _AddServiceTechnicianScreenState();
+  State<AddServiceTechnicianScreen> createState() => _AddServiceTechnicianScreenState();
 }
 
 class _AddServiceTechnicianScreenState extends State<AddServiceTechnicianScreen> {
@@ -25,21 +38,13 @@ class _AddServiceTechnicianScreenState extends State<AddServiceTechnicianScreen>
   bool _isSaving = false;
   bool _isLoadingStats = true;
 
-  // --- Theme Constants ---
-  final Color _primaryColor = const Color(0xFF17324D);
-  final Color _accentColor = const Color(0xFF3B82F6);
-  final Color _surfaceColor = const Color(0xFFF1F5F9);
-  final Color _borderColor = const Color(0xFFE2E8F0);
-
   // --- Controllers ---
   late TextEditingController _experienceController;
   late TextEditingController _territoryController;
-  late TextEditingController _secondaryTerritoryController;
   late TextEditingController _regionController;
   late TextEditingController _remarksController;
   late TextEditingController _leaveReasonController;
   late TextEditingController _dailyCapCtrl;
-  late TextEditingController _weeklyCapCtrl;
   late TextEditingController _monthlyCapCtrl;
 
   // --- State Variables ---
@@ -49,7 +54,6 @@ class _AddServiceTechnicianScreenState extends State<AddServiceTechnicianScreen>
   List<String> _secondarySkillsList = [];
   List<String> _certificationsList = [];
   List<String> _workingDaysList = [];
-  List<String> _secondaryTerritoriesList = [];
 
   DateTime? _leaveFrom;
   DateTime? _leaveTo;
@@ -57,19 +61,21 @@ class _AddServiceTechnicianScreenState extends State<AddServiceTechnicianScreen>
   bool _canHandleInstallation = true;
   bool _canHandleBreakdown = true;
   bool _canHandlePM = true;
-  bool _canHandleTraining = false;
-  bool _canHandleEmergency = false;
 
   // --- Performance Stats (Read-Only) ---
   int _openVisits = 0;
   int _completedVisits = 0;
-  int _thisMonthVisits = 0;
   int _upcomingVisits = 0;
-  int _last30DaysVisits = 0;
-  double _utilization = 0.0;
+  int _thisMonthVisits = 0;
 
   // --- Options ---
-  final List<String> _skillOptions = [
+  final List<String> _primarySkillOptions = [
+    'General Service', 'Installation', 'Breakdown Maintenance',
+    'Preventive Maintenance', 'Electrical', 'Mechanical',
+    'PLC', 'Automation', 'Calibration', 'Training'
+  ];
+
+  final List<String> _secondarySkillOptions = [
     'Installation', 'Breakdown Maintenance', 'Preventive Maintenance',
     'Electrical', 'Mechanical', 'PLC', 'Automation', 'Calibration',
     'Training', 'General Service',
@@ -83,7 +89,7 @@ class _AddServiceTechnicianScreenState extends State<AddServiceTechnicianScreen>
   final List<String> _dayOptions = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   final List<String> _statusOptions = [
-    'Available', 'Busy', 'On Leave', 'Training', 'Inactive'
+    'Available', 'Busy', 'On Leave', 'Inactive'
   ];
 
   @override
@@ -91,45 +97,38 @@ class _AddServiceTechnicianScreenState extends State<AddServiceTechnicianScreen>
     super.initState();
     _initializeData();
     _loadPerformanceStats();
-
-    // Auto-recalculate utilization when monthly capacity changes
-    _monthlyCapCtrl.addListener(_recalculateUtilization);
   }
 
   void _initializeData() {
     final d = widget.existingData;
 
-    _experienceController = TextEditingController(text: (d['experienceYears'] ?? '').toString());
-    _territoryController = TextEditingController(text: (d['territory'] ?? '').toString());
-    _regionController = TextEditingController(text: (d['serviceRegion'] ?? '').toString());
-    _remarksController = TextEditingController(text: (d['remarks'] ?? '').toString());
-    _leaveReasonController = TextEditingController(text: (d['leaveReason'] ?? '').toString());
+    _experienceController = TextEditingController(text: _safeString(d['experienceYears']));
+    _territoryController = TextEditingController(text: _safeString(d['territory']));
+    _regionController = TextEditingController(text: _safeString(d['serviceRegion']));
+    _remarksController = TextEditingController(text: _safeString(d['remarks']));
+    _leaveReasonController = TextEditingController(text: _safeString(d['leaveReason']));
 
-    _dailyCapCtrl = TextEditingController(text: (d['dailyCapacity'] ?? 3).toString());
-    _weeklyCapCtrl = TextEditingController(text: (d['weeklyCapacity'] ?? 15).toString());
-    _monthlyCapCtrl = TextEditingController(text: (d['monthlyCapacity'] ?? 60).toString());
+    _dailyCapCtrl = TextEditingController(text: _safeInt(d['dailyCapacity'] ?? 3).toString());
+    _monthlyCapCtrl = TextEditingController(text: _safeInt(d['monthlyCapacity'] ?? 60).toString());
 
-    _secondaryTerritoryController = TextEditingController();
-    if (d['secondaryTerritories'] is List) {
-      _secondaryTerritoriesList = List<String>.from(d['secondaryTerritories']);
+    String pSkill = _safeString(d['primarySkill']);
+    if (pSkill.isNotEmpty && _primarySkillOptions.contains(pSkill)) {
+      _primarySkill = pSkill;
     }
 
-    if (_skillOptions.contains(d['primarySkill'])) {
-      _primarySkill = d['primarySkill'];
-    }
-    if (_statusOptions.contains(d['availabilityStatus'])) {
-      _availabilityStatus = d['availabilityStatus'];
+    String aStatus = _safeString(d['availabilityStatus']);
+    if (aStatus.isNotEmpty && _statusOptions.contains(aStatus)) {
+      _availabilityStatus = aStatus;
     }
 
     if (d['secondarySkillsList'] is List) {
       _secondarySkillsList = List<String>.from(d['secondarySkillsList']);
     } else {
-      String secSkillsStr = (d['secondarySkills'] ?? '').toString();
+      String secSkillsStr = _safeString(d['secondarySkills']);
       if (secSkillsStr.isNotEmpty) {
         _secondarySkillsList = secSkillsStr.split(',').map((e) => e.trim()).toList();
       }
     }
-    // Prevent duplicate of primary skill in secondary
     _secondarySkillsList.removeWhere((s) => s == _primarySkill);
 
     if (d['certifications'] is List) {
@@ -148,8 +147,6 @@ class _AddServiceTechnicianScreenState extends State<AddServiceTechnicianScreen>
     _canHandleInstallation = d['canHandleInstallation'] ?? true;
     _canHandleBreakdown = d['canHandleBreakdown'] ?? true;
     _canHandlePM = d['canHandlePM'] ?? true;
-    _canHandleTraining = d['canHandleTraining'] ?? false;
-    _canHandleEmergency = d['canHandleEmergency'] ?? false;
 
     _checkAutoLeaveStatus();
   }
@@ -165,15 +162,6 @@ class _AddServiceTechnicianScreenState extends State<AddServiceTechnicianScreen>
     }
   }
 
-  void _recalculateUtilization() {
-    int monthlyCap = int.tryParse(_monthlyCapCtrl.text) ?? 60;
-    if (monthlyCap > 0) {
-      setState(() {
-        _utilization = (_thisMonthVisits / monthlyCap).clamp(0.0, 1.0);
-      });
-    }
-  }
-
   Future<void> _loadPerformanceStats() async {
     try {
       final res = await FirebaseFirestore.instance
@@ -183,29 +171,31 @@ class _AddServiceTechnicianScreenState extends State<AddServiceTechnicianScreen>
           .where('isDeleted', isEqualTo: false)
           .get();
 
-      int open = 0, completed = 0, thisMonth = 0, upcoming = 0, last30 = 0;
+      int open = 0, completed = 0, upcoming = 0, thisMonth = 0;
       final today = DateTime.now();
-      final thirtyDaysAgo = today.subtract(const Duration(days: 30));
 
       for (var doc in res.docs) {
         final data = doc.data();
-        final assignedUid = (data['assignedToUid'] ?? data['engineerUid'] ?? '').toString();
+        final assignedUid = _safeString(data['assignedTechnicianUid'].toString().isNotEmpty ? data['assignedTechnicianUid'] : data['engineerUid']);
         if (assignedUid != widget.userId) continue;
 
-        final status = (data['status'] ?? '').toString().toLowerCase();
+        final status = _safeString(data['visitStatus']).isNotEmpty ? _safeString(data['visitStatus']) : _safeString(data['status']);
         final vDateRaw = data['visitDate'] ?? data['date'];
         DateTime? vDate;
 
         if (vDateRaw is Timestamp) vDate = vDateRaw.toDate();
         else if (vDateRaw is String) vDate = DateTime.tryParse(vDateRaw);
 
-        if (status != 'completed' && status != 'cancelled') open++;
-        if (status == 'completed') completed++;
+        bool isCompleted = status == 'Completed' || status == 'Resolved';
+        bool isCancelled = status == 'Cancelled';
+        bool isOpen = !isCompleted && !isCancelled;
+
+        if (isOpen) open++;
+        if (isCompleted) completed++;
 
         if (vDate != null) {
           if (vDate.year == today.year && vDate.month == today.month) thisMonth++;
-          if (vDate.isAfter(thirtyDaysAgo) && vDate.isBefore(today.add(const Duration(days: 1)))) last30++;
-          if (vDate.isAfter(today) && status != 'completed' && status != 'cancelled') upcoming++;
+          if (vDate.isAfter(today) && isOpen) upcoming++;
         }
       }
 
@@ -213,12 +203,10 @@ class _AddServiceTechnicianScreenState extends State<AddServiceTechnicianScreen>
         setState(() {
           _openVisits = open;
           _completedVisits = completed;
-          _thisMonthVisits = thisMonth;
-          _last30DaysVisits = last30;
           _upcomingVisits = upcoming;
+          _thisMonthVisits = thisMonth;
           _isLoadingStats = false;
         });
-        _recalculateUtilization();
       }
     } catch (e) {
       if (mounted) setState(() => _isLoadingStats = false);
@@ -227,40 +215,33 @@ class _AddServiceTechnicianScreenState extends State<AddServiceTechnicianScreen>
 
   @override
   void dispose() {
-    _monthlyCapCtrl.removeListener(_recalculateUtilization);
     _experienceController.dispose();
     _territoryController.dispose();
-    _secondaryTerritoryController.dispose();
     _regionController.dispose();
     _remarksController.dispose();
     _leaveReasonController.dispose();
     _dailyCapCtrl.dispose();
-    _weeklyCapCtrl.dispose();
     _monthlyCapCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _saveProfile() async {
-    if (!_formKey.currentState!.validate()) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please check capacity validation errors.'), backgroundColor: Colors.red));
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
+
     setState(() => _isSaving = true);
 
     try {
       final payload = {
         'primarySkill': _primarySkill,
-        'secondarySkills': _secondarySkillsList.join(', '), // Kept for list compatibility
-        'secondarySkillsList': _secondarySkillsList, // Structured for future queries
+        'secondarySkills': _secondarySkillsList.join(', '),
+        'secondarySkillsList': _secondarySkillsList,
         'certifications': _certificationsList,
-        'experienceYears': int.tryParse(_experienceController.text.trim()) ?? 0,
+        'experienceYears': _safeInt(_experienceController.text),
         'territory': _territoryController.text.trim(),
-        'secondaryTerritories': _secondaryTerritoriesList,
         'serviceRegion': _regionController.text.trim(),
         'availabilityStatus': _availabilityStatus,
-        'dailyCapacity': int.tryParse(_dailyCapCtrl.text.trim()) ?? 3,
-        'weeklyCapacity': int.tryParse(_weeklyCapCtrl.text.trim()) ?? 15,
-        'monthlyCapacity': int.tryParse(_monthlyCapCtrl.text.trim()) ?? 60,
+        'dailyCapacity': _safeInt(_dailyCapCtrl.text),
+        'monthlyCapacity': _safeInt(_monthlyCapCtrl.text),
         'workingDays': _workingDaysList,
         'leaveFrom': _leaveFrom != null ? Timestamp.fromDate(_leaveFrom!) : null,
         'leaveTo': _leaveTo != null ? Timestamp.fromDate(_leaveTo!) : null,
@@ -268,8 +249,6 @@ class _AddServiceTechnicianScreenState extends State<AddServiceTechnicianScreen>
         'canHandleInstallation': _canHandleInstallation,
         'canHandleBreakdown': _canHandleBreakdown,
         'canHandlePM': _canHandlePM,
-        'canHandleTraining': _canHandleTraining,
-        'canHandleEmergency': _canHandleEmergency,
         'remarks': _remarksController.text.trim(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
@@ -282,217 +261,113 @@ class _AddServiceTechnicianScreenState extends State<AddServiceTechnicianScreen>
           .update(payload);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Technician resource profile updated'), backgroundColor: Colors.green),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Technician profile updated successfully'), backgroundColor: Colors.green));
         Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update: $e'), backgroundColor: Colors.red),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to update: $e'), backgroundColor: Colors.red));
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
   }
 
-  // --- Dynamic KPI Calculations ---
-  int get _profileCompleteness {
-    int score = 0;
-    if (_primarySkill != 'General Service') score += 15;
-    if (_secondarySkillsList.isNotEmpty) score += 15;
-    if (_certificationsList.isNotEmpty) score += 10;
-    if ((int.tryParse(_experienceController.text) ?? 0) > 0) score += 10;
-    if (_territoryController.text.isNotEmpty) score += 15;
-    if (_regionController.text.isNotEmpty) score += 10;
-    if (_workingDaysList.isNotEmpty) score += 15;
-    if (_canHandleInstallation || _canHandleBreakdown || _canHandlePM) score += 10;
-    return score.clamp(0, 100);
-  }
-
-  int get _dispatchReadiness {
-    int score = 0;
-    if (_availabilityStatus == 'Available') score += 40;
-    else if (_availabilityStatus == 'Busy') score += 20;
-
-    if (_workingDaysList.isNotEmpty) score += 20;
-    if (_territoryController.text.isNotEmpty) score += 20;
-    if (_primarySkill != 'General Service') score += 20;
-    return score.clamp(0, 100);
-  }
-
-  String get _leaveDuration {
-    if (_leaveFrom != null && _leaveTo != null) {
-      final days = _leaveTo!.difference(_leaveFrom!).inDays + 1;
-      if (days > 0) return '$days Days Leave Scheduled';
-      return 'Invalid Date Range';
-    }
-    return '';
-  }
-
-  // =========================================================================
+  // ==========================================
   // UI BUILDERS
-  // =========================================================================
-
+  // ==========================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _surfaceColor,
-      // Removed Internal AppBar
-      body: SafeArea(
+      backgroundColor: Colors.grey.shade50,
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
+        title: const Text('Technician Profile Configurator', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18)),
+      ),
+      body: Form(
+        key: _formKey,
         child: Column(
           children: [
-            _buildStickyActionBar(),
             Expanded(
-              child: Center(
-                child: Container(
-                  constraints: const BoxConstraints(maxWidth: 900),
-                  child: Form(
-                    key: _formKey,
-                    child: ListView(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 900),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildOverviewHeader(),
+                        _buildBasicInformation(),
                         const SizedBox(height: 20),
                         _buildPerformanceSnapshot(),
                         const SizedBox(height: 20),
-                        _buildSkillsMatrix(),
+                        _buildSkillsSection(),
                         const SizedBox(height: 20),
-                        _buildCapacityAndTerritory(),
+                        _buildTerritorySection(),
                         const SizedBox(height: 20),
-                        _buildDispatchPreferences(),
+                        _buildCapacityAndWorkingDays(),
+                        const SizedBox(height: 20),
+                        _buildAvailabilityAndCapabilities(),
                         const SizedBox(height: 20),
                         _buildLeaveManagement(),
                         const SizedBox(height: 20),
-                        _buildSection(
-                          title: 'Internal Remarks',
-                          icon: Icons.speaker_notes_outlined,
-                          child: TextFormField(
-                            controller: _remarksController,
-                            maxLines: 3,
-                            decoration: InputDecoration(hintText: 'Internal notes for dispatchers...', filled: true, fillColor: Colors.grey.shade50, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: _borderColor))),
-                          ),
-                        ),
-                        const SizedBox(height: 60),
+                        _buildInternalRemarks(),
                       ],
                     ),
                   ),
                 ),
               ),
             ),
+            _buildBottomSaveBar(),
           ],
         ),
       ),
     );
   }
 
-  // --- Sections ---
-
-  Widget _buildStickyActionBar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-      decoration: BoxDecoration(color: Colors.white, border: Border(bottom: BorderSide(color: _borderColor)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0, 2))]),
-      child: Row(
-        children: [
-          IconButton(icon: const Icon(Icons.arrow_back, color: Colors.black87), onPressed: () => Navigator.pop(context)),
-          const SizedBox(width: 8),
-          const Text('Resource Profile Configurator', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.black87)),
-          const Spacer(),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-                backgroundColor: _primaryColor,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
-            ),
-            icon: _isSaving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.save_rounded, size: 18, color: Colors.white),
-            label: const Text('Save Profile', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-            onPressed: _isSaving ? null : _saveProfile,
-          )
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOverviewHeader() {
+  Widget _buildBasicInformation() {
     final d = widget.existingData;
-    final name = (d['fullName'] ?? d['name'] ?? 'Technician').toString();
-    final email = (d['email'] ?? 'No Email').toString();
-    final phone = (d['phone'] ?? 'No Phone').toString();
-    final designation = (d['designation'] ?? 'Service Department').toString();
-    final dept = (d['department'] ?? 'Service').toString();
+    final name = _safeString(d['name'] ?? d['fullName'] ?? d['employeeName']);
+    final email = _safeString(d['email']);
+    final mobile = _safeString(d['mobile'] ?? d['mobileNumber'] ?? d['phone']);
+    final dept = _safeString(d['department'] ?? d['departmentName']);
+    final desig = _safeString(d['designation'] ?? d['designationName']);
 
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: _borderColor), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))]),
+    return _SectionBlock(
+      title: '1. Basic Information (Read-Only)',
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           CircleAvatar(
             radius: 36,
-            backgroundColor: _accentColor.withOpacity(0.1),
-            child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?', style: TextStyle(color: _accentColor, fontWeight: FontWeight.bold, fontSize: 28)),
+            backgroundColor: Colors.blue.withValues(alpha: 0.1),
+            child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?', style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 28)),
           ),
           const SizedBox(width: 20),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Text(name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.black87)),
-                    const SizedBox(width: 12),
-                    _buildStatusBadge(_availabilityStatus),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text('$designation • $dept', style: TextStyle(color: Colors.grey.shade700, fontSize: 13, fontWeight: FontWeight.w600)),
+                Text(name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.black87)),
+                const SizedBox(height: 4),
+                Text('$desig • $dept', style: TextStyle(color: Colors.grey.shade700, fontSize: 13, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Icon(Icons.email_outlined, size: 14, color: Colors.grey.shade500), const SizedBox(width: 4),
-                    Text(email, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-                    const SizedBox(width: 16),
                     Icon(Icons.phone_outlined, size: 14, color: Colors.grey.shade500), const SizedBox(width: 4),
-                    Text(phone, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                    Text(mobile.isEmpty ? 'N/A' : mobile, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                    const SizedBox(width: 16),
+                    Icon(Icons.email_outlined, size: 14, color: Colors.grey.shade500), const SizedBox(width: 4),
+                    Text(email.isEmpty ? 'N/A' : email, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
                   ],
                 )
               ],
             ),
           ),
-          Container(
-            width: 240,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade200)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildMiniProgressBar('Profile Completeness', _profileCompleteness, Colors.blue),
-                const SizedBox(height: 12),
-                _buildMiniProgressBar('Dispatch Readiness', _dispatchReadiness, Colors.green),
-              ],
-            ),
-          )
         ],
       ),
-    );
-  }
-
-  Widget _buildMiniProgressBar(String title, int percent, Color color) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(title, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.blueGrey)),
-            Text('$percent%', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: color)),
-          ],
-        ),
-        const SizedBox(height: 6),
-        LinearProgressIndicator(value: percent / 100, backgroundColor: Colors.grey.shade200, color: color, minHeight: 4, borderRadius: BorderRadius.circular(2)),
-      ],
     );
   }
 
@@ -501,44 +376,15 @@ class _AddServiceTechnicianScreenState extends State<AddServiceTechnicianScreen>
       return const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()));
     }
 
-    // Safely extract the monthly capacity integer for rendering
-    final monthlyCapacity = int.tryParse(_monthlyCapCtrl.text) ?? 0;
-
-    return _buildSection(
-        title: 'Real-time Performance Snapshot',
-        icon: Icons.dashboard_outlined,
+    return _SectionBlock(
+        title: '9. Performance Snapshot',
         child: Wrap(
           spacing: 12, runSpacing: 12,
           children: [
             _buildKpiCard('Open Visits', _openVisits.toString(), Icons.pending_actions, Colors.blue),
-            _buildKpiCard('Completed', _completedVisits.toString(), Icons.task_alt, Colors.green),
-            _buildKpiCard('Upcoming', _upcomingVisits.toString(), Icons.event_available, Colors.orange),
-            _buildKpiCard('Month Vol.', _thisMonthVisits.toString(), Icons.calendar_month, Colors.purple),
-            _buildKpiCard('30 Days', _last30DaysVisits.toString(), Icons.history, Colors.blueGrey),
-            _buildKpiCard('Avg/Week', (_last30DaysVisits / 4).toStringAsFixed(1), Icons.trending_up, Colors.teal),
-
-            // Utilization Bar
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              margin: const EdgeInsets.only(top: 8),
-              decoration: BoxDecoration(color: Colors.blueGrey.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.blueGrey.shade100)),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // BUG FIX: Using properly parsed integer variable instead of controller object mapping
-                  Text('Est. Monthly Utilization (vs $monthlyCapacity capacity limit)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.blueGrey.shade700)),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(child: LinearProgressIndicator(value: _utilization, backgroundColor: Colors.white, color: _utilization > 0.8 ? Colors.red : (_utilization > 0.5 ? Colors.orange : Colors.green), minHeight: 8, borderRadius: BorderRadius.circular(4))),
-                      const SizedBox(width: 12),
-                      Text('${(_utilization * 100).toInt()}%', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
-                    ],
-                  )
-                ],
-              ),
-            ),
+            _buildKpiCard('Completed Visits', _completedVisits.toString(), Icons.task_alt, Colors.green),
+            _buildKpiCard('Upcoming Visits', _upcomingVisits.toString(), Icons.event_available, Colors.orange),
+            _buildKpiCard('This Month Visits', _thisMonthVisits.toString(), Icons.calendar_month, Colors.purple),
           ],
         )
     );
@@ -546,19 +392,20 @@ class _AddServiceTechnicianScreenState extends State<AddServiceTechnicianScreen>
 
   Widget _buildKpiCard(String title, String val, IconData icon, Color color) {
     return Container(
-      width: 130, // Responsive wrap size
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: _borderColor)),
+      width: 150,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade200)),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: color),
-          const SizedBox(width: 10),
+          Icon(icon, size: 24, color: color),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.grey.shade600), maxLines: 1, overflow: TextOverflow.ellipsis),
-                Text(val, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+                Text(title, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.grey.shade600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 4),
+                Text(val, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
               ],
             ),
           )
@@ -567,12 +414,11 @@ class _AddServiceTechnicianScreenState extends State<AddServiceTechnicianScreen>
     );
   }
 
-  Widget _buildSkillsMatrix() {
-    List<String> availableSecondary = _skillOptions.where((s) => s != _primarySkill).toList();
+  Widget _buildSkillsSection() {
+    List<String> availableSecondary = _secondarySkillOptions.where((s) => s != _primarySkill).toList();
 
-    return _buildSection(
-        title: 'Skills & Certifications Matrix',
-        icon: Icons.psychology_outlined,
+    return _SectionBlock(
+        title: '2. Skills',
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -581,12 +427,12 @@ class _AddServiceTechnicianScreenState extends State<AddServiceTechnicianScreen>
                 Expanded(
                   child: DropdownButtonFormField<String>(
                     value: _primarySkill,
-                    decoration: InputDecoration(labelText: 'Primary Skill Specialty', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), filled: true, fillColor: Colors.grey.shade50),
-                    items: _skillOptions.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                    decoration: _inputDecoration('Primary Skill'),
+                    items: _primarySkillOptions.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
                     onChanged: (val) {
                       setState(() {
                         _primarySkill = val!;
-                        _secondarySkillsList.remove(_primarySkill); // Auto remove from secondary
+                        _secondarySkillsList.remove(_primarySkill);
                       });
                     },
                   ),
@@ -597,29 +443,25 @@ class _AddServiceTechnicianScreenState extends State<AddServiceTechnicianScreen>
                     controller: _experienceController,
                     keyboardType: TextInputType.number,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: InputDecoration(labelText: 'Experience (Years)', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), filled: true, fillColor: Colors.grey.shade50),
-                    validator: (val) {
-                      if (val != null && val.isNotEmpty && int.parse(val) < 0) return 'Must be >= 0';
-                      return null;
-                    },
+                    decoration: _inputDecoration('Experience (Years)'),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 24),
-            const Text('Secondary Skills (Multi-select)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+            const Text('Secondary Skills', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8, runSpacing: 8,
               children: availableSecondary.map((skill) {
                 final isSelected = _secondarySkillsList.contains(skill);
                 return FilterChip(
-                  label: Text(skill, style: TextStyle(fontSize: 12, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: isSelected ? _primaryColor : Colors.black87)),
+                  label: Text(skill, style: TextStyle(fontSize: 12, color: isSelected ? Colors.blue.shade800 : Colors.black87)),
                   selected: isSelected,
-                  selectedColor: _primaryColor.withOpacity(0.1),
-                  checkmarkColor: _primaryColor,
+                  selectedColor: Colors.blue.withValues(alpha: 0.1),
+                  checkmarkColor: Colors.blue.shade800,
                   backgroundColor: Colors.grey.shade50,
-                  side: BorderSide(color: isSelected ? _primaryColor.withOpacity(0.5) : _borderColor),
+                  side: BorderSide(color: isSelected ? Colors.blue.withValues(alpha: 0.5) : Colors.grey.shade300),
                   onSelected: (bool selected) {
                     setState(() {
                       if (selected) _secondarySkillsList.add(skill);
@@ -630,7 +472,7 @@ class _AddServiceTechnicianScreenState extends State<AddServiceTechnicianScreen>
               }).toList(),
             ),
             const SizedBox(height: 24),
-            const Text('Certifications / Licenses', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+            const Text('Certifications', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8, runSpacing: 8,
@@ -638,12 +480,12 @@ class _AddServiceTechnicianScreenState extends State<AddServiceTechnicianScreen>
                 final isSelected = _certificationsList.contains(cert);
                 return FilterChip(
                   avatar: isSelected ? const Icon(Icons.verified, size: 16, color: Colors.green) : null,
-                  label: Text(cert, style: TextStyle(fontSize: 12, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: isSelected ? Colors.green.shade800 : Colors.black87)),
+                  label: Text(cert, style: TextStyle(fontSize: 12, color: isSelected ? Colors.green.shade800 : Colors.black87)),
                   selected: isSelected,
                   selectedColor: Colors.green.shade50,
-                  showCheckmark: false, // Replaced by avatar icon
+                  showCheckmark: false,
                   backgroundColor: Colors.grey.shade50,
-                  side: BorderSide(color: isSelected ? Colors.green.shade300 : _borderColor),
+                  side: BorderSide(color: isSelected ? Colors.green.shade300 : Colors.grey.shade300),
                   onSelected: (bool selected) {
                     setState(() {
                       if (selected) _certificationsList.add(cert);
@@ -658,96 +500,41 @@ class _AddServiceTechnicianScreenState extends State<AddServiceTechnicianScreen>
     );
   }
 
-  Widget _buildCapacityAndTerritory() {
-    return _buildSection(
-        title: 'Capacity & Territory Management',
-        icon: Icons.map_outlined,
+  Widget _buildTerritorySection() {
+    return _SectionBlock(
+        title: '3. Territory',
+        child: Row(
+          children: [
+            Expanded(child: TextFormField(controller: _territoryController, decoration: _inputDecoration('Primary Territory'))),
+            const SizedBox(width: 16),
+            Expanded(child: TextFormField(controller: _regionController, decoration: _inputDecoration('Service Region'))),
+          ],
+        )
+    );
+  }
+
+  Widget _buildCapacityAndWorkingDays() {
+    return _SectionBlock(
+        title: '4. Capacity & 5. Working Days',
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Expanded(child: TextFormField(controller: _territoryController, decoration: InputDecoration(labelText: 'Primary Territory', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), filled: true, fillColor: Colors.grey.shade50))),
-                const SizedBox(width: 16),
-                Expanded(child: TextFormField(controller: _regionController, decoration: InputDecoration(labelText: 'Service Region', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), filled: true, fillColor: Colors.grey.shade50))),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: _secondaryTerritoryController,
-                    decoration: InputDecoration(
-                        labelText: 'Add Secondary Territory',
-                        hintText: 'Type and press enter or +',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        filled: true, fillColor: Colors.grey.shade50,
-                        suffixIcon: IconButton(
-                            icon: const Icon(Icons.add_circle, color: Colors.blue),
-                            onPressed: _addSecondaryTerritory
-                        )
-                    ),
-                    onFieldSubmitted: (_) => _addSecondaryTerritory(),
-                  ),
-                ),
-              ],
-            ),
-            if (_secondaryTerritoriesList.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8, runSpacing: 8,
-                children: _secondaryTerritoriesList.map((t) => InputChip(
-                  label: Text(t, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                  deleteIcon: const Icon(Icons.cancel, size: 16, color: Colors.redAccent),
-                  onDeleted: () => setState(() => _secondaryTerritoriesList.remove(t)),
-                  backgroundColor: Colors.blueGrey.shade50,
-                  side: BorderSide.none,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                )).toList(),
-              )
-            ],
-            const SizedBox(height: 32),
-            const Text('Planned Capacity Quotas', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black87)),
-            const SizedBox(height: 12),
-            Row(
-              children: [
                 Expanded(child: TextFormField(
                   controller: _dailyCapCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: InputDecoration(labelText: 'Daily Visits', prefixIcon: const Icon(Icons.today, size: 16), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), filled: true, fillColor: Colors.grey.shade50),
-                  validator: (val) {
-                    int v = int.tryParse(val ?? '') ?? 0;
-                    if (v <= 0) return '> 0';
-                    return null;
-                  },
-                )),
-                const SizedBox(width: 16),
-                Expanded(child: TextFormField(
-                  controller: _weeklyCapCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: InputDecoration(labelText: 'Weekly Target', prefixIcon: const Icon(Icons.view_week, size: 16), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), filled: true, fillColor: Colors.grey.shade50),
-                  validator: (val) {
-                    int w = int.tryParse(val ?? '') ?? 0;
-                    int d = int.tryParse(_dailyCapCtrl.text) ?? 0;
-                    if (w < d) return 'Must be >= Daily';
-                    return null;
-                  },
+                  decoration: _inputDecoration('Daily Capacity (Visits)'),
                 )),
                 const SizedBox(width: 16),
                 Expanded(child: TextFormField(
                   controller: _monthlyCapCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: InputDecoration(labelText: 'Monthly Target', prefixIcon: const Icon(Icons.calendar_month, size: 16), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), filled: true, fillColor: Colors.grey.shade50),
-                  validator: (val) {
-                    int m = int.tryParse(val ?? '') ?? 0;
-                    int w = int.tryParse(_weeklyCapCtrl.text) ?? 0;
-                    if (m < w) return 'Must be >= Weekly';
-                    return null;
-                  },
+                  decoration: _inputDecoration('Monthly Capacity (Visits)'),
                 )),
               ],
             ),
             const SizedBox(height: 24),
-            const Text('Standard Working Days', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black87)),
-            const SizedBox(height: 12),
+            const Text('Working Days', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+            const SizedBox(height: 8),
             Wrap(
               spacing: 8, runSpacing: 8,
               children: _dayOptions.map((day) {
@@ -755,10 +542,10 @@ class _AddServiceTechnicianScreenState extends State<AddServiceTechnicianScreen>
                 return FilterChip(
                   label: Text(day, style: TextStyle(fontSize: 12, color: isSelected ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)),
                   selected: isSelected,
-                  selectedColor: _primaryColor,
+                  selectedColor: Colors.blueGrey.shade700,
                   backgroundColor: Colors.grey.shade100,
                   checkmarkColor: Colors.white,
-                  side: isSelected ? BorderSide.none : BorderSide(color: _borderColor),
+                  side: isSelected ? BorderSide.none : BorderSide(color: Colors.grey.shade300),
                   onSelected: (bool selected) {
                     setState(() {
                       if (selected) _workingDaysList.add(day);
@@ -773,57 +560,56 @@ class _AddServiceTechnicianScreenState extends State<AddServiceTechnicianScreen>
     );
   }
 
-  void _addSecondaryTerritory() {
-    final t = _secondaryTerritoryController.text.trim();
-    final primary = _territoryController.text.trim();
-    if (t.isNotEmpty) {
-      if (t.toLowerCase() == primary.toLowerCase()) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Already set as Primary Territory'), backgroundColor: Colors.orange));
-        return;
-      }
-      if (!_secondaryTerritoriesList.any((e) => e.toLowerCase() == t.toLowerCase())) {
-        setState(() => _secondaryTerritoriesList.add(t));
-      }
-      _secondaryTerritoryController.clear();
-    }
-  }
-
-  Widget _buildDispatchPreferences() {
-    return _buildSection(
-        title: 'Dispatch Routing Preferences',
-        icon: Icons.route_outlined,
-        child: Wrap(
-          spacing: 16, runSpacing: 12,
+  Widget _buildAvailabilityAndCapabilities() {
+    return _SectionBlock(
+        title: '6. Availability & 7. Service Capability',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildPrefCheckbox('Can Handle Installations', _canHandleInstallation, (v) => setState(() => _canHandleInstallation = v)),
-            _buildPrefCheckbox('Can Handle Breakdowns', _canHandleBreakdown, (v) => setState(() => _canHandleBreakdown = v)),
-            _buildPrefCheckbox('Can Handle PM Visits', _canHandlePM, (v) => setState(() => _canHandlePM = v)),
-            _buildPrefCheckbox('Can Conduct Training', _canHandleTraining, (v) => setState(() => _canHandleTraining = v)),
-            _buildPrefCheckbox('Available for Emergency Calls', _canHandleEmergency, (v) => setState(() => _canHandleEmergency = v)),
+            SizedBox(
+              width: 300,
+              child: DropdownButtonFormField<String>(
+                value: _availabilityStatus,
+                decoration: _inputDecoration('Current Availability'),
+                items: _statusOptions.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                onChanged: (val) => setState(() => _availabilityStatus = val!),
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text('Service Capability', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 24, runSpacing: 12,
+              children: [
+                _buildCheckbox('Can Handle Installation', _canHandleInstallation, (v) => setState(() => _canHandleInstallation = v)),
+                _buildCheckbox('Can Handle Breakdown', _canHandleBreakdown, (v) => setState(() => _canHandleBreakdown = v)),
+                _buildCheckbox('Can Handle PM', _canHandlePM, (v) => setState(() => _canHandlePM = v)),
+              ],
+            )
           ],
         )
     );
   }
 
-  Widget _buildPrefCheckbox(String title, bool val, Function(bool) onChanged) {
-    return SizedBox(
-      width: 250,
-      child: CheckboxListTile(
-        title: Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-        value: val,
-        dense: true,
-        contentPadding: EdgeInsets.zero,
-        controlAffinity: ListTileControlAffinity.leading,
-        activeColor: _primaryColor,
-        onChanged: (v) => onChanged(v ?? false),
-      ),
+  Widget _buildCheckbox(String title, bool val, Function(bool) onChanged) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Checkbox(value: val, onChanged: (v) => onChanged(v ?? false), activeColor: Colors.blue.shade700),
+        Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+      ],
     );
   }
 
   Widget _buildLeaveManagement() {
-    return _buildSection(
-        title: 'Leave & Absence Planning',
-        icon: Icons.event_busy_outlined,
+    String leaveDurationStr = '';
+    if (_leaveFrom != null && _leaveTo != null) {
+      final days = _leaveTo!.difference(_leaveFrom!).inDays + 1;
+      if (days > 0) leaveDurationStr = '$days Days Leave Scheduled';
+    }
+
+    return _SectionBlock(
+        title: '8. Leave Management',
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -833,40 +619,36 @@ class _AddServiceTechnicianScreenState extends State<AddServiceTechnicianScreen>
                   child: InkWell(
                     onTap: () async {
                       final d = await showDatePicker(context: context, initialDate: _leaveFrom ?? DateTime.now(), firstDate: DateTime.now().subtract(const Duration(days: 365)), lastDate: DateTime.now().add(const Duration(days: 365)));
-                      if (d != null) {
-                        setState(() { _leaveFrom = d; _checkAutoLeaveStatus(); });
-                      }
+                      if (d != null) setState(() { _leaveFrom = d; _checkAutoLeaveStatus(); });
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                      decoration: BoxDecoration(border: Border.all(color: _borderColor), borderRadius: BorderRadius.circular(8), color: Colors.grey.shade50),
+                      decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8), color: Colors.white),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(_leaveFrom != null ? DateFormat('MMM dd, yyyy').format(_leaveFrom!) : 'Select Leave Start', style: TextStyle(color: _leaveFrom != null ? Colors.black87 : Colors.grey, fontWeight: FontWeight.bold)),
-                          const Icon(Icons.calendar_today, size: 16, color: Colors.blueGrey),
+                          Text(_leaveFrom != null ? DateFormat('MMM dd, yyyy').format(_leaveFrom!) : 'Leave From', style: TextStyle(color: _leaveFrom != null ? Colors.black87 : Colors.grey.shade600)),
+                          Icon(Icons.calendar_today, size: 18, color: Colors.grey.shade500),
                         ],
                       ),
                     ),
                   ),
                 ),
-                const Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Icon(Icons.arrow_forward, size: 16, color: Colors.grey)),
+                const SizedBox(width: 16),
                 Expanded(
                   child: InkWell(
                     onTap: () async {
                       final d = await showDatePicker(context: context, initialDate: _leaveTo ?? _leaveFrom ?? DateTime.now(), firstDate: DateTime.now().subtract(const Duration(days: 365)), lastDate: DateTime.now().add(const Duration(days: 365)));
-                      if (d != null) {
-                        setState(() { _leaveTo = d; _checkAutoLeaveStatus(); });
-                      }
+                      if (d != null) setState(() { _leaveTo = d; _checkAutoLeaveStatus(); });
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                      decoration: BoxDecoration(border: Border.all(color: _borderColor), borderRadius: BorderRadius.circular(8), color: Colors.grey.shade50),
+                      decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8), color: Colors.white),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(_leaveTo != null ? DateFormat('MMM dd, yyyy').format(_leaveTo!) : 'Select Leave End', style: TextStyle(color: _leaveTo != null ? Colors.black87 : Colors.grey, fontWeight: FontWeight.bold)),
-                          const Icon(Icons.calendar_today, size: 16, color: Colors.blueGrey),
+                          Text(_leaveTo != null ? DateFormat('MMM dd, yyyy').format(_leaveTo!) : 'Leave To', style: TextStyle(color: _leaveTo != null ? Colors.black87 : Colors.grey.shade600)),
+                          Icon(Icons.calendar_today, size: 18, color: Colors.grey.shade500),
                         ],
                       ),
                     ),
@@ -874,67 +656,99 @@ class _AddServiceTechnicianScreenState extends State<AddServiceTechnicianScreen>
                 ),
                 if (_leaveFrom != null || _leaveTo != null) ...[
                   const SizedBox(width: 12),
-                  IconButton(
-                    icon: const Icon(Icons.clear, color: Colors.red),
-                    tooltip: 'Clear Leave',
-                    onPressed: () => setState((){ _leaveFrom = null; _leaveTo = null; }),
-                  )
+                  IconButton(icon: const Icon(Icons.clear, color: Colors.red), tooltip: 'Clear Leave', onPressed: () => setState((){ _leaveFrom = null; _leaveTo = null; })),
                 ]
               ],
             ),
-            if (_leaveDuration.isNotEmpty) ... [
+            if (leaveDurationStr.isNotEmpty) ... [
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.orange.shade200)),
-                child: Text(_leaveDuration, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.orange.shade900)),
+                decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.red.shade100)),
+                child: Text(leaveDurationStr, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.red.shade800)),
               )
             ],
             const SizedBox(height: 16),
             TextFormField(
               controller: _leaveReasonController,
-              decoration: InputDecoration(labelText: 'Leave Reason / Notes', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), filled: true, fillColor: Colors.grey.shade50),
+              decoration: _inputDecoration('Leave Reason'),
             ),
           ],
         )
     );
   }
 
-  // --- Reusable Widget ---
+  Widget _buildInternalRemarks() {
+    return _SectionBlock(
+        title: '10. Internal Remarks',
+        child: TextFormField(
+          controller: _remarksController,
+          maxLines: 3,
+          decoration: _inputDecoration('Internal notes for dispatchers...'),
+        )
+    );
+  }
 
-  Widget _buildSection({required String title, required IconData icon, required Widget child}) {
+  Widget _buildBottomSaveBar() {
     return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: _borderColor), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.01), blurRadius: 4, offset: const Offset(0, 2))]),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 22, color: _primaryColor),
-              const SizedBox(width: 12),
-              Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: _primaryColor)),
-            ],
-          ),
-          const SizedBox(height: 20),
-          child,
-        ],
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border(top: BorderSide(color: Colors.grey.shade200)),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), offset: const Offset(0, -4), blurRadius: 10)]
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            const SizedBox(width: 16),
+            ElevatedButton.icon(
+              onPressed: _isSaving ? null : _saveProfile,
+              icon: _isSaving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.save),
+              label: const Text('Save Profile'),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildStatusBadge(String status) {
-    Color bg = Colors.grey.shade100;
-    Color fg = Colors.grey.shade700;
-    final s = status.toLowerCase();
-    if (s == 'available') { bg = Colors.green.shade50; fg = Colors.green.shade700; }
-    else if (s == 'busy') { bg = Colors.orange.shade50; fg = Colors.orange.shade800; }
-    else if (s == 'on leave' || s == 'leave') { bg = Colors.red.shade50; fg = Colors.red.shade700; }
+  InputDecoration _inputDecoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.blue.shade400)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+    );
+  }
+}
 
+class _SectionBlock extends StatelessWidget {
+  final String title;
+  final Widget child;
+
+  const _SectionBlock({required this.title, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12), border: Border.all(color: fg.withOpacity(0.2))),
-      child: Text(status.toUpperCase(), style: TextStyle(color: fg, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.blueGrey.shade800)),
+          const SizedBox(height: 24),
+          child,
+        ],
+      ),
     );
   }
 }

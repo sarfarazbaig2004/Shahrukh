@@ -1,9 +1,74 @@
 // FILE PATH: lib/modules/service/screens/add_service_request_screen.dart
 
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
+String _generateMachineUid() {
+  final chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  final rnd = math.Random();
+  final rStr = String.fromCharCodes(Iterable.generate(6, (_) => chars.codeUnitAt(rnd.nextInt(chars.length))));
+  return 'M-${DateTime.now().millisecondsSinceEpoch}-$rStr';
+}
+
+class ServiceItemModel {
+  String machineUid;
+  String itemNature;
+  String? categoryId;
+  String? categoryName;
+  String? subcategoryId;
+  String? subcategoryName;
+  String? machineTypeId;
+  String? machineTypeName;
+  String? itemId;
+  String? itemCode;
+  String? itemName;
+  TextEditingController brandCtrl;
+  TextEditingController serialNumberCtrl;
+  List<String> availableSerialNumbers;
+
+  String complaintCategory;
+  TextEditingController complaintDescCtrl;
+  String priority;
+  bool isWarranty;
+
+  List<Map<String, dynamic>> requiredParts;
+
+  ServiceItemModel({
+    String? machineUid,
+    this.itemNature = 'Machine',
+    this.categoryId,
+    this.categoryName,
+    this.subcategoryId,
+    this.subcategoryName,
+    this.machineTypeId,
+    this.machineTypeName,
+    this.itemId,
+    this.itemCode,
+    this.itemName,
+    TextEditingController? brandCtrl,
+    TextEditingController? serialNumberCtrl,
+    List<String>? availableSerialNumbers,
+    this.complaintCategory = 'Machine Breakdown',
+    TextEditingController? complaintDescCtrl,
+    this.priority = 'Medium',
+    this.isWarranty = false,
+    List<Map<String, dynamic>>? requiredParts,
+  })  : machineUid = machineUid ?? _generateMachineUid(),
+        brandCtrl = brandCtrl ?? TextEditingController(),
+        serialNumberCtrl = serialNumberCtrl ?? TextEditingController(),
+        availableSerialNumbers = availableSerialNumbers ?? [],
+        complaintDescCtrl = complaintDescCtrl ?? TextEditingController(),
+        requiredParts = requiredParts ?? [];
+
+  void dispose() {
+    brandCtrl.dispose();
+    serialNumberCtrl.dispose();
+    complaintDescCtrl.dispose();
+  }
+}
 
 class AddServiceRequestScreen extends StatefulWidget {
   final String companyId;
@@ -49,22 +114,10 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
   String? _assignedToName;
   String? _assignedToEmail;
 
-  // --- GENERIC SERVICE ITEM HIERARCHY STATE ---
-  String _serviceItemNature = 'Machine'; // Default to Machine
-  String? _serviceCategoryId;
-  String? _serviceCategoryName;
-  String? _serviceSubcategoryId;
-  String? _serviceSubcategoryName;
-  String? _serviceMachineType;
+  // --- MULTI-MACHINE STATE ---
+  List<ServiceItemModel> _serviceItems = [];
 
-  String? _serviceItemId;
-  String? _serviceItemCode;
-  String? _serviceItemName;
-  List<String> _availableSerialNumbers = [];
-
-  List<Map<String, dynamic>> _requiredParts = [];
-
-  // --- CONTROLLERS ---
+  // --- GLOBAL REQUEST STATE CONTROLLERS ---
   final TextEditingController _customerNameCtrl = TextEditingController();
   final TextEditingController _customerCodeCtrl = TextEditingController();
   final TextEditingController _contactPersonCtrl = TextEditingController();
@@ -76,16 +129,9 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
   final TextEditingController _stateCtrl = TextEditingController();
   final TextEditingController _pincodeCtrl = TextEditingController();
   final TextEditingController _salesPersonCtrl = TextEditingController();
-
-  final TextEditingController _brandCtrl = TextEditingController();
-  final TextEditingController _serialNumberCtrl = TextEditingController();
-  final TextEditingController _complaintDescCtrl = TextEditingController();
   final TextEditingController _remarksCtrl = TextEditingController();
 
-  String _selectedCategory = 'Machine Breakdown';
-  String _selectedPriority = 'Medium';
   String _selectedSource = 'Customer Call';
-  bool _isWarranty = false;
   String _status = 'New';
 
   final List<String> _categories = [
@@ -117,7 +163,7 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
   CollectionReference<Map<String, dynamic>> get _usersRef =>
       FirebaseFirestore.instance.collection('companies').doc(widget.companyId).collection('users');
 
-  // SAFE ID NORMALIZER - Converts "" to null to prevent dropdown assertions
+  // SAFE ID NORMALIZER
   String? _normalizeId(dynamic val) {
     if (val == null) return null;
     final str = val.toString().trim();
@@ -153,41 +199,69 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
       _pincodeCtrl.text = d['pincode'] ?? '';
       _salesPersonCtrl.text = d['salesPersonName'] ?? '';
 
-      // --- Map Service Assignment safely ---
       _assignedToUid = _normalizeId(d['assignedToUid']);
       _assignedToName = _normalizeId(d['assignedToName']);
       _assignedToEmail = _normalizeId(d['assignedToEmail']);
 
-      // --- Map Service Item Hierarchy safely ---
-      _serviceItemNature = d['serviceItemNature'] ?? d['machineNature'] ?? 'Machine';
-      _serviceCategoryId = _normalizeId(d['serviceCategoryId'] ?? d['machineCategoryId']);
-      _serviceCategoryName = d['serviceCategoryName'] ?? d['machineCategory'];
-      _serviceSubcategoryId = _normalizeId(d['serviceSubcategoryId'] ?? d['machineSubcategoryId']);
-      _serviceSubcategoryName = d['serviceSubCategoryName'] ?? d['machineSubCategory'];
-      _serviceMachineType = _normalizeId(d['serviceMachineType'] ?? d['machineType']);
-      _serviceItemId = _normalizeId(d['serviceItemId'] ?? d['machineId']);
-      _serviceItemCode = d['serviceItemCode'] ?? d['machineCode'];
-      _serviceItemName = d['serviceItemName'] ?? d['machineModel'];
-      _brandCtrl.text = d['brand'] ?? d['machineBrand'] ?? '';
-      _serialNumberCtrl.text = d['serialNumber'] ?? d['machineSerialNumber'] ?? '';
-
-      if (d['requiredParts'] is List) {
-        _requiredParts = List<Map<String, dynamic>>.from(
-            (d['requiredParts'] as List).map((x) => Map<String, dynamic>.from(x))
-        );
-      }
-
-      _complaintDescCtrl.text = d['complaintDescription'] ?? '';
-      _remarksCtrl.text = d['remarks'] ?? '';
-      _selectedCategory = d['complaintCategory'] ?? _categories.first;
-      _selectedPriority = d['priority'] ?? _priorities[1];
       _selectedSource = d['source'] ?? _sources.first;
-      _isWarranty = d['isWarranty'] ?? false;
+      _remarksCtrl.text = d['remarks'] ?? '';
       _status = d['status'] ?? 'New';
+
+      // --- DYNAMIC MULTI-MACHINE INITIALIZATION ---
+      if (d['serviceItems'] is List && (d['serviceItems'] as List).isNotEmpty) {
+        _serviceItems = (d['serviceItems'] as List).map((item) {
+          final i = Map<String, dynamic>.from(item);
+          return ServiceItemModel(
+            machineUid: i['machineUid'] ?? _generateMachineUid(), // Fallback for auto-generating missing machineUid
+            itemNature: i['itemNature'] ?? i['machineNature'] ?? 'Machine',
+            categoryId: _normalizeId(i['categoryId']),
+            categoryName: i['categoryName'],
+            subcategoryId: _normalizeId(i['subcategoryId']),
+            subcategoryName: i['subcategoryName'],
+            machineTypeId: _normalizeId(i['machineTypeId']), // Improved Machine Type Mapping
+            machineTypeName: i['machineTypeName'] ?? i['machineType'], // Fallback for old machineType names
+            itemId: _normalizeId(i['itemId']),
+            itemCode: i['itemCode'],
+            itemName: i['itemName'],
+            brandCtrl: TextEditingController(text: i['brand'] ?? ''),
+            serialNumberCtrl: TextEditingController(text: i['serialNumber'] ?? ''),
+            complaintCategory: i['complaintCategory'] ?? _categories.first,
+            complaintDescCtrl: TextEditingController(text: i['complaintDescription'] ?? ''),
+            priority: i['priority'] ?? _priorities[1],
+            isWarranty: i['isWarranty'] ?? false,
+            requiredParts: i['requiredParts'] != null ? List<Map<String, dynamic>>.from((i['requiredParts'] as List).map((x) => Map<String, dynamic>.from(x))) : [],
+          );
+        }).toList();
+      } else {
+        // --- BACKWARD COMPATIBILITY: Mapping legacy Single Machine structure ---
+        _serviceItems.add(ServiceItemModel(
+          machineUid: _generateMachineUid(),
+          itemNature: d['serviceItemNature'] ?? d['machineNature'] ?? 'Machine',
+          categoryId: _normalizeId(d['serviceCategoryId'] ?? d['machineCategoryId']),
+          categoryName: d['serviceCategoryName'] ?? d['machineCategory'],
+          subcategoryId: _normalizeId(d['serviceSubcategoryId'] ?? d['machineSubcategoryId']),
+          subcategoryName: d['serviceSubCategoryName'] ?? d['machineSubCategory'],
+          machineTypeId: _normalizeId(d['serviceMachineTypeId'] ?? d['machineTypeId']), // Extract Legacy ID if available
+          machineTypeName: d['serviceMachineTypeName'] ?? d['serviceMachineType'] ?? d['machineTypeName'] ?? d['machineType'],
+          itemId: _normalizeId(d['serviceItemId'] ?? d['machineId']),
+          itemCode: d['serviceItemCode'] ?? d['machineCode'],
+          itemName: d['serviceItemName'] ?? d['machineModel'],
+          brandCtrl: TextEditingController(text: d['brand'] ?? d['machineBrand'] ?? ''),
+          serialNumberCtrl: TextEditingController(text: d['serialNumber'] ?? d['machineSerialNumber'] ?? ''),
+          complaintCategory: d['complaintCategory'] ?? _categories.first,
+          complaintDescCtrl: TextEditingController(text: d['complaintDescription'] ?? ''),
+          priority: d['priority'] ?? _priorities[1],
+          isWarranty: d['isWarranty'] ?? false,
+          requiredParts: d['requiredParts'] != null ? List<Map<String, dynamic>>.from((d['requiredParts'] as List).map((x) => Map<String, dynamic>.from(x))) : [],
+        ));
+      }
 
       if (_selectedCustomerId != null) {
         _fetchCustomerRelatedData(_selectedCustomerId!);
       }
+    } else {
+      // New record, start with 1 empty machine
+      _serviceItems.add(ServiceItemModel());
     }
   }
 
@@ -209,10 +283,11 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
     _stateCtrl.dispose();
     _pincodeCtrl.dispose();
     _salesPersonCtrl.dispose();
-    _brandCtrl.dispose();
-    _serialNumberCtrl.dispose();
-    _complaintDescCtrl.dispose();
     _remarksCtrl.dispose();
+
+    for (var item in _serviceItems) {
+      item.dispose();
+    }
     super.dispose();
   }
 
@@ -493,46 +568,67 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
   // INVENTORY HIERARCHY ENGINE
   // ==========================================
 
-  void _resetHierarchy({bool resetCat = false, bool resetSub = false, bool resetType = false}) {
+  void _addServiceItem() {
     setState(() {
-      if (resetCat) {
-        _serviceCategoryId = null;
-        _serviceCategoryName = null;
-      }
-      if (resetSub) {
-        _serviceSubcategoryId = null;
-        _serviceSubcategoryName = null;
-      }
-      if (resetType) {
-        _serviceMachineType = null;
-      }
-      _serviceItemId = null;
-      _serviceItemName = null;
-      _serviceItemCode = null;
-      _brandCtrl.clear();
-      _serialNumberCtrl.clear();
-      _availableSerialNumbers.clear();
-      _isWarranty = false;
+      _serviceItems.add(ServiceItemModel());
     });
   }
 
-  void _applyServiceItemProduct(Map<String, dynamic> product) {
+  void _removeServiceItem(int index) {
+    if (_serviceItems.length <= 1) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('At least one machine/product is required.'),
+        backgroundColor: Colors.red,
+      ));
+      return;
+    }
     setState(() {
-      _serviceItemId = product['id'];
-      _serviceItemName = (product['name'] ?? '').toString();
-      _serviceItemCode = (product['itemCode'] ?? product['sku'] ?? '').toString();
-      _brandCtrl.text = (product['make'] ?? product['brand'] ?? '').toString();
+      _serviceItems[index].dispose();
+      _serviceItems.removeAt(index);
+    });
+  }
 
-      // Smart extraction for serial numbers (Array logic)
+  void _resetHierarchy(int index, {bool resetCat = false, bool resetSub = false, bool resetType = false}) {
+    setState(() {
+      final item = _serviceItems[index];
+      if (resetCat) {
+        item.categoryId = null;
+        item.categoryName = null;
+      }
+      if (resetSub) {
+        item.subcategoryId = null;
+        item.subcategoryName = null;
+      }
+      if (resetType) {
+        item.machineTypeId = null;
+        item.machineTypeName = null;
+      }
+      item.itemId = null;
+      item.itemName = null;
+      item.itemCode = null;
+      item.brandCtrl.clear();
+      item.serialNumberCtrl.clear();
+      item.availableSerialNumbers.clear();
+      item.isWarranty = false;
+    });
+  }
+
+  void _applyServiceItemProduct(int index, Map<String, dynamic> product) {
+    setState(() {
+      final item = _serviceItems[index];
+      item.itemId = product['id'];
+      item.itemName = (product['name'] ?? '').toString();
+      item.itemCode = (product['itemCode'] ?? product['sku'] ?? '').toString();
+      item.brandCtrl.text = (product['make'] ?? product['brand'] ?? '').toString();
+
       if (product['serialNumbers'] is List) {
-        _availableSerialNumbers = List<String>.from(product['serialNumbers']).where((s) => s.isNotEmpty).toList();
+        item.availableSerialNumbers = List<String>.from(product['serialNumbers']).where((s) => s.isNotEmpty).toList();
       } else {
-        _availableSerialNumbers.clear();
+        item.availableSerialNumbers.clear();
       }
 
-      // Auto-extract warranty bounds if tracked natively
       if (product['warrantyMonths'] != null) {
-        _isWarranty = true;
+        item.isWarranty = true;
       }
     });
   }
@@ -541,7 +637,7 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
   // SPARES & ACCESSORIES ENGINE
   // ==========================================
 
-  Future<void> _showAddPartModal() async {
+  Future<void> _showAddPartModal(int machineIndex) async {
     String? selectedPartId;
     String? selectedPartName;
     String? selectedPartCode;
@@ -577,7 +673,7 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
                         stream: _productsRef
                             .where('isActive', isEqualTo: true)
                             .where('productNatureLower', whereIn: ['spare', 'accessory'])
-                            .limit(50) // Progressive load
+                            .limit(50)
                             .snapshots(),
                         builder: (context, snap) {
                           if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
@@ -594,9 +690,6 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
                               return name.contains(searchQuery) || sku.contains(searchQuery);
                             }).toList();
                           }
-
-                          // Prevent duplicates
-                          docs = docs.where((d) => !_requiredParts.any((ip) => ip['partId'] == d.id)).toList();
 
                           if (docs.isEmpty) {
                             return const Center(child: Text('No matching parts found', style: TextStyle(color: Colors.grey)));
@@ -676,8 +769,16 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
       },
     );
 
-    if (result != null) {
-      setState(() => _requiredParts.add(result));
+    if (result != null && mounted) {
+      setState(() {
+        // Prevent Duplicate Rows - Merge Quantities instead
+        final existingIndex = _serviceItems[machineIndex].requiredParts.indexWhere((p) => p['partId'] == result['partId']);
+        if (existingIndex >= 0) {
+          _serviceItems[machineIndex].requiredParts[existingIndex]['quantity'] += result['quantity'];
+        } else {
+          _serviceItems[machineIndex].requiredParts.add(result);
+        }
+      });
     }
   }
 
@@ -695,9 +796,22 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
 
   Future<void> _saveRequest() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_serviceItemId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select the Target Item from Inventory.'), backgroundColor: Colors.red));
-      return;
+
+    // Strong Pre-Save Validation per Machine
+    for (int i = 0; i < _serviceItems.length; i++) {
+      final m = _serviceItems[i];
+      if (m.categoryId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Machine/Product #${i + 1} : Category is required'), backgroundColor: Colors.red));
+        return;
+      }
+      if (m.itemId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Machine/Product #${i + 1} : Target Product Model is required'), backgroundColor: Colors.red));
+        return;
+      }
+      if (m.complaintDescCtrl.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Machine/Product #${i + 1} : Complaint description required'), backgroundColor: Colors.red));
+        return;
+      }
     }
 
     setState(() => _isLoading = true);
@@ -749,6 +863,48 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
   }
 
   Map<String, dynamic> _buildPayload(String reqNo, String docId) {
+    // Generate isolated items array payload
+    List<Map<String, dynamic>> serviceItemsPayload = _serviceItems.map((item) {
+      return {
+        'machineUid': item.machineUid,
+        'itemNature': item.itemNature,
+        'categoryId': item.categoryId,
+        'categoryName': item.categoryName,
+        'subcategoryId': item.subcategoryId,
+        'subcategoryName': item.subcategoryName,
+        'machineTypeId': item.machineTypeId,
+        'machineTypeName': item.machineTypeName,
+        'itemId': item.itemId,
+        'itemCode': item.itemCode,
+        'itemName': item.itemName,
+        'brand': item.brandCtrl.text.trim(),
+        'serialNumber': item.serialNumberCtrl.text.trim(),
+        'complaintCategory': item.complaintCategory,
+        'complaintDescription': item.complaintDescCtrl.text.trim(),
+        'priority': item.priority,
+        'isWarranty': item.isWarranty,
+        'requiredParts': item.requiredParts,
+      };
+    }).toList();
+
+    // Safely Merge all Required Parts for Legacy Systems (Grouped by PartId)
+    Map<String, Map<String, dynamic>> mergedLegacyParts = {};
+    for(var item in serviceItemsPayload) {
+      if (item['requiredParts'] != null) {
+        for(var part in item['requiredParts']) {
+          final pId = part['partId'].toString();
+          if (mergedLegacyParts.containsKey(pId)) {
+            mergedLegacyParts[pId]!['quantity'] += (part['quantity'] ?? 0);
+          } else {
+            mergedLegacyParts[pId] = Map<String, dynamic>.from(part);
+          }
+        }
+      }
+    }
+    List<Map<String, dynamic>> allLegacyParts = mergedLegacyParts.values.toList();
+
+    final first = _serviceItems.first;
+
     return {
       'id': docId,
       'companyId': widget.companyId,
@@ -771,7 +927,7 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
       'salesPersonId': _salesPersonId ?? '',
       'salesPersonName': _salesPersonName ?? '',
 
-      // Assignment: Safely save null instead of empty strings
+      // Assignment
       'assignedToUid': _assignedToUid,
       'assignedToName': _assignedToName,
       'assignedToEmail': _assignedToEmail,
@@ -783,40 +939,47 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
           : FieldValue.serverTimestamp())
           : null,
 
-      // Modern Generic Mapping
-      'serviceItemNature': _serviceItemNature,
-      'serviceCategoryId': _serviceCategoryId,
-      'serviceCategoryName': _serviceCategoryName,
-      'serviceSubcategoryId': _serviceSubcategoryId,
-      'serviceSubCategoryName': _serviceSubcategoryName,
-      'serviceMachineType': _serviceItemNature == 'Machine' ? _serviceMachineType : null,
-      'serviceItemId': _serviceItemId,
-      'serviceItemCode': _serviceItemCode,
-      'serviceItemName': _serviceItemName,
-      'brand': _brandCtrl.text.trim(),
-      'serialNumber': _serialNumberCtrl.text.trim(),
+      // --- MULTI-MACHINE ARRAY ---
+      'serviceItems': serviceItemsPayload,
 
-      // Legacy Mappings
-      'machineCategoryId': _serviceCategoryId,
-      'machineCategory': _serviceCategoryName,
-      'machineSubcategoryId': _serviceSubcategoryId,
-      'machineSubCategory': _serviceSubcategoryName,
-      'machineType': _serviceMachineType,
-      'machineId': _serviceItemId,
-      'machineCode': _serviceItemCode,
-      'machineModel': _serviceItemName,
-      'machineNature': _serviceItemNature,
-      'machineBrand': _brandCtrl.text.trim(),
-      'machineSerialNumber': _serialNumberCtrl.text.trim(),
+      // --- BACKWARD COMPATIBILITY: Legacy First Machine Mappings ---
+      'serviceItemNature': first.itemNature,
+      'serviceCategoryId': first.categoryId,
+      'serviceCategoryName': first.categoryName,
+      'serviceSubcategoryId': first.subcategoryId,
+      'serviceSubCategoryName': first.subcategoryName,
+      'serviceMachineTypeId': first.machineTypeId,
+      'serviceMachineTypeName': first.machineTypeName,
+      'serviceMachineType': first.itemNature == 'Machine' ? first.machineTypeName : null, // Safely mapped for older queries
+      'serviceItemId': first.itemId,
+      'serviceItemCode': first.itemCode,
+      'serviceItemName': first.itemName,
+      'brand': first.brandCtrl.text.trim(),
+      'serialNumber': first.serialNumberCtrl.text.trim(),
+      'complaintCategory': first.complaintCategory,
+      'complaintDescription': first.complaintDescCtrl.text.trim(),
+      'priority': first.priority,
+      'isWarranty': first.isWarranty,
 
-      'requiredParts': _requiredParts,
+      // Deep Legacy Mappings
+      'machineCategoryId': first.categoryId,
+      'machineCategory': first.categoryName,
+      'machineSubcategoryId': first.subcategoryId,
+      'machineSubCategory': first.subcategoryName,
+      'machineTypeId': first.machineTypeId,
+      'machineType': first.machineTypeName, // Keep name here for older records
+      'machineId': first.itemId,
+      'machineCode': first.itemCode,
+      'machineModel': first.itemName,
+      'machineNature': first.itemNature,
+      'machineBrand': first.brandCtrl.text.trim(),
+      'machineSerialNumber': first.serialNumberCtrl.text.trim(),
 
-      'complaintCategory': _selectedCategory,
-      'complaintDescription': _complaintDescCtrl.text.trim(),
-      'priority': _selectedPriority,
+      'requiredParts': allLegacyParts,
+
+      // Global Parameters
       'source': _selectedSource,
       'status': _status,
-      'isWarranty': _isWarranty,
       'remarks': _remarksCtrl.text.trim(),
       'updatedAt': FieldValue.serverTimestamp(),
       'updatedBy': widget.currentUserUid,
@@ -825,23 +988,50 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
     };
   }
 
+  // Generate powerful prefix keywords for search optimization
   List<String> _generateSearchKeywords(String requestNo) {
-    final str = '$requestNo ${_customerNameCtrl.text} ${_contactPersonCtrl.text} ${_mobileCtrl.text} ${_serviceItemName ?? ''} ${_serialNumberCtrl.text} ${_selectedCustomerCode ?? ''} ${_gstCtrl.text}'.toLowerCase();
-    return str.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toSet().toList();
+    Set<String> keywords = {};
+
+    void addPrefixes(String text) {
+      if (text.isEmpty) return;
+      final words = text.toLowerCase().split(RegExp(r'\s+'));
+      for (var word in words) {
+        word = word.replaceAll(RegExp(r'[^a-z0-9]'), '');
+        for (int i = 2; i <= word.length; i++) {
+          keywords.add(word.substring(0, i));
+        }
+        if (word.isNotEmpty) keywords.add(word);
+      }
+    }
+
+    addPrefixes(requestNo);
+    addPrefixes(_customerNameCtrl.text);
+    addPrefixes(_contactPersonCtrl.text);
+    addPrefixes(_mobileCtrl.text);
+    addPrefixes(_selectedCustomerCode ?? '');
+    addPrefixes(_gstCtrl.text);
+
+    for(var item in _serviceItems) {
+      addPrefixes(item.itemName ?? '');
+      addPrefixes(item.serialNumberCtrl.text);
+      // Generate keywords from complaint description to enable free-text searching
+      addPrefixes(item.complaintDescCtrl.text);
+    }
+
+    return keywords.toList();
   }
 
   // ==========================================
   // UI BUILDERS & SAFE DROPDOWN FACTORY
   // ==========================================
 
-  // ✨ CRITICAL FIX: Safe Stream Dropdown Factory prevents ALL duplicates and guarantees selected value exists
   Widget _buildSafeStreamDropdown({
     required String label,
     required IconData icon,
     required String? currentValue,
     required String? legacyName,
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
-    required String valueField, // Usually 'id' or 'name'
+    required String valueField,
     required String displayField,
     required void Function(String?) onChanged,
     String? Function(String?)? validator,
@@ -859,7 +1049,6 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
       }
     }
 
-    // Recover legacy or deleted item safely without duplicate crashes
     if (currentValue != null && currentValue.isNotEmpty && !validValues.contains(currentValue)) {
       items.add(DropdownMenuItem(
         value: currentValue,
@@ -906,47 +1095,24 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
                         const SizedBox(height: 16),
                         _buildAssignmentSection(),
                         const SizedBox(height: 16),
-                        _buildServiceItemSection(),
+                        _buildDynamicServiceItemsSection(),
                         const SizedBox(height: 16),
                         _SectionBlock(
-                          title: 'Service Details',
-                          subtitle: 'Provide technical details of the issue or requirement',
+                          title: 'Request Information',
+                          subtitle: 'Source and internal remarks',
                           child: Column(
                             children: [
-                              _buildResponsiveRow(
-                                children: [
-                                  _buildDropdown(label: 'Service Category *', icon: Icons.category_outlined, value: _selectedCategory, items: _categories, onChanged: (v) => setState(() => _selectedCategory = v!)),
-                                  _buildDropdown(label: 'Priority *', icon: Icons.flag_outlined, value: _selectedPriority, items: _priorities, onChanged: (v) => setState(() => _selectedPriority = v!)),
-                                ],
+                              _buildDropdown(
+                                label: 'Source *',
+                                icon: Icons.campaign_outlined,
+                                value: _selectedSource,
+                                items: _sources,
+                                onChanged: (v) => setState(() => _selectedSource = v!),
                               ),
                               const SizedBox(height: 12),
-                              _buildTextField(label: 'Problem Description / Requirement *', controller: _complaintDescCtrl, icon: Icons.description_outlined, required: true, maxLines: 3),
-                              const SizedBox(height: 12),
-                              _buildResponsiveRow(
-                                children: [
-                                  _buildDropdown(label: 'Source *', icon: Icons.campaign_outlined, value: _selectedSource, items: _sources, onChanged: (v) => setState(() => _selectedSource = v!)),
-                                  Container(
-                                    decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(10), color: Colors.white),
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                                    child: SwitchListTile(
-                                      title: const Text('Under Warranty?', style: TextStyle(fontSize: 14)),
-                                      value: _isWarranty,
-                                      onChanged: (val) => setState(() => _isWarranty = val),
-                                      contentPadding: EdgeInsets.zero,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                              _buildTextField(label: 'Internal Remarks', controller: _remarksCtrl, icon: Icons.notes_outlined, maxLines: 2),
                             ],
                           ),
-                        ),
-                        const SizedBox(height: 16),
-                        _buildRequiredPartsSection(),
-                        const SizedBox(height: 16),
-                        _SectionBlock(
-                          title: 'Additional Information',
-                          subtitle: 'Internal remarks and attachments',
-                          child: _buildTextField(label: 'Internal Remarks', controller: _remarksCtrl, icon: Icons.notes_outlined, maxLines: 2),
                         ),
                       ],
                     ),
@@ -965,9 +1131,8 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
   Widget _buildAssignmentSection() {
     return _SectionBlock(
         title: 'Assignment',
-        subtitle: 'Assign this request to a service coordinator or engineer',
+        subtitle: 'Assign this request to a Service Coordinator or Service Manager',
         child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          // Optimized Firestore Query
             stream: _usersRef
                 .where('isActive', isEqualTo: true)
                 .where('department', isEqualTo: 'Service')
@@ -982,14 +1147,13 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
 
               var docs = snap.data?.docs ?? [];
 
-              // Strict Local Designation Filtering
               docs = docs.where((doc) {
                 final designation = (doc.data()['designation'] ?? '').toString().toLowerCase().trim();
                 return designation == 'service manager' || designation == 'service coordinator';
               }).toList();
 
               List<DropdownMenuItem<String?>> items = [];
-              Set<String> addedIds = {}; // Prevent duplicates
+              Set<String> addedIds = {};
 
               for (var doc in docs) {
                 if (addedIds.contains(doc.id)) continue;
@@ -1002,13 +1166,12 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
                 items.add(DropdownMenuItem(value: doc.id, child: Text(label)));
               }
 
-              // Handle case where existing assigned user is no longer active, moved dept, or changed designation
               if (_assignedToUid != null && !addedIds.contains(_assignedToUid)) {
                 items.add(DropdownMenuItem(
                   value: _assignedToUid,
-                  child: Text('${_assignedToName ?? 'Unknown User'} (Inactive/Moved)'),
+                  child: Text('${_assignedToName ?? 'Unknown User'} (Legacy/Moved)'),
                 ));
-                addedIds.add(_assignedToUid!); // Mark as added to maintain Dropdown safety
+                addedIds.add(_assignedToUid!);
               }
 
               final safeAssignedToUid = addedIds.contains(_assignedToUid) ? _assignedToUid : null;
@@ -1016,7 +1179,7 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
               return DropdownButtonFormField<String?>(
                 value: safeAssignedToUid,
                 decoration: _inputDecoration(label: 'Assign To', icon: Icons.person_pin_circle_outlined),
-                items: items.isEmpty ? null : items, // If empty, appropriately disables dropdown
+                items: items.isEmpty ? null : items,
                 onChanged: (val) {
                   setState(() {
                     _assignedToUid = val;
@@ -1036,29 +1199,61 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
     );
   }
 
-  // --- COMPONENT: DYNAMIC SERVICE ITEM HIERARCHY ---
-  Widget _buildServiceItemSection() {
-    bool isMachine = _serviceItemNature == 'Machine';
+  // --- COMPONENT: DYNAMIC SERVICE ITEMS SECTION ---
+  Widget _buildDynamicServiceItemsSection() {
+    return Column(
+      children: [
+        ...List.generate(_serviceItems.length, (index) {
+          return Padding(
+            padding: EdgeInsets.only(bottom: index == _serviceItems.length - 1 ? 0 : 16),
+            child: _buildSingleServiceItemCard(index),
+          );
+        }),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: OutlinedButton.icon(
+            onPressed: _addServiceItem,
+            icon: const Icon(Icons.add_circle_outline),
+            label: const Text('Add Another Machine / Product', style: TextStyle(fontWeight: FontWeight.w600)),
+            style: OutlinedButton.styleFrom(
+              side: BorderSide(color: Colors.blue.shade600, width: 1.5),
+              foregroundColor: Colors.blue.shade700,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        )
+      ],
+    );
+  }
 
-    // Normalize nature array to prevent duplicates and static list crashes
+  Widget _buildSingleServiceItemCard(int index) {
+    final item = _serviceItems[index];
+    bool isMachine = item.itemNature == 'Machine';
     final natureOptions = ['Machine', 'Spare', 'Accessory', 'Consumable'];
-    final safeNature = natureOptions.contains(_serviceItemNature) ? _serviceItemNature : 'Machine';
+    final safeNature = natureOptions.contains(item.itemNature) ? item.itemNature : 'Machine';
 
     return _SectionBlock(
-      title: 'Target Service Item',
-      subtitle: 'Select the nature of the product and locate it in inventory',
+      title: 'Machine/Product #${index + 1}',
+      subtitle: 'Target product and technical details of the issue',
+      action: IconButton(
+        icon: Icon(Icons.delete_outline, color: _serviceItems.length > 1 ? Colors.red : Colors.grey),
+        tooltip: 'Remove Machine',
+        onPressed: () => _removeServiceItem(index),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Row 1: Product Nature Dropdown
+          // Row 1: Product Nature
           DropdownButtonFormField<String>(
             value: safeNature,
             decoration: _inputDecoration(label: 'Product Nature *', icon: Icons.settings_applications_outlined),
             items: natureOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
             onChanged: (val) {
               if (val != null) {
-                _resetHierarchy(resetCat: true, resetSub: true, resetType: true);
-                setState(() => _serviceItemNature = val);
+                _resetHierarchy(index, resetCat: true, resetSub: true, resetType: true);
+                setState(() => item.itemNature = val);
               }
             },
           ),
@@ -1073,45 +1268,49 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
                   return _buildSafeStreamDropdown(
                     label: 'Category *',
                     icon: Icons.folder_outlined,
-                    currentValue: _serviceCategoryId,
-                    legacyName: _serviceCategoryName,
+                    currentValue: item.categoryId,
+                    legacyName: item.categoryName,
                     docs: snap.data?.docs ?? [],
                     valueField: 'id',
                     displayField: 'name',
                     validator: (v) => v == null ? 'Required' : null,
                     onChanged: (val) {
                       if (val != null) {
-                        _resetHierarchy(resetSub: true, resetType: true);
-                        _serviceCategoryId = val;
-                        final docs = snap.data?.docs ?? [];
-                        if (docs.any((d) => d.id == val)) {
-                          _serviceCategoryName = docs.firstWhere((d) => d.id == val).data()['name'];
-                        }
+                        _resetHierarchy(index, resetSub: true, resetType: true);
+                        setState(() {
+                          item.categoryId = val;
+                          final docs = snap.data?.docs ?? [];
+                          if (docs.any((d) => d.id == val)) {
+                            item.categoryName = docs.firstWhere((d) => d.id == val).data()['name'];
+                          }
+                        });
                       }
                     },
                   );
                 },
               ),
-              if (_serviceCategoryId != null)
+              if (item.categoryId != null)
                 StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                  stream: _subcategoriesRef(_serviceCategoryId!).orderBy('nameLower').snapshots(),
+                  stream: _subcategoriesRef(item.categoryId!).orderBy('nameLower').snapshots(),
                   builder: (context, snap) {
                     return _buildSafeStreamDropdown(
                       label: 'Sub Category',
                       icon: Icons.folder_open_outlined,
-                      currentValue: _serviceSubcategoryId,
-                      legacyName: _serviceSubcategoryName,
+                      currentValue: item.subcategoryId,
+                      legacyName: item.subcategoryName,
                       docs: snap.data?.docs ?? [],
                       valueField: 'id',
                       displayField: 'name',
                       onChanged: (val) {
                         if (val != null) {
-                          _resetHierarchy(resetType: true);
-                          _serviceSubcategoryId = val;
-                          final docs = snap.data?.docs ?? [];
-                          if (docs.any((d) => d.id == val)) {
-                            _serviceSubcategoryName = docs.firstWhere((d) => d.id == val).data()['name'];
-                          }
+                          _resetHierarchy(index, resetType: true);
+                          setState(() {
+                            item.subcategoryId = val;
+                            final docs = snap.data?.docs ?? [];
+                            if (docs.any((d) => d.id == val)) {
+                              item.subcategoryName = docs.firstWhere((d) => d.id == val).data()['name'];
+                            }
+                          });
                         }
                       },
                     );
@@ -1138,15 +1337,21 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
                     return _buildSafeStreamDropdown(
                       label: 'Machine Type',
                       icon: Icons.precision_manufacturing_outlined,
-                      currentValue: _serviceMachineType,
-                      legacyName: _serviceMachineType,
+                      currentValue: item.machineTypeId,
+                      legacyName: item.machineTypeName,
                       docs: snap.data?.docs ?? [],
-                      valueField: 'name', // Using Name instead of ID for this specific dropdown
+                      valueField: 'id', // Changed to correctly save ID
                       displayField: 'name',
                       onChanged: (val) {
                         if (val != null) {
-                          _resetHierarchy();
-                          setState(() => _serviceMachineType = val);
+                          _resetHierarchy(index);
+                          setState(() {
+                            item.machineTypeId = val;
+                            final docs = snap.data?.docs ?? [];
+                            if (docs.any((d) => d.id == val)) {
+                              item.machineTypeName = docs.firstWhere((d) => d.id == val).data()['name'];
+                            }
+                          });
                         }
                       },
                     );
@@ -1156,32 +1361,37 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
               StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                 stream: _productsRef
                     .where('isActive', isEqualTo: true)
-                    .where('productNatureLower', isEqualTo: _serviceItemNature.toLowerCase())
+                    .where('productNatureLower', isEqualTo: item.itemNature.toLowerCase())
                     .snapshots(),
                 builder: (context, snap) {
                   List<QueryDocumentSnapshot<Map<String, dynamic>>> docs = snap.data?.docs ?? [];
 
-                  // Cascading Filters
-                  if (_serviceCategoryId != null) docs = docs.where((d) => d.data()['categoryId'] == _serviceCategoryId).toList();
-                  if (_serviceSubcategoryId != null) docs = docs.where((d) => d.data()['subcategoryId'] == _serviceSubcategoryId).toList();
-                  if (isMachine && _serviceMachineType != null) docs = docs.where((d) => d.data()['machineType'] == _serviceMachineType).toList();
+                  if (item.categoryId != null) docs = docs.where((d) => d.data()['categoryId'] == item.categoryId).toList();
+                  if (item.subcategoryId != null) docs = docs.where((d) => d.data()['subcategoryId'] == item.subcategoryId).toList();
+                  if (isMachine && item.machineTypeId != null) docs = docs.where((d) => d.data()['machineTypeId'] == item.machineTypeId).toList();
 
-                  // Customer Ownership Filter
+                  // Advanced Customer-Owned Product Filtering Logic
+                  // Ensures customer products appear first, but never hides global products completely.
                   if (_selectedCustomerId != null) {
-                    docs = docs.where((d) {
+                    List<QueryDocumentSnapshot<Map<String, dynamic>>> customerDocs = [];
+                    List<QueryDocumentSnapshot<Map<String, dynamic>>> globalDocs = [];
+
+                    for (var d in docs) {
                       final cId = d.data()['customerId'];
-                      if (cId != null && cId.toString().isNotEmpty) {
-                        return cId == _selectedCustomerId;
+                      if (cId != null && cId.toString() == _selectedCustomerId) {
+                        customerDocs.add(d);
+                      } else if (cId == null || cId.toString().isEmpty) {
+                        globalDocs.add(d);
                       }
-                      return true; // General catalog item
-                    }).toList();
+                    }
+                    docs = [...customerDocs, ...globalDocs];
                   }
 
                   return _buildSafeStreamDropdown(
                     label: 'Target Product Model *',
                     icon: Icons.memory_outlined,
-                    currentValue: _serviceItemId,
-                    legacyName: _serviceItemName,
+                    currentValue: item.itemId,
+                    legacyName: item.itemName,
                     docs: docs,
                     valueField: 'id',
                     displayField: 'name',
@@ -1190,7 +1400,7 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
                       if (val != null && docs.any((d) => d.id == val)) {
                         final product = docs.firstWhere((d) => d.id == val).data();
                         product['id'] = val;
-                        _applyServiceItemProduct(product);
+                        _applyServiceItemProduct(index, product);
                       }
                     },
                   );
@@ -1199,47 +1409,74 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
             ],
           ),
 
-          // Row 4: Brand & Serial Number (Only for Machines, or Spares with Serial)
-          if (isMachine || _serviceItemNature == 'Spare') ...[
+          // Row 4: Brand & Serial Number
+          if (isMachine || item.itemNature == 'Spare') ...[
             const SizedBox(height: 12),
             _buildResponsiveRow(
               children: [
-                _buildTextField(label: 'Brand / Make', controller: _brandCtrl, readOnly: true, icon: Icons.branding_watermark),
-                if (_availableSerialNumbers.isNotEmpty)
+                _buildTextField(label: 'Brand / Make', controller: item.brandCtrl, readOnly: true, icon: Icons.branding_watermark),
+                if (item.availableSerialNumbers.isNotEmpty)
                   Builder(
                     builder: (context) {
-                      final validSerials = _availableSerialNumbers.where((s) => s.isNotEmpty).toSet().toList();
-                      final safeSerial = validSerials.contains(_serialNumberCtrl.text) ? _serialNumberCtrl.text : null;
+                      final validSerials = item.availableSerialNumbers.where((s) => s.isNotEmpty).toSet().toList();
+                      final safeSerial = validSerials.contains(item.serialNumberCtrl.text) ? item.serialNumberCtrl.text : null;
 
                       return DropdownButtonFormField<String>(
                         value: safeSerial,
                         decoration: _inputDecoration(label: 'Select Serial Number', icon: Icons.tag),
                         items: validSerials.map((sn) => DropdownMenuItem(value: sn, child: Text(sn))).toList(),
                         onChanged: (val) {
-                          if (val != null) setState(() => _serialNumberCtrl.text = val);
+                          if (val != null) setState(() => item.serialNumberCtrl.text = val);
                         },
                       );
                     },
                   )
                 else
-                  _buildTextField(label: 'Serial Number', controller: _serialNumberCtrl, icon: Icons.tag_outlined),
+                  _buildTextField(label: 'Serial Number', controller: item.serialNumberCtrl, icon: Icons.tag_outlined),
               ],
             ),
-          ]
+          ],
+
+          const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Divider(height: 1)),
+          const Text('Service Details', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Colors.black87)),
+          const SizedBox(height: 12),
+
+          _buildResponsiveRow(
+            children: [
+              _buildDropdown(label: 'Service Category *', icon: Icons.category_outlined, value: item.complaintCategory, items: _categories, onChanged: (v) => setState(() => item.complaintCategory = v!)),
+              _buildDropdown(label: 'Priority *', icon: Icons.flag_outlined, value: item.priority, items: _priorities, onChanged: (v) => setState(() => item.priority = v!)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildTextField(label: 'Problem Description / Requirement *', controller: item.complaintDescCtrl, icon: Icons.description_outlined, required: true, maxLines: 3),
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(10), color: Colors.white),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            child: SwitchListTile(
+              title: const Text('Under Warranty?', style: TextStyle(fontSize: 14)),
+              value: item.isWarranty,
+              onChanged: (val) => setState(() => item.isWarranty = val),
+              contentPadding: EdgeInsets.zero,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildRequiredPartsSection(index),
         ],
       ),
     );
   }
 
-  // --- COMPONENT: SPARES / ACCESSORIES REQUIREMENT ---
-  Widget _buildRequiredPartsSection() {
+  // --- COMPONENT: SPARES / ACCESSORIES REQUIREMENT PER MACHINE ---
+  Widget _buildRequiredPartsSection(int machineIndex) {
+    final item = _serviceItems[machineIndex];
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE6EAF0)),
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1247,26 +1484,31 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
+              const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Required Parts & Accessories', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                  const SizedBox(height: 4),
-                  const Text('Log required replacement spares or accessories', style: TextStyle(fontSize: 12, color: Color(0xFF667085))),
+                  Text('Required Parts', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  SizedBox(height: 2),
+                  Text('Log replacement spares required', style: TextStyle(fontSize: 11, color: Colors.blueGrey)),
                 ],
               ),
               OutlinedButton.icon(
-                onPressed: _showAddPartModal,
+                onPressed: () => _showAddPartModal(machineIndex),
                 icon: const Icon(Icons.add, size: 16),
                 label: const Text('Add Part'),
-                style: OutlinedButton.styleFrom(foregroundColor: Colors.blue.shade700, side: BorderSide(color: Colors.blue.shade200)),
+                style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    minimumSize: Size.zero,
+                    foregroundColor: Colors.blue.shade700,
+                    side: BorderSide(color: Colors.blue.shade200)
+                ),
               ),
             ],
           ),
-          if (_requiredParts.isNotEmpty) ...[
-            const SizedBox(height: 16),
+          if (item.requiredParts.isNotEmpty) ...[
+            const SizedBox(height: 12),
             Container(
-              decoration: BoxDecoration(border: Border.all(color: const Color(0xFFE4E7EC)), borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(border: Border.all(color: const Color(0xFFE2E8F0)), borderRadius: BorderRadius.circular(8), color: Colors.white),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: Table(
@@ -1286,20 +1528,20 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
                         Padding(padding: EdgeInsets.all(10), child: Text('Action', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13), textAlign: TextAlign.center)),
                       ],
                     ),
-                    ..._requiredParts.asMap().entries.map((entry) {
+                    ...item.requiredParts.asMap().entries.map((entry) {
                       final idx = entry.key;
-                      final item = entry.value;
+                      final part = entry.value;
                       return TableRow(
-                        decoration: BoxDecoration(border: idx != _requiredParts.length - 1 ? const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))) : null),
+                        decoration: BoxDecoration(border: idx != item.requiredParts.length - 1 ? const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))) : null),
                         children: [
-                          Padding(padding: const EdgeInsets.all(10), child: Text(item['partName'] ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
-                          Padding(padding: const EdgeInsets.all(10), child: Text((item['partNature'] ?? '').toUpperCase(), style: const TextStyle(fontSize: 12, color: Colors.blueGrey))),
-                          Padding(padding: const EdgeInsets.all(10), child: Text(item['quantity'].toString(), style: const TextStyle(fontSize: 13))),
+                          Padding(padding: const EdgeInsets.all(10), child: Text(part['partName'] ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
+                          Padding(padding: const EdgeInsets.all(10), child: Text((part['partNature'] ?? '').toUpperCase(), style: const TextStyle(fontSize: 12, color: Colors.blueGrey))),
+                          Padding(padding: const EdgeInsets.all(10), child: Text(part['quantity'].toString(), style: const TextStyle(fontSize: 13))),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             child: IconButton(
                               icon: const Icon(Icons.remove_circle_outline, color: Colors.red, size: 20),
-                              onPressed: () => setState(() => _requiredParts.removeAt(idx)),
+                              onPressed: () => setState(() => item.requiredParts.removeAt(idx)),
                               padding: EdgeInsets.zero,
                               constraints: const BoxConstraints(),
                             ),
@@ -1404,7 +1646,6 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
 
           if (_customerContacts.isNotEmpty) ...[
             Builder(builder: (context) {
-              // Deduplicate and fallback safely
               List<DropdownMenuItem<String>> contactItems = [];
               Set<String> addedContacts = {};
 
@@ -1458,7 +1699,6 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
           if (_customerAddresses.isNotEmpty) ...[
             const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Divider(height: 1)),
             Builder(builder: (context) {
-              // Deduplicate and fallback safely
               List<DropdownMenuItem<String>> addressItems = [];
               Set<String> addedAddresses = {};
 
@@ -1635,13 +1875,8 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
     required void Function(String?) onChanged,
     required IconData icon,
   }) {
-    // 🛡️ Ensure original list isn't mutated and remove any trailing duplicates
     List<String> safeItems = items.where((e) => e.isNotEmpty).toSet().toList();
-
-    if (value.isNotEmpty && !safeItems.contains(value)) {
-      safeItems.add(value);
-    }
-
+    if (value.isNotEmpty && !safeItems.contains(value)) safeItems.add(value);
     final safeValue = safeItems.contains(value) ? value : (safeItems.isNotEmpty ? safeItems.first : null);
 
     return DropdownButtonFormField<String>(
@@ -1657,11 +1892,13 @@ class _SectionBlock extends StatelessWidget {
   final String title;
   final String subtitle;
   final Widget child;
+  final Widget? action;
 
   const _SectionBlock({
     required this.title,
     required this.subtitle,
     required this.child,
+    this.action,
   });
 
   @override
@@ -1678,9 +1915,23 @@ class _SectionBlock extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.black87)),
-          const SizedBox(height: 4),
-          Text(subtitle, style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.black87)),
+                    const SizedBox(height: 4),
+                    Text(subtitle, style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600)),
+                  ],
+                ),
+              ),
+              if (action != null) action!,
+            ],
+          ),
           const SizedBox(height: 20),
           child,
         ],
@@ -1688,3 +1939,4 @@ class _SectionBlock extends StatelessWidget {
     );
   }
 }
+

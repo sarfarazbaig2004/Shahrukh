@@ -5,126 +5,227 @@
 
     <meta charset="UTF-8">
     <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-    <meta name="description" content="QUIK - Smart CRM & Quotation Management System">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="QUIK ERP - Enterprise Resource Platform">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
-    <!-- iOS meta tags & icons -->
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black">
-    <meta name="apple-mobile-web-app-title" content="QUIK">
-    <link rel="apple-touch-icon" href="icons/Icon-192.png">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="QUIK ERP">
 
-    <!-- Favicon -->
-    <link rel="icon" type="image/png" href="favicon.png"/>
+    <link rel="apple-touch-icon" href="icons/Icon-192.png?v=2">
+    <link rel="icon" type="image/png" href="favicon.png?v=2"/>
 
-    <title>QUIK</title>
-    <link rel="manifest" href="manifest.json">
+    <title>QUIK ERP</title>
+    <link rel="manifest" href="manifest.json?v=2">
 
     <style>
+        /* Modern reset and enterprise typography */
         body {
-          margin: 0;
-          background: #EEF2F7; /* same as dashboard canvas */
-          font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #FFFFFF;
+            font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
 
+        /* Full screen loader wrapper */
         #loader {
-          position: fixed;
-          inset: 0;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          background: #EEF2F7;
-          z-index: 9999;
+            position: fixed;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: #FFFFFF;
+            z-index: 9999;
+            opacity: 0;
+            animation: fadeIn 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
         }
 
-        .loader-container {
-          text-align: center;
-          padding: 24px;
+        /* Center container layout */
+        .loader-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            padding: 24px;
+            max-width: 90%;
         }
 
+        /* 90px breathing logo with subtle shadow */
         .logo {
-          width: 84px;
-          height: 84px;
-          object-fit: contain;
-          margin-bottom: 10px;
-          filter: drop-shadow(0 10px 18px rgba(0,0,0,0.08));
+            width: 90px;
+            height: 90px;
+            object-fit: contain;
+            margin-bottom: 24px;
+            filter: drop-shadow(0 8px 24px rgba(15, 23, 42, 0.08));
+            animation: breathe 3.5s infinite ease-in-out;
         }
 
+        /* Enterprise Typography */
         .brand {
-          margin: 0;
-          font-size: 28px;
-          font-weight: 900;
-          letter-spacing: 0.4px;
-          color: #111827;
+            margin: 0;
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+            color: #0F172A; /* Dark Navy */
         }
 
-        .tagline {
-          margin: 6px 0 0;
-          font-size: 14px;
-          color: #6B7280;
-          font-weight: 600;
+        .subtitle {
+            margin: 8px 0 12px 0;
+            font-size: 16px;
+            color: #475569; /* Professional Gray */
+            font-weight: 500;
+            letter-spacing: 0.2px;
         }
 
-        .spinner {
-          margin: 20px auto 0;
-          width: 42px;
-          height: 42px;
-          border: 4px solid #E5E7EB;
-          border-top: 4px solid #2563EB; /* dashboard blue */
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
+        .modules {
+            margin: 0 0 24px 0;
+            font-size: 13px;
+            color: #64748B; /* Lighter Gray for modules */
+            font-weight: 500;
+            letter-spacing: 0.4px;
         }
 
-        @keyframes spin {
-          100% { transform: rotate(360deg); }
+        .company {
+            margin: 0 0 48px 0;
+            font-size: 14px;
+            color: #334155;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* SAP/Dynamics style thin progress bar */
+        .progress-container {
+            width: 220px;
+            height: 4px;
+            background-color: #F1F5F9;
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+            margin-bottom: 16px;
+        }
+
+        .progress-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 40%;
+            background-color: #0078D4; /* Premium Enterprise Blue */
+            border-radius: 4px;
+            animation: slide 1.5s infinite ease-in-out;
+        }
+
+        /* Rotating Status Text Container */
+        .status-container {
+            height: 20px; /* Fixed height prevents layout shift */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .status-message {
+            margin: 0;
+            font-size: 13px;
+            color: #64748B;
+            font-weight: 500;
+            transition: opacity 0.3s ease;
+        }
+
+        /* Absolute Footer */
+        .footer {
+            position: absolute;
+            bottom: 32px;
+            font-size: 12px;
+            color: #94A3B8;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+
+        /* Keyframe Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes breathe {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+
+        @keyframes slide {
+            0% { transform: translateX(-150%); }
+            100% { transform: translateX(250%); }
         }
     </style>
 </head>
 
 <body>
-<!-- Professional Loader -->
 <div id="loader">
-    <div class="loader-container">
-        <img src="icons/Icon-192.png" class="logo" alt="QUIK Logo" />
-        <h1 class="brand">QUIK</h1>
-        <p class="tagline">Smart CRM & Quotation System</p>
-        <div class="spinner"></div>
+    <div class="loader-content">
+        <img src="assets/images/logo.png" class="logo" alt="QUIK ERP Logo" />
+
+        <h1 class="brand">QUIK ERP</h1>
+        <p class="subtitle">Enterprise Resource Platform</p>
+        <p class="modules">CRM • Sales • Service • Quotation • Inventory</p>
+        <p class="company">Built for MEMCO</p>
+
+        <div class="progress-container">
+            <div class="progress-bar"></div>
+        </div>
+
+        <div class="status-container">
+            <p id="status-message" class="status-message">Initializing Workspace...</p>
+        </div>
     </div>
+
+    <div class="footer">Powered by GenZ Protech</div>
 </div>
 
-<!-- Hide loader when Flutter renders first frame -->
 <script>
+    // 1. Rotating Status Messages Logic
+    const statusEl = document.getElementById('status-message');
+    const messages = [
+        "Initializing Workspace...",
+        "Loading CRM Module...",
+        "Loading Inventory Module...",
+        "Loading Service Module...",
+        "Preparing Dashboard...",
+        "Connecting Database..."
+    ];
+    let msgIndex = 0;
+
+    // Change message every 1.5 seconds with a smooth CSS fade
+    const messageInterval = setInterval(() => {
+        if (!statusEl) return;
+        statusEl.style.opacity = '0';
+        setTimeout(() => {
+            msgIndex = (msgIndex + 1) % messages.length;
+            statusEl.innerText = messages[msgIndex];
+            statusEl.style.opacity = '1';
+        }, 300); // Wait for fade out to complete
+    }, 1500);
+
+    // 2. Smooth Exit Transition when Flutter Renders
     window.addEventListener('flutter-first-frame', function () {
-      const el = document.getElementById('loader');
-      if (el) el.remove();
+        clearInterval(messageInterval); // Stop rotation
+
+        const el = document.getElementById('loader');
+        if (el) {
+            // Apply requested enterprise transition
+            el.style.transition = 'opacity .6s ease, transform .6s ease';
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(-30px)';
+
+            // Remove from DOM safely after animation completes
+            setTimeout(() => {
+                el.remove();
+            }, 600);
+        }
     });
-</script>
-
-<!-- Firebase Configuration -->
-<script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getAuth } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-    import { getFirestore } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyBMXuXMz_4AkvBjkht-5vq8tUUMK0U0zY4",
-      authDomain: "genz-protech.firebaseapp.com",
-      projectId: "genz-protech",
-      storageBucket: "genz-protech.firebasestorage.app",
-      messagingSenderId: "401330939326",
-      appId: "1:401330939326:web:9c9299bb367e8ecd9e45ef",
-      measurementId: "G-MZ2YC5ED2S"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-
-    window.firebaseApp = app;
-    window.firebaseAuth = auth;
-    window.firebaseFirestore = db;
-
-    console.log("Firebase initialized successfully!");
 </script>
 
 <script src="flutter_bootstrap.js" async></script>

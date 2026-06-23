@@ -1465,6 +1465,8 @@ class _ZohoShellState extends State<ZohoShell> {
           padding: const EdgeInsets.all(10),
           child: CustomerVisitListScreen(
             companyId: widget.companyId,
+            currentUserUid: widget.userUid,
+            currentUserName: _resolvedEmployeeName(),
             currentUserId: widget.userUid,
             currentUserRole: _currentRole,
           ),
@@ -1481,6 +1483,8 @@ class _ZohoShellState extends State<ZohoShell> {
           padding: const EdgeInsets.all(10),
           child: ScreensStockInList(
             companyId: widget.companyId,
+            currentUserUid: widget.userUid,
+            currentUserName: _resolvedEmployeeName(),
             userUid: widget.userUid,
           ),
         );
