@@ -35,9 +35,9 @@ String normalizeTaskStatus(dynamic value) {
 String normalizeTaskPriority(dynamic value) {
   final raw = (value ?? '').toString().trim().toLowerCase();
 
+  if (raw == 'low') return 'Low';
   if (raw == 'high') return 'High';
   if (raw == 'critical' || raw == 'urgent') return 'Critical';
-  if (raw == 'low') return 'Low';
 
   return 'Medium';
 }
@@ -140,7 +140,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
     super.dispose();
   }
 
-  Future<String> _nextSerialTaskNumber(String year) async {
+  Future<String> _nextTaskNumber() async {
+    final year = DateTime.now().year.toString();
     final prefix = 'TASK-$year-';
 
     final snap = await _tasksRef
@@ -152,37 +153,29 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
     for (final doc in snap.docs) {
       final taskNumber = (doc.data()['taskNumber'] ?? '').toString().trim();
-      final match = RegExp('^TASK-$year-(\\d+)\$').firstMatch(taskNumber);
+      final match = RegExp(r'^TASK-\d{4}-(\d+)$').firstMatch(taskNumber);
       if (match == null) continue;
 
-      final number = int.tryParse(match.group(1) ?? '') ?? 0;
-      if (number > maxNo) maxNo = number;
+      final no = int.tryParse(match.group(1) ?? '') ?? 0;
+      if (no > maxNo) maxNo = no;
     }
 
-    return '$prefix${(maxNo + 1).toString().padLeft(3, '0')}';
-  }
+    var nextNo = maxNo + 1;
 
-  Future<String> _nextTaskNumber(String linkedInquiryNumber) async {
-    final inquiryNo = linkedInquiryNumber.trim().toUpperCase();
-
-    final inquiryMatch = RegExp(r'^INQ-(\d{4})-(\d+)$').firstMatch(inquiryNo);
-
-    if (inquiryMatch != null) {
-      final year = inquiryMatch.group(1)!;
-      final serial = inquiryMatch.group(2)!.padLeft(3, '0');
-      final candidate = 'TASK-$year-$serial';
+    while (true) {
+      final candidate = '$prefix${nextNo.toString().padLeft(3, '0')}';
 
       final existing = await _tasksRef
           .where('taskNumber', isEqualTo: candidate)
           .limit(1)
           .get();
 
-      if (existing.docs.isEmpty) return candidate;
+      if (existing.docs.isEmpty) {
+        return candidate;
+      }
 
-      return _nextSerialTaskNumber(year);
+      nextNo++;
     }
-
-    return _nextSerialTaskNumber(DateTime.now().year.toString());
   }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> _taskStream() {
@@ -198,13 +191,13 @@ class _TaskListScreenState extends State<TaskListScreen> {
       final statusOk =
           _statusFilter == 'All' ||
           task.status == normalizeTaskStatus(_statusFilter);
+
       final priorityOk =
           _priorityFilter == 'All' ||
           task.priority == normalizeTaskPriority(_priorityFilter);
 
       final text = [
         task.taskNumber,
-        task.inquiryNumber,
         task.title,
         task.description,
         task.assignedToName,
@@ -227,7 +220,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
   Future<void> _createTaskDialog() async {
     final titleCtrl = TextEditingController();
     final descCtrl = TextEditingController();
-    final inquiryCtrl = TextEditingController();
     final assignedNameCtrl = TextEditingController(text: _currentUserName);
     final assignedUidCtrl = TextEditingController(text: _currentUserId);
 
@@ -250,11 +242,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
               setDialogState(() => saving = true);
 
               try {
-                final taskNumber = await _nextTaskNumber(inquiryCtrl.text);
+                final taskNumber = await _nextTaskNumber();
 
                 await _tasksRef.add({
                   'taskNumber': taskNumber,
-                  'inquiryNumber': inquiryCtrl.text.trim(),
                   'title': titleCtrl.text.trim(),
                   'description': descCtrl.text.trim(),
                   'status': normalizeTaskStatus(selectedStatus),
@@ -290,15 +281,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      TextField(
-                        controller: inquiryCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Linked Inquiry No',
-                          hintText: 'Example: INQ-2026-001',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
                       TextField(
                         controller: titleCtrl,
                         decoration: const InputDecoration(
@@ -434,7 +416,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
     titleCtrl.dispose();
     descCtrl.dispose();
-    inquiryCtrl.dispose();
     assignedNameCtrl.dispose();
     assignedUidCtrl.dispose();
   }
@@ -619,7 +600,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
               onChanged: (value) => setState(() => _searchQuery = value),
               decoration: InputDecoration(
                 labelText: 'Search tasks',
-                hintText: 'Task no, inquiry no, title, assignee...',
+                hintText: 'Task no, title, assignee...',
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _searchQuery.isEmpty
                     ? null
@@ -753,12 +734,6 @@ class _TaskCard extends StatelessWidget {
                     color: Color(0xFF0F172A),
                   ),
                 ),
-                const SizedBox(width: 8),
-                if (task.inquiryNumber.isNotEmpty)
-                  Text(
-                    '• ${task.inquiryNumber}',
-                    style: const TextStyle(color: Color(0xFF64748B)),
-                  ),
                 const Spacer(),
                 SizedBox(
                   width: 160,
@@ -889,7 +864,6 @@ class _TaskRecord {
   final String id;
   final DocumentReference<Map<String, dynamic>> ref;
   final String taskNumber;
-  final String inquiryNumber;
   final String title;
   final String description;
   final String status;
@@ -903,7 +877,6 @@ class _TaskRecord {
     required this.id,
     required this.ref,
     required this.taskNumber,
-    required this.inquiryNumber,
     required this.title,
     required this.description,
     required this.status,
@@ -932,7 +905,6 @@ class _TaskRecord {
       taskNumber: str(data['taskNumber']).isEmpty
           ? str(data['taskNo'])
           : str(data['taskNumber']),
-      inquiryNumber: str(data['inquiryNumber']),
       title: str(data['title']).isEmpty ? 'Untitled Task' : str(data['title']),
       description: str(data['description']),
       status: normalizeTaskStatus(data['status']),
