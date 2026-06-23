@@ -35,6 +35,11 @@ import 'package:QUIK/modules/reports/sales_report/sales_report_screen.dart';
 
 // Service Sub-Modules
 import 'package:QUIK/modules/service/service_requests/service_request_list_screen.dart';
+import 'package:QUIK/modules/service/service_quotations/service_quotation_list_screen.dart';
+import 'package:QUIK/modules/service/service_visits/service_visit_list_screen.dart';
+import 'package:QUIK/modules/service/service_technicians/service_technician_list_screen.dart';
+
+// Purchase Sub-Modules
 import 'package:QUIK/modules/purchase/purchase_bills/purchase_bill_screens.dart';
 import 'package:QUIK/modules/purchase/vendors/screens_vendor_list.dart';
 
@@ -53,11 +58,7 @@ enum ShellPage {
   serviceWorkOrders,
   serviceQuotations,
   serviceVisits,
-  serviceInstallationCommissioning,
   serviceTechnicians,
-  serviceReports,
-  serviceEquipmentHistory,
-  serviceClosedWorkOrders,
 
   crmCustomers,
   crmContacts,
@@ -126,21 +127,13 @@ extension ShellPageX on ShellPage {
       case ShellPage.serviceRequests:
         return 'Service Requests';
       case ShellPage.serviceWorkOrders:
-        return 'Work Orders';
+        return 'Service Sales Orders';
       case ShellPage.serviceQuotations:
-        return 'Quotations';
+        return 'Service Quotations';
       case ShellPage.serviceVisits:
         return 'Service Visits';
-      case ShellPage.serviceInstallationCommissioning:
-        return 'Installation / Commissioning';
       case ShellPage.serviceTechnicians:
         return 'Service Technicians';
-      case ShellPage.serviceReports:
-        return 'Service Reports';
-      case ShellPage.serviceEquipmentHistory:
-        return 'Equipment History';
-      case ShellPage.serviceClosedWorkOrders:
-        return 'Closed Work Orders';
 
       case ShellPage.crmCustomers:
         return 'Customers';
@@ -249,16 +242,8 @@ extension ShellPageX on ShellPage {
         return Icons.request_quote_outlined;
       case ShellPage.serviceVisits:
         return Icons.directions_car_outlined;
-      case ShellPage.serviceInstallationCommissioning:
-        return Icons.precision_manufacturing_outlined;
       case ShellPage.serviceTechnicians:
         return Icons.engineering_outlined;
-      case ShellPage.serviceReports:
-        return Icons.assignment_outlined;
-      case ShellPage.serviceEquipmentHistory:
-        return Icons.history_outlined;
-      case ShellPage.serviceClosedWorkOrders:
-        return Icons.fact_check_outlined;
 
       case ShellPage.crmCustomers:
         return Icons.people_outline;
@@ -548,16 +533,8 @@ class _ZohoShellState extends State<ZohoShell> {
         return _hasPermission('service', 'quotations');
       case ShellPage.serviceVisits:
         return _hasPermission('service', 'serviceVisits');
-      case ShellPage.serviceInstallationCommissioning:
-        return _hasPermission('service', 'installationCommissioning');
       case ShellPage.serviceTechnicians:
         return _hasPermission('service', 'serviceTechnicians');
-      case ShellPage.serviceReports:
-        return _hasPermission('service', 'serviceReports');
-      case ShellPage.serviceEquipmentHistory:
-        return _hasPermission('service', 'equipmentHistory');
-      case ShellPage.serviceClosedWorkOrders:
-        return _hasPermission('service', 'closedWorkOrders');
 
     // CRM
       case ShellPage.crmCustomers:
@@ -667,11 +644,7 @@ class _ZohoShellState extends State<ZohoShell> {
           ShellPage.serviceWorkOrders,
           ShellPage.serviceQuotations,
           ShellPage.serviceVisits,
-          ShellPage.serviceInstallationCommissioning,
           ShellPage.serviceTechnicians,
-          ShellPage.serviceReports,
-          ShellPage.serviceEquipmentHistory,
-          ShellPage.serviceClosedWorkOrders,
         ],
       ),
       SidebarGroup(
@@ -809,7 +782,7 @@ class _ZohoShellState extends State<ZohoShell> {
       case ShellPage.salesTasks:
       case ShellPage.crmCustomers:
       case ShellPage.crmContacts:
-      case ShellPage.crmVisits: // ✅ NEW: Registered CRM Visits
+      case ShellPage.crmVisits:
       case ShellPage.inventoryProducts:
       case ShellPage.adminUsers:
       case ShellPage.settingsGeneral:
@@ -820,10 +793,13 @@ class _ZohoShellState extends State<ZohoShell> {
       case ShellPage.financePaymentsReceived:
       case ShellPage.financeOutstanding:
       case ShellPage.reportsSales:
-      case ShellPage.serviceRequests: // ✅ Connected Service Requests
+      case ShellPage.serviceRequests:
+      case ShellPage.serviceQuotations:
+      case ShellPage.serviceVisits:
+      case ShellPage.serviceTechnicians:
         return true;
       default:
-      // Service modules removed to trigger placeholder correctly
+      // Modules removed or not yet fully connected to trigger placeholder correctly
         return false;
     }
   }
@@ -1416,6 +1392,8 @@ class _ZohoShellState extends State<ZohoShell> {
           child: ScreensInquiryList(),
         );
 
+    // --- Professional Service Workflow Mapping ---
+
       case ShellPage.serviceRequests:
         return Padding(
           padding: const EdgeInsets.all(10),
@@ -1426,21 +1404,43 @@ class _ZohoShellState extends State<ZohoShell> {
           ),
         );
 
-    // Industrial Service Submodules Routing (Now using placeholder fallback)
-      case ShellPage.serviceWorkOrders:
       case ShellPage.serviceQuotations:
-      case ShellPage.serviceVisits:
-      case ShellPage.serviceInstallationCommissioning:
-      case ShellPage.serviceTechnicians:
-      case ShellPage.serviceReports:
-      case ShellPage.serviceEquipmentHistory:
-      case ShellPage.serviceClosedWorkOrders:
         return Padding(
           padding: const EdgeInsets.all(10),
-          child: _moduleLandingPage(
-            activePage,
-          ), // Render professional placeholder for now
+          child: ServiceQuotationListScreen(
+            companyId: widget.companyId,
+            currentUserUid: widget.userUid,
+            currentUserName: _resolvedEmployeeName(),
+          ),
         );
+
+      case ShellPage.serviceVisits:
+        return Padding(
+          padding: const EdgeInsets.all(10),
+          child: ServiceVisitListScreen(
+            companyId: widget.companyId,
+            currentUserUid: widget.userUid,
+            currentUserName: _resolvedEmployeeName(),
+          ),
+        );
+
+      case ShellPage.serviceTechnicians:
+        return Padding(
+          padding: const EdgeInsets.all(10),
+          child: ServiceTechnicianListScreen(
+            companyId: widget.companyId,
+            currentUserUid: widget.userUid,
+            currentUserName: _resolvedEmployeeName(),
+          ),
+        );
+
+      case ShellPage.serviceWorkOrders:
+        return Padding(
+          padding: const EdgeInsets.all(10),
+          child: _moduleLandingPage(activePage),
+        );
+
+    // --- CRM Mapping ---
 
       case ShellPage.crmCustomers:
         return const Padding(
@@ -1459,7 +1459,6 @@ class _ZohoShellState extends State<ZohoShell> {
           ),
         );
 
-    // ✅ NEW: Connected Customer Visits
       case ShellPage.crmVisits:
         return Padding(
           padding: const EdgeInsets.all(10),
@@ -1658,7 +1657,6 @@ class _ZohoShellState extends State<ZohoShell> {
           ),
         );
 
-
       default:
         return Padding(
           padding: const EdgeInsets.all(10),
@@ -1846,11 +1844,7 @@ class _ZohoShellState extends State<ZohoShell> {
       case ShellPage.serviceWorkOrders:
       case ShellPage.serviceQuotations:
       case ShellPage.serviceVisits:
-      case ShellPage.serviceInstallationCommissioning:
       case ShellPage.serviceTechnicians:
-      case ShellPage.serviceReports:
-      case ShellPage.serviceEquipmentHistory:
-      case ShellPage.serviceClosedWorkOrders:
         return [
           'Work Orders',
           'Engineers',
@@ -1888,16 +1882,8 @@ class _ZohoShellState extends State<ZohoShell> {
         return 'Manage cost estimations for out-of-warranty services, spare parts, labor, and engineer field visits.';
       case ShellPage.serviceVisits:
         return 'Schedule and monitor field visits for service engineers, including site check-ins, travel logs, and utilized spares.';
-      case ShellPage.serviceInstallationCommissioning:
-        return 'Manage complete machine installations, site readiness checks, trial runs, and formal customer handover processes.';
       case ShellPage.serviceTechnicians:
         return 'Monitor service team workload, manage engineer skill mapping, track real-time availability, and optimize field assignments.';
-      case ShellPage.serviceReports:
-        return 'Generate and track post-service completion reports and client acknowledgments.';
-      case ShellPage.serviceEquipmentHistory:
-        return 'View complete lifecycle and repair history for specific machines and equipment serial numbers.';
-      case ShellPage.serviceClosedWorkOrders:
-        return 'Review past service interventions and historical completed repair data.';
 
       default:
         return 'This module is part of the professional ERP architecture. You can keep your current app working while gradually connecting this module to its own database, screens, and workflows.';
@@ -1979,26 +1965,12 @@ class _ZohoShellState extends State<ZohoShell> {
           'Spare requirements',
           'Site readiness',
         ];
-      case ShellPage.serviceInstallationCommissioning:
-        return [
-          'Installation checklist',
-          'Commissioning reports',
-          'Trial run sign-off',
-          'Calibration details',
-        ];
       case ShellPage.serviceTechnicians:
         return [
           'Technician availability',
           'Skill mapping',
           'Workload dashboard',
           'Territory assignment',
-        ];
-      case ShellPage.serviceEquipmentHistory:
-        return [
-          'Serial number tracking',
-          'Component replacement history',
-          'Warranty claims summary',
-          'Performance logs',
         ];
 
       default:
