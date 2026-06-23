@@ -727,12 +727,8 @@ class _TaskCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Text(
-                  task.taskNumber.isEmpty ? 'TASK' : task.taskNumber,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF0F172A),
-                  ),
+                _TaskNumberBadge(
+                  number: task.taskNumber.isEmpty ? 'TASK' : task.taskNumber,
                 ),
                 const Spacer(),
                 SizedBox(
@@ -797,6 +793,44 @@ class _TaskCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _TaskNumberBadge extends StatelessWidget {
+  final String number;
+
+  const _TaskNumberBadge({required this.number});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFEDD5),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFFB923C)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.confirmation_number_outlined,
+            size: 15,
+            color: Color(0xFFEA580C),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            number,
+            style: const TextStyle(
+              color: Color(0xFF9A3412),
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ],
       ),
     );
   }
