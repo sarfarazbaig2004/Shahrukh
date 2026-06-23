@@ -1382,10 +1382,22 @@ class _ZohoShellState extends State<ZohoShell> {
           count++;
         }
 
-        return _navCountBadge(
-          count: count,
-          selected: selected,
-          color: const Color(0xFF60A5FA),
+        if (count <= 0) return const SizedBox.shrink();
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: selected ? const Color(0xFFFFEDD5) : const Color(0xFF475569),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            count.toString(),
+            style: TextStyle(
+              color: selected ? const Color(0xFFEA580C) : Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
         );
       },
     );
