@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../tasks/screens_task_list.dart';
 
 class TaskScreen extends StatelessWidget {
   final String? companyId;
@@ -28,19 +29,17 @@ class TaskScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Padding(
-        padding: EdgeInsets.all(32),
-        child: Text(
-          'Task module has been removed.',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF64748B),
-          ),
-        ),
-      ),
+    return TaskListScreen(
+      companyId: companyId,
+      userUid: userUid,
+      currentUserId: currentUserId,
+      currentUserUid: currentUserUid,
+      currentUserName: currentUserName,
+      userName: userName,
+      userEmail: userEmail,
+      currentUserEmail: currentUserEmail,
+      role: role,
+      currentUserRole: currentUserRole,
     );
   }
 }
