@@ -1,24 +1,31 @@
 import 'package:flutter/material.dart';
 
-const Color zTealTop = Color(0xFF0F6A6C);
-const Color zDarkBar = Color(0xFF1E293B);
-const Color zIconRail = Color(0xFF0F172A);
-const Color zSidebarBg = Color(0xFFF8FAFC);
-const Color zCanvasBg = Color(0xFFF3F6FB);
-const Color zBorder = Color(0xFFE2E8F0);
-const Color zText = Color(0xFF0F172A);
-const Color zMuted = Color(0xFF64748B);
+const Color zMemcoOrange = Color(0xFFF97316);
+const Color zMemcoOrangeDark = Color(0xFFEA580C);
+const Color zMemcoBlack = Color(0xFF111111);
+const Color zMemcoGraphite = Color(0xFF2B2F33);
+const Color zMemcoDarkGray = Color(0xFF3F3F46);
+const Color zMemcoCanvas = Color(0xFFF4F4F5);
 
-const Color zBlue = Color(0xFF2563EB);
-const Color zBlueDark = Color(0xFF1D4ED8);
-const Color zBlueDeep = Color(0xFF1E40AF);
-const Color zBlueSoft = Color(0xFFEFF6FF);
+const Color zTealTop = Color(0xFF2B2F33);
+const Color zDarkBar = Color(0xFF111111);
+const Color zIconRail = Color(0xFF18181B);
+const Color zSidebarBg = Color(0xFFF5F5F4);
+const Color zCanvasBg = Color(0xFFF4F4F5);
+const Color zBorder = Color(0xFFE4E4E7);
+const Color zText = Color(0xFF18181B);
+const Color zMuted = Color(0xFF71717A);
+
+const Color zBlue = Color(0xFFF97316);
+const Color zBlueDark = Color(0xFFEA580C);
+const Color zBlueDeep = Color(0xFFC2410C);
+const Color zBlueSoft = Color(0xFFFFF7ED);
 
 const Color zSuccess = Color(0xFF16A34A);
 const Color zSuccessSoft = Color(0xFFDCFCE7);
 
-const Color zOrange = Color(0xFFF59E0B);
-const Color zOrangeSoft = Color(0xFFFEF3C7);
+const Color zOrange = Color(0xFFF97316);
+const Color zOrangeSoft = Color(0xFFFFF7ED);
 
 const Color zPurple = Color(0xFF7C3AED);
 const Color zPurpleSoft = Color(0xFFF3E8FF);
@@ -32,9 +39,9 @@ const Color zInfoSoft = Color(0xFFE0F2FE);
 const Color zWarning = Color(0xFFD97706);
 const Color zWarningSoft = Color(0xFFFFEDD5);
 
-const Color zLoginBg = Color(0xFFF5F8FE);
+const Color zLoginBg = Color(0xFFF5F5F4);
 const Color zSurface = Colors.white;
-const Color zSurfaceSoft = Color(0xFFF8FAFC);
+const Color zSurfaceSoft = Color(0xFFFAFAFA);
 
 const double kAppRadiusXs = 10;
 const double kAppRadiusSm = 12;
@@ -46,8 +53,8 @@ const double kCardElevation = 0;
 const double kSectionGap = 16;
 const double kPagePadding = 20;
 
-const String kAppName = 'QUIK ERP';
-const String kAppTagline = 'Unified Business ERP';
+const String kAppName = 'MEMCO ERP';
+const String kAppTagline = 'Industrial Automation ERP';
 
 MaterialColor createMaterialColor(Color color) {
   final strengths = <double>[.05];
@@ -78,7 +85,7 @@ ThemeData buildQuikTheme() {
     seedColor: zBlue,
     brightness: Brightness.light,
     primary: zBlue,
-    secondary: zTealTop,
+    secondary: zDarkBar,
     surface: zSurface,
     error: zDanger,
   );
@@ -94,8 +101,8 @@ ThemeData buildQuikTheme() {
 
   return base.copyWith(
     canvasColor: zCanvasBg,
-    splashColor: zBlue.withValues(alpha: 0.05),
-    highlightColor: zBlue.withValues(alpha: 0.03),
+    splashColor: zBlue.withValues(alpha: 0.08),
+    highlightColor: zBlue.withValues(alpha: 0.04),
 
     textTheme: base.textTheme.copyWith(
       headlineLarge: const TextStyle(
@@ -181,10 +188,7 @@ ThemeData buildQuikTheme() {
         fontSize: 18,
         fontWeight: FontWeight.w800,
       ),
-      iconTheme: IconThemeData(
-        color: zText,
-        size: 20,
-      ),
+      iconTheme: IconThemeData(color: zText, size: 20),
     ),
 
     cardTheme: CardThemeData(
@@ -217,10 +221,7 @@ ThemeData buildQuikTheme() {
       filled: true,
       fillColor: Colors.white,
       isDense: true,
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 14,
-        vertical: 15,
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
       hintStyle: const TextStyle(
         color: zMuted,
         fontSize: 13.5,
@@ -231,10 +232,7 @@ ThemeData buildQuikTheme() {
         fontSize: 13.5,
         fontWeight: FontWeight.w600,
       ),
-      errorStyle: const TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.w600,
-      ),
+      errorStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(kAppRadiusMd),
         borderSide: const BorderSide(color: zBorder),
@@ -266,10 +264,7 @@ ThemeData buildQuikTheme() {
         backgroundColor: zBlue,
         foregroundColor: Colors.white,
         elevation: 0,
-        textStyle: const TextStyle(
-          fontSize: 14.5,
-          fontWeight: FontWeight.w700,
-        ),
+        textStyle: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(kAppRadiusMd),
@@ -282,10 +277,7 @@ ThemeData buildQuikTheme() {
         backgroundColor: zBlue,
         foregroundColor: Colors.white,
         elevation: 0,
-        textStyle: const TextStyle(
-          fontSize: 14.5,
-          fontWeight: FontWeight.w700,
-        ),
+        textStyle: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(kAppRadiusMd),
@@ -299,10 +291,7 @@ ThemeData buildQuikTheme() {
         backgroundColor: Colors.white,
         elevation: 0,
         side: const BorderSide(color: zBorder),
-        textStyle: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w700,
-        ),
+        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(kAppRadiusMd),
@@ -313,10 +302,7 @@ ThemeData buildQuikTheme() {
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
         foregroundColor: zBlue,
-        textStyle: const TextStyle(
-          fontSize: 13.5,
-          fontWeight: FontWeight.w700,
-        ),
+        textStyle: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(kAppRadiusSm),
         ),
@@ -324,9 +310,7 @@ ThemeData buildQuikTheme() {
     ),
 
     checkboxTheme: CheckboxThemeData(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(4),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
       side: const BorderSide(color: zBorder),
       fillColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) return zBlue;

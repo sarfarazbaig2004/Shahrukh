@@ -20,6 +20,8 @@ class DesktopUserTable extends StatelessWidget {
   final Future<void> Function(UserDoc doc) onEdit;
   final Future<void> Function(UserDoc doc) onToggle;
   final Future<void> Function(UserDoc doc) onDelete;
+  final Future<void> Function(UserDoc doc)? onRestore;
+  final Future<void> Function(UserDoc doc)? onPermanentDelete;
 
   const DesktopUserTable({
     super.key,
@@ -32,6 +34,8 @@ class DesktopUserTable extends StatelessWidget {
     required this.onEdit,
     required this.onToggle,
     required this.onDelete,
+    this.onRestore,
+    this.onPermanentDelete,
   });
 
   static const double _tableMinWidth = 1040;
@@ -63,9 +67,7 @@ class DesktopUserTable extends StatelessWidget {
             child: ConstrainedBox(
               constraints: const BoxConstraints(minWidth: _tableMinWidth),
               child: Theme(
-                data: Theme.of(context).copyWith(
-                  dividerColor: cardBorderColor,
-                ),
+                data: Theme.of(context).copyWith(dividerColor: cardBorderColor),
                 child: DataTable(
                   sortAscending: sortAscending,
                   sortColumnIndex: sortColumnIndex,
@@ -121,9 +123,7 @@ class DesktopUserTable extends StatelessWidget {
         label: const Text('Created', style: headingStyle),
         onSort: (_, __) => onSort(5, 'createdAt'),
       ),
-      const DataColumn(
-        label: Text('Actions', style: headingStyle),
-      ),
+      const DataColumn(label: Text('Actions', style: headingStyle)),
     ];
   }
 
@@ -144,17 +144,11 @@ class DesktopUserTable extends StatelessWidget {
 
     final statusText = storedStatus.isNotEmpty
         ? statusLabelFromValue(storedStatus)
-        : statusLabel(
-      isActive: isActive,
-      isDeleted: isDeleted,
-    );
+        : statusLabel(isActive: isActive, isDeleted: isDeleted);
 
     final statusClr = storedStatus.isNotEmpty
         ? statusColorFromValue(storedStatus)
-        : statusColor(
-      isActive: isActive,
-      isDeleted: isDeleted,
-    );
+        : statusColor(isActive: isActive, isDeleted: isDeleted);
 
     return DataRow(
       cells: [
@@ -173,12 +167,7 @@ class DesktopUserTable extends StatelessWidget {
             backgroundColor: roleColor(role).withValues(alpha: 0.10),
           ),
         ),
-        DataCell(
-          _textCell(
-            formatDepartment(department),
-            width: 150,
-          ),
-        ),
+        DataCell(_textCell(formatDepartment(department), width: 150)),
         DataCell(
           MiniBadge(
             text: statusText,
@@ -186,18 +175,8 @@ class DesktopUserTable extends StatelessWidget {
             backgroundColor: statusClr.withValues(alpha: 0.10),
           ),
         ),
-        DataCell(
-          _textCell(
-            formatTimestamp(data['lastLoginAt']),
-            width: 135,
-          ),
-        ),
-        DataCell(
-          _textCell(
-            formatTimestamp(data['createdAt']),
-            width: 135,
-          ),
-        ),
+        DataCell(_textCell(formatTimestamp(data['lastLoginAt']), width: 135)),
+        DataCell(_textCell(formatTimestamp(data['createdAt']), width: 135)),
         DataCell(
           _buildActions(
             doc: doc,
@@ -217,8 +196,9 @@ class DesktopUserTable extends StatelessWidget {
     required bool isSelfUser,
   }) {
     final safeName = displayName.trim().isEmpty ? 'Unnamed User' : displayName;
-    final secondaryText =
-    email.isNotEmpty ? email : (designation.isEmpty ? '-' : designation);
+    final secondaryText = email.isNotEmpty
+        ? email
+        : (designation.isEmpty ? '-' : designation);
 
     return SizedBox(
       width: 300,
@@ -274,10 +254,7 @@ class DesktopUserTable extends StatelessWidget {
                 Text(
                   secondaryText,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    color: mutedTextColor,
-                  ),
+                  style: const TextStyle(fontSize: 11.5, color: mutedTextColor),
                 ),
               ],
             ),
@@ -296,10 +273,7 @@ class DesktopUserTable extends StatelessWidget {
         safeValue,
         overflow: TextOverflow.ellipsis,
         maxLines: 1,
-        style: const TextStyle(
-          color: Color(0xFF475569),
-          fontSize: 12.5,
-        ),
+        style: const TextStyle(color: Color(0xFF475569), fontSize: 12.5),
       ),
     );
   }
@@ -312,6 +286,9 @@ class DesktopUserTable extends StatelessWidget {
   }) {
     final canToggle = !isSelfUser && !isDeleted;
     final canDelete = !isSelfUser && !isDeleted;
+    final canRestore = !isSelfUser && isDeleted && onRestore != null;
+    final canPermanentDelete =
+        !isSelfUser && isDeleted && onPermanentDelete != null;
 
     return SizedBox(
       width: 110,
@@ -324,8 +301,8 @@ class DesktopUserTable extends StatelessWidget {
               value: isDeleted ? false : isActive,
               onChanged: canToggle
                   ? (_) async {
-                await onToggle(doc);
-              }
+                      await onToggle(doc);
+                    }
                   : null,
               activeThumbColor: primaryColor,
             ),
@@ -350,28 +327,56 @@ class DesktopUserTable extends StatelessWidget {
                     await onDelete(doc);
                   }
                   break;
+                case 'restore':
+                  if (canRestore) {
+                    await onRestore!(doc);
+                  }
+                  break;
+                case 'permanentDelete':
+                  if (canPermanentDelete) {
+                    await onPermanentDelete!(doc);
+                  }
+                  break;
               }
             },
             itemBuilder: (_) => [
-              const PopupMenuItem(
-                value: 'view',
-                child: Text('View'),
-              ),
-              const PopupMenuItem(
-                value: 'edit',
-                child: Text('Edit'),
-              ),
-              PopupMenuItem(
-                value: 'delete',
-                enabled: canDelete,
-                child: Text(
-                  isDeleted ? 'Archived' : 'Delete',
-                  style: TextStyle(
-                    color: canDelete ? dangerColor : mutedTextColor,
-                    fontWeight: FontWeight.w600,
+              const PopupMenuItem(value: 'view', child: Text('View')),
+              const PopupMenuItem(value: 'edit', child: Text('Edit')),
+              if (isDeleted) ...[
+                PopupMenuItem(
+                  value: 'restore',
+                  enabled: canRestore,
+                  child: Text(
+                    'Restore User',
+                    style: TextStyle(
+                      color: canRestore ? successColor : mutedTextColor,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-              ),
+                PopupMenuItem(
+                  value: 'permanentDelete',
+                  enabled: canPermanentDelete,
+                  child: Text(
+                    'Permanently Delete',
+                    style: TextStyle(
+                      color: canPermanentDelete ? dangerColor : mutedTextColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ] else
+                PopupMenuItem(
+                  value: 'delete',
+                  enabled: canDelete,
+                  child: Text(
+                    'Delete',
+                    style: TextStyle(
+                      color: canDelete ? dangerColor : mutedTextColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
             ],
             child: Container(
               width: 34,

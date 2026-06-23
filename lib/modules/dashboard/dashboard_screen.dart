@@ -1,6 +1,7 @@
 // FILE: lib/modules/dashboard/dashboard_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:QUIK/core/theme/app_theme.dart';
 import 'package:intl/intl.dart';
 import 'package:QUIK/modules/dashboard/dashboard_widgets.dart';
 import 'package:QUIK/modules/dashboard/dashboard_service.dart';
@@ -52,7 +53,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: zCanvasBg,
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(20.0),
@@ -106,24 +107,109 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildHeader() {
     final displayName = widget.userName.isNotEmpty ? widget.userName : 'Admin';
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Welcome $displayName',
-          style: const TextStyle(
-            fontSize: 26,
-            fontWeight: FontWeight.w800,
-            color: Color(0xFF0F172A),
-            letterSpacing: -0.5,
+    final today = DateFormat('EEE, dd MMM yyyy').format(DateTime.now());
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(kAppRadiusXl),
+        border: Border.all(color: zBorder),
+        boxShadow: [
+          BoxShadow(
+            color: zText.withValues(alpha: 0.045),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
           ),
-        ),
-        const SizedBox(height: 4),
-        const Text(
-          'Here is your live business overview.',
-          style: TextStyle(fontSize: 14, color: Color(0xFF64748B)),
-        ),
-      ],
+        ],
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isCompact = constraints.maxWidth < 650;
+
+          final titleBlock = Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 5,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: zBlue,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Welcome $displayName',
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                        color: zText,
+                        letterSpacing: -0.7,
+                        height: 1.15,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Live business overview for sales, finance, service and operations.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: zMuted,
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+
+          final dateBadge = Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: zSurfaceSoft,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: zBorder),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.factory_outlined, color: zBlue, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  today,
+                  style: const TextStyle(
+                    color: zText,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12.5,
+                  ),
+                ),
+              ],
+            ),
+          );
+
+          if (isCompact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [titleBlock, const SizedBox(height: 18), dateBadge],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: titleBlock),
+              const SizedBox(width: 20),
+              dateBadge,
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -167,7 +253,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   title: 'Total Revenue',
                   value: formatter.format(data.totalRevenue),
                   icon: Icons.account_balance_wallet_outlined,
-                  color: const Color(0xFF3B82F6),
+                  color: zBlue,
                   trendText: 'Live Data',
                   isPositive: true,
                 ),
@@ -180,7 +266,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   title: 'Outstanding',
                   value: formatter.format(data.totalOutstanding),
                   icon: Icons.access_time_rounded,
-                  color: const Color(0xFFF59E0B),
+                  color: zBlue,
                   trendText: 'Pending Collections',
                   isPositive: false,
                 ),
@@ -193,7 +279,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   title: 'Active Quotes',
                   value: data.activeQuotes.toString(),
                   icon: Icons.description_outlined,
-                  color: const Color(0xFF8B5CF6),
+                  color: zBlue,
                   trendText: 'In Pipeline',
                   isPositive: true,
                 ),
@@ -206,7 +292,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   title: 'Conversion Rate',
                   value: '${data.conversionRate.toStringAsFixed(1)}%',
                   icon: Icons.trending_up_rounded,
-                  color: const Color(0xFF10B981),
+                  color: zBlue,
                   trendText: 'Avg Performance',
                   isPositive: true,
                 ),
@@ -365,16 +451,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     SizedBox(
                       width: cardWidth,
                       child: DashboardCard(
-                        title: 'Follow-ups Today',
-                        child: Text(
-                          data.followUpsToday.toString(),
-                          style: kpiStyle,
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      width: cardWidth,
-                      child: DashboardCard(
                         title: 'New Inquiries',
                         child: Text(
                           data.newInquiries.toString(),
@@ -394,63 +470,84 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget? _buildTasksActivitiesSection() {
     final showTasks = hasPermission('sales', 'tasks');
-    final showActivities = hasPermission('sales', 'followUps');
+    final showMeetings = hasPermission('sales', 'meetings');
 
-    if (!showTasks && !showActivities) return null;
+    if (!showTasks && !showMeetings) return null;
 
-    Widget activities = DashboardCard(
-      title: 'Recent Activities',
-      child: ListView.separated(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: 3,
-        separatorBuilder: (context, index) =>
-            const Divider(height: 24, color: Color(0xFFF1F5F9)),
-        itemBuilder: (context, index) =>
-            const ActivityItem(text: 'System synchronization successful.'),
-      ),
-    );
-
-    Widget tasks = DashboardCard(
-      title: 'Pending Tasks',
-      child: ListView.separated(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: 3,
-        separatorBuilder: (context, index) =>
-            const Divider(height: 24, color: Color(0xFFF1F5F9)),
-        itemBuilder: (context, index) =>
-            const TaskItem(text: 'Check pending invoices and follow-ups.'),
-      ),
+    const kpiStyle = TextStyle(
+      fontSize: 22,
+      fontWeight: FontWeight.w800,
+      color: Color(0xFF0F172A),
+      letterSpacing: -0.5,
     );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionHeader(title: 'Tasks & Activities'),
+        const SectionHeader(title: 'Productivity'),
         const SizedBox(height: 16),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            bool isWide = constraints.maxWidth > 800;
-
-            if (showTasks && showActivities) {
-              return isWide
-                  ? Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(child: activities),
-                        const SizedBox(width: 16),
-                        Expanded(child: tasks),
-                      ],
-                    )
-                  : Column(
-                      children: [activities, const SizedBox(height: 16), tasks],
-                    );
-            } else if (showActivities) {
-              return activities;
-            } else {
-              return tasks;
+        StreamBuilder<DashboardProductivityData>(
+          stream: _service.streamProductivityData(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const SizedBox(
+                height: 100,
+                child: Center(child: CircularProgressIndicator()),
+              );
             }
+
+            final data = snapshot.data!;
+            final cards = <Widget>[];
+
+            if (showTasks) {
+              cards.add(
+                DashboardCard(
+                  title: 'Open Tasks',
+                  child: Text(data.openTasks.toString(), style: kpiStyle),
+                ),
+              );
+              cards.add(
+                DashboardCard(
+                  title: 'Critical Tasks',
+                  child: Text(data.criticalTasks.toString(), style: kpiStyle),
+                ),
+              );
+            }
+
+            if (showMeetings) {
+              cards.add(
+                DashboardCard(
+                  title: 'Upcoming Meetings',
+                  child: Text(
+                    data.upcomingMeetings.toString(),
+                    style: kpiStyle,
+                  ),
+                ),
+              );
+              cards.add(
+                DashboardCard(
+                  title: 'Today Meetings',
+                  child: Text(data.todayMeetings.toString(), style: kpiStyle),
+                ),
+              );
+            }
+
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                final width = constraints.maxWidth;
+                final cardWidth = width > 1000
+                    ? (width - 48) / 4
+                    : (width > 650 ? (width - 16) / 2 : width);
+
+                return Wrap(
+                  spacing: 16,
+                  runSpacing: 16,
+                  children: cards
+                      .map((card) => SizedBox(width: cardWidth, child: card))
+                      .toList(),
+                );
+              },
+            );
           },
         ),
       ],
@@ -537,8 +634,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
         context,
         MaterialPageRoute(
           builder: (_) => Scaffold(
+            backgroundColor: zCanvasBg,
             appBar: AppBar(title: Text(title)),
-            body: const Center(child: Text('Module Screen Placeholder')),
+            body: Center(
+              child: Container(
+                width: 520,
+                margin: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(28),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.rocket_launch_outlined,
+                      size: 44,
+                      color: Color(0xFF2563EB),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'This quick action is reserved for the next enterprise workflow upgrade. Please open the module from the sidebar for currently active workflows.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(height: 1.45, color: Color(0xFF64748B)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       );

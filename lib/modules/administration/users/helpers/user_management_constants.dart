@@ -190,6 +190,7 @@ const Map<String, String> permissionActionLabels = {
 class PermissionModules {
   static const String dashboard = 'dashboard';
   static const String sales = 'sales';
+  static const String service = 'service';
   static const String crm = 'crm';
   static const String purchase = 'purchase';
   static const String inventory = 'inventory';
@@ -202,6 +203,7 @@ class PermissionModules {
 const List<String> permissionModuleOrder = [
   PermissionModules.dashboard,
   PermissionModules.sales,
+  PermissionModules.service,
   PermissionModules.crm,
   PermissionModules.purchase,
   PermissionModules.inventory,
@@ -214,6 +216,7 @@ const List<String> permissionModuleOrder = [
 const Map<String, String> permissionModuleLabels = {
   PermissionModules.dashboard: 'Dashboard',
   PermissionModules.sales: 'Sales',
+  PermissionModules.service: 'Service',
   PermissionModules.crm: 'CRM',
   PermissionModules.purchase: 'Purchase',
   PermissionModules.inventory: 'Inventory',
@@ -231,16 +234,25 @@ class SalesSubmodules {
   static const String inquiries = 'inquiries';
   static const String quotations = 'quotations';
   static const String salesOrders = 'salesOrders';
-  static const String followUps = 'followUps';
   static const String tasks = 'tasks';
   static const String meetings = 'meetings';
+}
+
+class ServiceSubmodules {
+  // Keep the established storage/runtime keys where they already exist.
+  static const String serviceCalls = 'serviceRequests';
+  static const String serviceVisits = 'serviceVisits';
+  static const String serviceTechnicians = 'serviceTechnicians';
+  static const String complaints = 'complaints';
+  static const String amc = 'amc';
+  static const String installation = 'installationCommissioning';
+  static const String serviceReports = 'serviceReports';
 }
 
 class CrmSubmodules {
   static const String customers = 'customers';
   static const String contacts = 'contacts';
   static const String customerVisits = 'customerVisits';
-  static const String communicationHistory = 'communicationHistory';
 }
 
 class PurchaseSubmodules {
@@ -296,15 +308,22 @@ const Map<String, List<String>> permissionSubmoduleMap = {
     SalesSubmodules.inquiries,
     SalesSubmodules.quotations,
     SalesSubmodules.salesOrders,
-    SalesSubmodules.followUps,
     SalesSubmodules.tasks,
     SalesSubmodules.meetings,
+  ],
+  PermissionModules.service: <String>[
+    ServiceSubmodules.serviceCalls,
+    ServiceSubmodules.serviceVisits,
+    ServiceSubmodules.serviceTechnicians,
+    ServiceSubmodules.complaints,
+    ServiceSubmodules.amc,
+    ServiceSubmodules.installation,
+    ServiceSubmodules.serviceReports,
   ],
   PermissionModules.crm: <String>[
     CrmSubmodules.customers,
     CrmSubmodules.contacts,
     CrmSubmodules.customerVisits,
-    CrmSubmodules.communicationHistory,
   ],
   PermissionModules.purchase: <String>[
     PurchaseSubmodules.vendors,
@@ -353,14 +372,20 @@ const Map<String, String> permissionSubmoduleLabels = {
   SalesSubmodules.inquiries: 'Inquiries',
   SalesSubmodules.quotations: 'Quotations',
   SalesSubmodules.salesOrders: 'Sales Orders',
-  SalesSubmodules.followUps: 'Follow-ups',
   SalesSubmodules.tasks: 'Tasks',
   SalesSubmodules.meetings: 'Meetings',
+
+  ServiceSubmodules.serviceCalls: 'Service Calls',
+  ServiceSubmodules.serviceVisits: 'Service Visits',
+  ServiceSubmodules.serviceTechnicians: 'Service Technicians',
+  ServiceSubmodules.complaints: 'Complaints',
+  ServiceSubmodules.amc: 'AMC',
+  ServiceSubmodules.installation: 'Installation',
+  ServiceSubmodules.serviceReports: 'Service Reports',
 
   CrmSubmodules.customers: 'Customers',
   CrmSubmodules.contacts: 'Contacts',
   CrmSubmodules.customerVisits: 'Customer Visits',
-  CrmSubmodules.communicationHistory: 'Communication History',
 
   PurchaseSubmodules.vendors: 'Vendors',
   PurchaseSubmodules.purchaseOrders: 'Purchase Orders',
@@ -380,7 +405,8 @@ const Map<String, String> permissionSubmoduleLabels = {
   DispatchSubmodules.deliveredOrders: 'Delivered Orders',
 
   FinanceSubmodules.proformaInvoice: 'Proforma Invoice',
-  FinanceSubmodules.taxInvoice: 'Invoice', // Changed from 'Tax Invoice' to 'Invoice'
+  FinanceSubmodules.taxInvoice:
+      'Invoice', // Changed from 'Tax Invoice' to 'Invoice'
   FinanceSubmodules.paymentReceived: 'Payment Received',
   FinanceSubmodules.outstanding: 'Outstanding',
   FinanceSubmodules.expenseEntries: 'Expense Entries',
@@ -414,8 +440,17 @@ const List<String> reportActions = [
   PermissionActions.export,
 ];
 
-const List<String> dashboardActions = [
+const List<String> dashboardActions = [PermissionActions.view];
+
+const List<String> serviceOperationalActions = [
   PermissionActions.view,
+  PermissionActions.create,
+  PermissionActions.edit,
+];
+
+const List<String> serviceComplaintActions = [
+  PermissionActions.view,
+  PermissionActions.create,
 ];
 
 const Map<String, List<String>> permissionActionsByModule = {
@@ -426,14 +461,21 @@ const Map<String, List<String>> permissionActionsBySubmodule = {
   SalesSubmodules.inquiries: standardCrudActions,
   SalesSubmodules.quotations: standardCrudActions,
   SalesSubmodules.salesOrders: standardCrudActions,
-  SalesSubmodules.followUps: standardCrudActions,
   SalesSubmodules.tasks: standardCrudActions,
   SalesSubmodules.meetings: standardCrudActions,
+
+  // The Service card intentionally contains 12 visible actions in total.
+  ServiceSubmodules.serviceCalls: serviceOperationalActions,
+  ServiceSubmodules.serviceVisits: serviceOperationalActions,
+  ServiceSubmodules.serviceTechnicians: [PermissionActions.view],
+  ServiceSubmodules.complaints: serviceComplaintActions,
+  ServiceSubmodules.amc: [PermissionActions.view],
+  ServiceSubmodules.installation: [PermissionActions.view],
+  ServiceSubmodules.serviceReports: [PermissionActions.view],
 
   CrmSubmodules.customers: standardCrudActions,
   CrmSubmodules.contacts: standardCrudActions,
   CrmSubmodules.customerVisits: standardCrudActions,
-  CrmSubmodules.communicationHistory: standardCrudActions,
 
   PurchaseSubmodules.vendors: standardCrudActions,
   PurchaseSubmodules.purchaseOrders: standardCrudActions,
@@ -509,12 +551,10 @@ const Map<String, List<String>> permissionActionsBySubmodule = {
 /// ------------------------------------------------------------
 
 Map<String, bool> buildActionMap(
-    List<String> actions, {
-      required bool enabled,
-    }) {
-  return <String, bool>{
-    for (final action in actions) action: enabled,
-  };
+  List<String> actions, {
+  required bool enabled,
+}) {
+  return <String, bool>{for (final action in actions) action: enabled};
 }
 
 Map<String, dynamic> buildEmptyPermissions() {
@@ -568,8 +608,8 @@ Map<String, dynamic> buildFullPermissions() {
 }
 
 Map<String, dynamic> mergePermissionsWithCanonicalShape(
-    Map<String, dynamic>? incoming,
-    ) {
+  Map<String, dynamic>? incoming,
+) {
   final canonical = buildEmptyPermissions();
 
   if (incoming == null || incoming.isEmpty) {
@@ -580,8 +620,9 @@ Map<String, dynamic> mergePermissionsWithCanonicalShape(
     final incomingModule = incoming[module];
 
     if (module == PermissionModules.dashboard) {
-      final moduleActions =
-      Map<String, bool>.from(canonical[module] as Map<String, bool>);
+      final moduleActions = Map<String, bool>.from(
+        canonical[module] as Map<String, bool>,
+      );
 
       if (incomingModule is Map) {
         for (final action in moduleActions.keys) {
@@ -593,22 +634,54 @@ Map<String, dynamic> mergePermissionsWithCanonicalShape(
       continue;
     }
 
-    final submoduleMap =
-    Map<String, dynamic>.from(canonical[module] as Map<String, dynamic>);
+    final submoduleMap = Map<String, dynamic>.from(
+      canonical[module] as Map<String, dynamic>,
+    );
 
     if (incomingModule is Map) {
       for (final submodule in submoduleMap.keys) {
-        final canonicalActions =
-        Map<String, bool>.from(submoduleMap[submodule] as Map<String, bool>);
-        final incomingSubmodule = incomingModule[submodule];
+        final canonicalActions = Map<String, bool>.from(
+          submoduleMap[submodule] as Map<String, bool>,
+        );
+        final incomingSubmodules = module == PermissionModules.service
+            ? _servicePermissionAliasesFor(submodule)
+                  .map((key) => incomingModule[key])
+                  .where((value) => value != null)
+            : <dynamic>[incomingModule[submodule]];
 
-        if (incomingSubmodule is Map) {
-          for (final action in canonicalActions.keys) {
-            canonicalActions[action] = incomingSubmodule[action] == true;
+        for (final incomingSubmodule in incomingSubmodules) {
+          if (incomingSubmodule is Map) {
+            for (final action in canonicalActions.keys) {
+              if (incomingSubmodule[action] == true) {
+                canonicalActions[action] = true;
+              }
+            }
+
+            if (module == PermissionModules.service) {
+              for (final entry in incomingSubmodule.entries) {
+                if (!canonicalActions.containsKey(entry.key)) {
+                  canonicalActions[entry.key.toString()] = entry.value == true;
+                }
+              }
+            }
+          } else if (incomingSubmodule == true) {
+            canonicalActions[PermissionActions.view] = true;
           }
         }
 
         submoduleMap[submodule] = canonicalActions;
+      }
+
+      if (module == PermissionModules.service) {
+        for (final entry in incomingModule.entries) {
+          final key = entry.key.toString();
+          if (!submoduleMap.containsKey(key) &&
+              !_isKnownServicePermissionAlias(key)) {
+            submoduleMap[entry.key.toString()] = _copyPermissionValue(
+              entry.value,
+            );
+          }
+        }
       }
     }
 
@@ -616,6 +689,43 @@ Map<String, dynamic> mergePermissionsWithCanonicalShape(
   }
 
   return canonical;
+}
+
+Iterable<String> _servicePermissionAliasesFor(String submodule) {
+  switch (submodule) {
+    case ServiceSubmodules.serviceCalls:
+      return const ['serviceRequests', 'serviceCalls', 'serviceCall'];
+    case ServiceSubmodules.serviceVisits:
+      return const ['serviceVisits', 'serviceVisit'];
+    case ServiceSubmodules.serviceTechnicians:
+      return const ['serviceTechnicians', 'serviceTechnician'];
+    case ServiceSubmodules.complaints:
+      return const ['complaints', 'serviceComplaints'];
+    case ServiceSubmodules.amc:
+      return const ['amc', 'annualMaintenanceContracts'];
+    case ServiceSubmodules.installation:
+      return const ['installationCommissioning', 'installation'];
+    case ServiceSubmodules.serviceReports:
+      return const ['serviceReports', 'serviceReport'];
+    default:
+      return <String>[submodule];
+  }
+}
+
+bool _isKnownServicePermissionAlias(String key) {
+  return permissionSubmoduleMap[PermissionModules.service]!.any(
+    (submodule) => _servicePermissionAliasesFor(submodule).contains(key),
+  );
+}
+
+dynamic _copyPermissionValue(dynamic value) {
+  if (value is Map) {
+    return <String, dynamic>{
+      for (final entry in value.entries)
+        entry.key.toString(): _copyPermissionValue(entry.value),
+    };
+  }
+  return value;
 }
 
 Map<String, dynamic> _canonicalRolePermissions(Map<String, dynamic> partial) {
@@ -635,8 +745,10 @@ Map<String, dynamic> getDefaultPermissions(String role) {
 
     case UserRoles.manager:
       return _canonicalRolePermissions({
-        PermissionModules.dashboard:
-        buildActionMap(dashboardActions, enabled: true),
+        PermissionModules.dashboard: buildActionMap(
+          dashboardActions,
+          enabled: true,
+        ),
         PermissionModules.sales: {
           SalesSubmodules.inquiries: buildActionMap(
             permissionActionsBySubmodule[SalesSubmodules.inquiries]!,
@@ -650,10 +762,6 @@ Map<String, dynamic> getDefaultPermissions(String role) {
             permissionActionsBySubmodule[SalesSubmodules.salesOrders]!,
             enabled: true,
           ),
-          SalesSubmodules.followUps: buildActionMap(
-            permissionActionsBySubmodule[SalesSubmodules.followUps]!,
-            enabled: true,
-          ),
           SalesSubmodules.tasks: buildActionMap(
             permissionActionsBySubmodule[SalesSubmodules.tasks]!,
             enabled: true,
@@ -662,6 +770,14 @@ Map<String, dynamic> getDefaultPermissions(String role) {
             permissionActionsBySubmodule[SalesSubmodules.meetings]!,
             enabled: true,
           ),
+        },
+        PermissionModules.service: {
+          for (final submodule
+              in permissionSubmoduleMap[PermissionModules.service]!)
+            submodule: buildActionMap(
+              permissionActionsBySubmodule[submodule]!,
+              enabled: true,
+            ),
         },
         PermissionModules.crm: {
           CrmSubmodules.customers: buildActionMap(
@@ -676,10 +792,6 @@ Map<String, dynamic> getDefaultPermissions(String role) {
             permissionActionsBySubmodule[CrmSubmodules.customerVisits]!,
             enabled: true,
           ),
-          CrmSubmodules.communicationHistory: buildActionMap(
-            permissionActionsBySubmodule[CrmSubmodules.communicationHistory]!,
-            enabled: true,
-          ),
         },
         PermissionModules.purchase: {
           PurchaseSubmodules.vendors: buildActionMap(
@@ -691,7 +803,8 @@ Map<String, dynamic> getDefaultPermissions(String role) {
             enabled: true,
           ),
           PurchaseSubmodules.grnMaterialReceipt: buildActionMap(
-            permissionActionsBySubmodule[PurchaseSubmodules.grnMaterialReceipt]!,
+            permissionActionsBySubmodule[PurchaseSubmodules
+                .grnMaterialReceipt]!,
             enabled: true,
           ),
           PurchaseSubmodules.vendorLedger: buildActionMap(
@@ -793,13 +906,13 @@ Map<String, dynamic> getDefaultPermissions(String role) {
             enabled: false,
           ),
           AdministrationSubmodules.rolesPermissions: buildActionMap(
-            permissionActionsBySubmodule[
-            AdministrationSubmodules.rolesPermissions]!,
+            permissionActionsBySubmodule[AdministrationSubmodules
+                .rolesPermissions]!,
             enabled: false,
           ),
           AdministrationSubmodules.companyProfile: buildActionMap(
-            permissionActionsBySubmodule[
-            AdministrationSubmodules.companyProfile]!,
+            permissionActionsBySubmodule[AdministrationSubmodules
+                .companyProfile]!,
             enabled: false,
           ),
           AdministrationSubmodules.branches: buildActionMap(
@@ -815,8 +928,10 @@ Map<String, dynamic> getDefaultPermissions(String role) {
 
     case UserRoles.sales:
       return _canonicalRolePermissions({
-        PermissionModules.dashboard:
-        buildActionMap(dashboardActions, enabled: true),
+        PermissionModules.dashboard: buildActionMap(
+          dashboardActions,
+          enabled: true,
+        ),
         PermissionModules.sales: {
           SalesSubmodules.inquiries: {
             PermissionActions.view: true,
@@ -834,12 +949,6 @@ Map<String, dynamic> getDefaultPermissions(String role) {
             PermissionActions.view: true,
             PermissionActions.create: true,
             PermissionActions.edit: false,
-            PermissionActions.delete: false,
-          },
-          SalesSubmodules.followUps: {
-            PermissionActions.view: true,
-            PermissionActions.create: true,
-            PermissionActions.edit: true,
             PermissionActions.delete: false,
           },
           SalesSubmodules.tasks: {
@@ -874,19 +983,27 @@ Map<String, dynamic> getDefaultPermissions(String role) {
             PermissionActions.edit: true,
             PermissionActions.delete: false,
           },
-          CrmSubmodules.communicationHistory: {
-            PermissionActions.view: true,
-            PermissionActions.create: true,
-            PermissionActions.edit: false,
-            PermissionActions.delete: false,
-          },
         },
       });
 
     case UserRoles.service:
       return _canonicalRolePermissions({
-        PermissionModules.dashboard:
-        buildActionMap(dashboardActions, enabled: true),
+        PermissionModules.dashboard: buildActionMap(
+          dashboardActions,
+          enabled: true,
+        ),
+        PermissionModules.service: {
+          ServiceSubmodules.serviceCalls: {
+            PermissionActions.view: true,
+            PermissionActions.create: true,
+            PermissionActions.edit: true,
+          },
+          ServiceSubmodules.serviceVisits: {
+            PermissionActions.view: true,
+            PermissionActions.create: true,
+            PermissionActions.edit: false,
+          },
+        },
         PermissionModules.crm: {
           CrmSubmodules.customers: {
             PermissionActions.view: true,
@@ -906,19 +1023,15 @@ Map<String, dynamic> getDefaultPermissions(String role) {
             PermissionActions.edit: true,
             PermissionActions.delete: false,
           },
-          CrmSubmodules.communicationHistory: {
-            PermissionActions.view: true,
-            PermissionActions.create: true,
-            PermissionActions.edit: true,
-            PermissionActions.delete: false,
-          },
         },
       });
 
     case UserRoles.accounts:
       return _canonicalRolePermissions({
-        PermissionModules.dashboard:
-        buildActionMap(dashboardActions, enabled: true),
+        PermissionModules.dashboard: buildActionMap(
+          dashboardActions,
+          enabled: true,
+        ),
         PermissionModules.finance: {
           FinanceSubmodules.proformaInvoice: {
             PermissionActions.view: true,
@@ -959,8 +1072,10 @@ Map<String, dynamic> getDefaultPermissions(String role) {
 
     case UserRoles.purchase:
       return _canonicalRolePermissions({
-        PermissionModules.dashboard:
-        buildActionMap(dashboardActions, enabled: true),
+        PermissionModules.dashboard: buildActionMap(
+          dashboardActions,
+          enabled: true,
+        ),
         PermissionModules.purchase: {
           PurchaseSubmodules.vendors: {
             PermissionActions.view: true,
@@ -1001,8 +1116,10 @@ Map<String, dynamic> getDefaultPermissions(String role) {
 
     case UserRoles.inventory:
       return _canonicalRolePermissions({
-        PermissionModules.dashboard:
-        buildActionMap(dashboardActions, enabled: true),
+        PermissionModules.dashboard: buildActionMap(
+          dashboardActions,
+          enabled: true,
+        ),
         PermissionModules.inventory: {
           InventorySubmodules.products: {
             PermissionActions.view: true,
@@ -1041,8 +1158,10 @@ Map<String, dynamic> getDefaultPermissions(String role) {
 
     case UserRoles.dispatch:
       return _canonicalRolePermissions({
-        PermissionModules.dashboard:
-        buildActionMap(dashboardActions, enabled: true),
+        PermissionModules.dashboard: buildActionMap(
+          dashboardActions,
+          enabled: true,
+        ),
         PermissionModules.dispatch: {
           DispatchSubmodules.readyForDispatch: {
             PermissionActions.view: true,
@@ -1069,8 +1188,10 @@ Map<String, dynamic> getDefaultPermissions(String role) {
 
     case UserRoles.viewer:
       return _canonicalRolePermissions({
-        PermissionModules.dashboard:
-        buildActionMap(dashboardActions, enabled: true),
+        PermissionModules.dashboard: buildActionMap(
+          dashboardActions,
+          enabled: true,
+        ),
       });
 
     default:
@@ -1083,19 +1204,16 @@ Map<String, dynamic> getDefaultPermissions(String role) {
 /// ------------------------------------------------------------
 
 Map<String, dynamic> normalizePermissionsForStorage(
-    Map<String, dynamic>? permissions, {
-      String? role,
-    }) {
+  Map<String, dynamic>? permissions, {
+  String? role,
+}) {
   if (isSuperAccessRole(role)) {
     return buildFullPermissions();
   }
   return mergePermissionsWithCanonicalShape(permissions);
 }
 
-bool hasModuleAccess(
-    Map<String, dynamic>? permissions,
-    String moduleKey,
-    ) {
+bool hasModuleAccess(Map<String, dynamic>? permissions, String moduleKey) {
   if (permissions == null || permissions.isEmpty) return false;
 
   final moduleData = permissions[moduleKey];
@@ -1115,11 +1233,11 @@ bool hasModuleAccess(
 }
 
 bool hasPermission(
-    Map<String, dynamic>? permissions, {
-      required String moduleKey,
-      String? submoduleKey,
-      required String action,
-    }) {
+  Map<String, dynamic>? permissions, {
+  required String moduleKey,
+  String? submoduleKey,
+  required String action,
+}) {
   if (permissions == null || permissions.isEmpty) return false;
 
   final moduleData = permissions[moduleKey];

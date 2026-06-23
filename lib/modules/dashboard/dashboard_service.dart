@@ -30,13 +30,22 @@ class DashboardChartData {
 
 class DashboardCrmData {
   final int openDeals;
-  final int followUpsToday;
   final int newInquiries;
 
-  DashboardCrmData({
-    required this.openDeals,
-    required this.followUpsToday,
-    required this.newInquiries,
+  DashboardCrmData({required this.openDeals, required this.newInquiries});
+}
+
+class DashboardProductivityData {
+  final int openTasks;
+  final int criticalTasks;
+  final int upcomingMeetings;
+  final int todayMeetings;
+
+  DashboardProductivityData({
+    required this.openTasks,
+    required this.criticalTasks,
+    required this.upcomingMeetings,
+    required this.todayMeetings,
   });
 }
 
@@ -191,14 +200,7 @@ class DashboardService {
         .snapshots()
         .map((snap) {
           int openDeals = 0;
-          int followUpsToday = 0;
           int newInquiries = 0;
-
-          final today = DateTime(
-            DateTime.now().year,
-            DateTime.now().month,
-            DateTime.now().day,
-          );
 
           for (var doc in snap.docs) {
             final data = doc.data();
@@ -207,26 +209,80 @@ class DashboardService {
             final status = (data['status'] ?? '').toString().toLowerCase();
             if (status == 'open' || status == 'pending') openDeals++;
             if (status == 'new') newInquiries++;
-
-            if (data['nextFollowUpDate'] != null) {
-              DateTime followUpDate = _parseDate(data['nextFollowUpDate']);
-              DateTime dateOnly = DateTime(
-                followUpDate.year,
-                followUpDate.month,
-                followUpDate.day,
-              );
-              if (dateOnly.isAtSameMomentAs(today)) {
-                followUpsToday++;
-              }
-            }
           }
 
           return DashboardCrmData(
             openDeals: openDeals,
-            followUpsToday: followUpsToday,
             newInquiries: newInquiries,
           );
         });
+  }
+
+  Stream<DashboardProductivityData> streamProductivityData() {
+    return _db.collection('companies').doc(companyId).snapshots().asyncMap((
+      _,
+    ) async {
+      try {
+        final tasksSnap = await _db
+            .collection('companies')
+            .doc(companyId)
+            .collection('tasks')
+            .get();
+
+        final meetingsSnap = await _db
+            .collection('companies')
+            .doc(companyId)
+            .collection('meetings')
+            .get();
+
+        int openTasks = 0;
+        int criticalTasks = 0;
+        int upcomingMeetings = 0;
+        int todayMeetings = 0;
+
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+
+        for (final doc in tasksSnap.docs) {
+          final data = doc.data();
+          if (data['isDeleted'] == true) continue;
+
+          final status = (data['status'] ?? '').toString().toLowerCase();
+          final priority = (data['priority'] ?? '').toString().toLowerCase();
+
+          if (status != 'completed') openTasks++;
+          if (priority == 'critical' && status != 'completed') criticalTasks++;
+        }
+
+        for (final doc in meetingsSnap.docs) {
+          final data = doc.data();
+          if (data['isDeleted'] == true) continue;
+
+          final status = (data['status'] ?? '').toString().toLowerCase();
+          if (status == 'cancelled') continue;
+
+          final startAt = _parseDate(data['startAt']);
+          final meetingDay = DateTime(startAt.year, startAt.month, startAt.day);
+
+          if (startAt.isAfter(now)) upcomingMeetings++;
+          if (meetingDay.isAtSameMomentAs(today)) todayMeetings++;
+        }
+
+        return DashboardProductivityData(
+          openTasks: openTasks,
+          criticalTasks: criticalTasks,
+          upcomingMeetings: upcomingMeetings,
+          todayMeetings: todayMeetings,
+        );
+      } catch (e) {
+        return DashboardProductivityData(
+          openTasks: 0,
+          criticalTasks: 0,
+          upcomingMeetings: 0,
+          todayMeetings: 0,
+        );
+      }
+    });
   }
 
   Stream<List<DashboardTransaction>> streamRecentTransactions() {

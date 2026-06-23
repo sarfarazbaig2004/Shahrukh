@@ -89,26 +89,31 @@ class BranchOption {
 class UserManagementService {
   final FirebaseFirestore firestore;
 
-  UserManagementService({
-    FirebaseFirestore? firestore,
-  }) : firestore = firestore ?? FirebaseFirestore.instance;
+  UserManagementService({FirebaseFirestore? firestore})
+    : firestore = firestore ?? FirebaseFirestore.instance;
 
   CollectionReference<Map<String, dynamic>> _companyUsersCollection(
-      String companyId,
-      ) {
+    String companyId,
+  ) {
     return firestore.collection('companies').doc(companyId).collection('users');
   }
 
   CollectionReference<Map<String, dynamic>> _companyInvitesCollection(
-      String companyId,
-      ) {
-    return firestore.collection('companies').doc(companyId).collection('invites');
+    String companyId,
+  ) {
+    return firestore
+        .collection('companies')
+        .doc(companyId)
+        .collection('invites');
   }
 
   CollectionReference<Map<String, dynamic>> _companyBranchesCollection(
-      String companyId,
-      ) {
-    return firestore.collection('companies').doc(companyId).collection('branches');
+    String companyId,
+  ) {
+    return firestore
+        .collection('companies')
+        .doc(companyId)
+        .collection('branches');
   }
 
   CollectionReference<Map<String, dynamic>> get _globalUsersCollection =>
@@ -180,27 +185,19 @@ class UserManagementService {
     return false;
   }
 
-  String _deriveStatus({
-    required bool isActive,
-    required bool isDeleted,
-  }) {
+  String _deriveStatus({required bool isActive, required bool isDeleted}) {
     if (isDeleted) return UserStatus.archived;
     return isActive ? UserStatus.active : UserStatus.inactive;
   }
 
-  Map<String, dynamic> _baseUpdateAudit({
-    required String updatedByUid,
-  }) {
+  Map<String, dynamic> _baseUpdateAudit({required String updatedByUid}) {
     return {
       'updatedAt': FieldValue.serverTimestamp(),
       'updatedByUid': updatedByUid,
     };
   }
 
-  void _assertRequiredId(
-      String label,
-      String value,
-      ) {
+  void _assertRequiredId(String label, String value) {
     if (_normalizeText(value).isEmpty) {
       throw ArgumentError('$label is required.');
     }
@@ -221,7 +218,7 @@ class UserManagementService {
     final rand = Random();
     return List.generate(
       8,
-          (index) => chars[rand.nextInt(chars.length)],
+      (index) => chars[rand.nextInt(chars.length)],
     ).join();
   }
 
@@ -247,9 +244,7 @@ class UserManagementService {
         .replaceAll(RegExp(r'^_|_$'), '');
   }
 
-  Map<String, dynamic> _sanitizeRawNestedMap(
-      Map<String, dynamic>? input,
-      ) {
+  Map<String, dynamic> _sanitizeRawNestedMap(Map<String, dynamic>? input) {
     if (input == null || input.isEmpty) {
       return <String, dynamic>{};
     }
@@ -291,16 +286,10 @@ class UserManagementService {
       return getDefaultPermissions(normalizedRole);
     }
 
-    return normalizePermissionsForStorage(
-      sanitized,
-      role: normalizedRole,
-    );
+    return normalizePermissionsForStorage(sanitized, role: normalizedRole);
   }
 
-  bool _deepMapEquals(
-      Map<String, dynamic> a,
-      Map<String, dynamic> b,
-      ) {
+  bool _deepMapEquals(Map<String, dynamic> a, Map<String, dynamic> b) {
     if (a.length != b.length) return false;
 
     final aKeys = a.keys.toSet();
@@ -383,10 +372,7 @@ class UserManagementService {
       permissions: permissions,
     );
 
-    final status = _deriveStatus(
-      isActive: isActive,
-      isDeleted: isDeleted,
-    );
+    final status = _deriveStatus(isActive: isActive, isDeleted: isDeleted);
 
     return {
       'companyId': companyId,
@@ -400,15 +386,17 @@ class UserManagementService {
       'branchName': normalizedBranchName,
       'reportingManagerUid': normalizedReportingManagerUid,
       'reportingManagerName': normalizedReportingManagerName,
-      'accessScope':
-      normalizedAccessScope.isEmpty ? AccessScope.company : normalizedAccessScope,
+      'accessScope': normalizedAccessScope.isEmpty
+          ? AccessScope.company
+          : normalizedAccessScope,
       'isAdmin': isSuperAccessRole(normalizedRole),
       'isActive': isActive,
       'isDeleted': isDeleted,
       'status': status,
       'permissions': canonicalPermissions,
       if (normalizedEmail.isNotEmpty) 'email': normalizedEmail,
-      if (normalizedDisplayName.isNotEmpty) 'displayName': normalizedDisplayName,
+      if (normalizedDisplayName.isNotEmpty)
+        'displayName': normalizedDisplayName,
       if (normalizedPhone.isNotEmpty) 'phone': normalizedPhone,
       if (normalizedPhotoUrl.isNotEmpty) 'photoUrl': normalizedPhotoUrl,
       ..._baseUpdateAudit(updatedByUid: updatedByUid),
@@ -423,10 +411,7 @@ class UserManagementService {
     required String updatedByUid,
   }) {
     final normalizedRole = _normalizeRole(role);
-    final status = _deriveStatus(
-      isActive: isActive,
-      isDeleted: isDeleted,
-    );
+    final status = _deriveStatus(isActive: isActive, isDeleted: isDeleted);
 
     return {
       'companyIds': FieldValue.arrayUnion([companyId]),
@@ -485,14 +470,9 @@ class UserManagementService {
       permissions: permissions,
     );
 
-    final companyRef = _companyUserDoc(
-      companyId: companyId,
-      userUid: userUid,
-    );
+    final companyRef = _companyUserDoc(companyId: companyId, userUid: userUid);
 
-    final globalRef = _globalUserDoc(
-      userUid: userUid,
-    );
+    final globalRef = _globalUserDoc(userUid: userUid);
 
     try {
       await firestore.runTransaction((transaction) async {
@@ -531,18 +511,14 @@ class UserManagementService {
         final companyCreateAudit = companySnap.exists
             ? <String, dynamic>{}
             : <String, dynamic>{
-          'createdAt': FieldValue.serverTimestamp(),
-          'createdByUid': updatedByUid,
-        };
+                'createdAt': FieldValue.serverTimestamp(),
+                'createdByUid': updatedByUid,
+              };
 
-        transaction.set(
-          companyRef,
-          {
-            ...companyPayload,
-            ...companyCreateAudit,
-          },
-          SetOptions(merge: true),
-        );
+        transaction.set(companyRef, {
+          ...companyPayload,
+          ...companyCreateAudit,
+        }, SetOptions(merge: true));
 
         final globalPayload = _globalMembershipPayload(
           companyId: companyId,
@@ -552,23 +528,23 @@ class UserManagementService {
           updatedByUid: updatedByUid,
         );
 
-        transaction.set(
-          globalRef,
-          {
-            'uid': userUid,
-            if (_normalizeEmail(email).isNotEmpty) 'email': _normalizeEmail(email),
-            if (_normalizeText(displayName).isNotEmpty)
-              'displayName': _normalizeText(displayName),
-            if (_normalizePhone(phone).isNotEmpty) 'phone': _normalizePhone(phone),
-            if (_normalizeText(photoUrl).isNotEmpty)
-              'photoUrl': _normalizeText(photoUrl),
-            ...globalPayload,
-          },
-          SetOptions(merge: true),
-        );
+        transaction.set(globalRef, {
+          'uid': userUid,
+          if (_normalizeEmail(email).isNotEmpty)
+            'email': _normalizeEmail(email),
+          if (_normalizeText(displayName).isNotEmpty)
+            'displayName': _normalizeText(displayName),
+          if (_normalizePhone(phone).isNotEmpty)
+            'phone': _normalizePhone(phone),
+          if (_normalizeText(photoUrl).isNotEmpty)
+            'photoUrl': _normalizeText(photoUrl),
+          ...globalPayload,
+        }, SetOptions(merge: true));
       });
     } on FirebaseException catch (e) {
-      throw StateError('Failed to save user and permissions: ${e.message ?? e.code}');
+      throw StateError(
+        'Failed to save user and permissions: ${e.message ?? e.code}',
+      );
     } catch (e) {
       rethrow;
     }
@@ -629,14 +605,9 @@ class UserManagementService {
       updatedByUid: updatedByUid,
     );
 
-    final companyRef = _companyUserDoc(
-      companyId: companyId,
-      userUid: userUid,
-    );
+    final companyRef = _companyUserDoc(companyId: companyId, userUid: userUid);
 
-    final globalRef = _globalUserDoc(
-      userUid: userUid,
-    );
+    final globalRef = _globalUserDoc(userUid: userUid);
 
     try {
       await firestore.runTransaction((transaction) async {
@@ -660,43 +631,37 @@ class UserManagementService {
 
         final currentIsActive = data['isActive'] == true;
         final newIsActive = !currentIsActive;
-        final role = _normalizeText(data['role']).isEmpty ? UserRoles.viewer : data['role'];
+        final role = _normalizeText(data['role']).isEmpty
+            ? UserRoles.viewer
+            : data['role'];
 
         final newStatus = _deriveStatus(
           isActive: newIsActive,
           isDeleted: false,
         );
 
-        transaction.set(
-          companyRef,
-          {
+        transaction.set(companyRef, {
+          'isActive': newIsActive,
+          'isDeleted': false,
+          'status': newStatus,
+          ..._baseUpdateAudit(updatedByUid: updatedByUid),
+        }, SetOptions(merge: true));
+
+        transaction.set(globalRef, {
+          'memberships.$companyId': {
+            'companyId': companyId,
+            'role': _normalizeRole(role),
+            'roleLabel': _roleLabelFor(_normalizeRole(role), role),
+            'isAdmin': isSuperAccessRole(role),
             'isActive': newIsActive,
             'isDeleted': false,
             'status': newStatus,
-            ..._baseUpdateAudit(updatedByUid: updatedByUid),
-          },
-          SetOptions(merge: true),
-        );
-
-        transaction.set(
-          globalRef,
-          {
-            'memberships.$companyId': {
-              'companyId': companyId,
-              'role': _normalizeRole(role),
-              'roleLabel': _roleLabelFor(_normalizeRole(role), role),
-              'isAdmin': isSuperAccessRole(role),
-              'isActive': newIsActive,
-              'isDeleted': false,
-              'status': newStatus,
-              'updatedAt': FieldValue.serverTimestamp(),
-              'updatedByUid': updatedByUid,
-            },
             'updatedAt': FieldValue.serverTimestamp(),
             'updatedByUid': updatedByUid,
           },
-          SetOptions(merge: true),
-        );
+          'updatedAt': FieldValue.serverTimestamp(),
+          'updatedByUid': updatedByUid,
+        }, SetOptions(merge: true));
       });
     } on FirebaseException catch (e) {
       throw StateError('Failed to update user status: ${e.message ?? e.code}');
@@ -716,14 +681,9 @@ class UserManagementService {
       updatedByUid: deletedByUid,
     );
 
-    final companyRef = _companyUserDoc(
-      companyId: companyId,
-      userUid: userUid,
-    );
+    final companyRef = _companyUserDoc(companyId: companyId, userUid: userUid);
 
-    final globalRef = _globalUserDoc(
-      userUid: userUid,
-    );
+    final globalRef = _globalUserDoc(userUid: userUid);
 
     try {
       await firestore.runTransaction((transaction) async {
@@ -739,40 +699,34 @@ class UserManagementService {
           throw StateError('User document company scope mismatch.');
         }
 
-        final role = _normalizeText(data['role']).isEmpty ? UserRoles.viewer : data['role'];
+        final role = _normalizeText(data['role']).isEmpty
+            ? UserRoles.viewer
+            : data['role'];
 
-        transaction.set(
-          companyRef,
-          {
+        transaction.set(companyRef, {
+          'isActive': false,
+          'isDeleted': true,
+          'status': UserStatus.archived,
+          'deletedAt': FieldValue.serverTimestamp(),
+          'deletedByUid': deletedByUid,
+          ..._baseUpdateAudit(updatedByUid: deletedByUid),
+        }, SetOptions(merge: true));
+
+        transaction.set(globalRef, {
+          'memberships.$companyId': {
+            'companyId': companyId,
+            'role': _normalizeRole(role),
+            'roleLabel': _roleLabelFor(_normalizeRole(role), role),
+            'isAdmin': isSuperAccessRole(role),
             'isActive': false,
             'isDeleted': true,
             'status': UserStatus.archived,
-            'deletedAt': FieldValue.serverTimestamp(),
-            'deletedByUid': deletedByUid,
-            ..._baseUpdateAudit(updatedByUid: deletedByUid),
-          },
-          SetOptions(merge: true),
-        );
-
-        transaction.set(
-          globalRef,
-          {
-            'memberships.$companyId': {
-              'companyId': companyId,
-              'role': _normalizeRole(role),
-              'roleLabel': _roleLabelFor(_normalizeRole(role), role),
-              'isAdmin': isSuperAccessRole(role),
-              'isActive': false,
-              'isDeleted': true,
-              'status': UserStatus.archived,
-              'updatedAt': FieldValue.serverTimestamp(),
-              'updatedByUid': deletedByUid,
-            },
             'updatedAt': FieldValue.serverTimestamp(),
             'updatedByUid': deletedByUid,
           },
-          SetOptions(merge: true),
-        );
+          'updatedAt': FieldValue.serverTimestamp(),
+          'updatedByUid': deletedByUid,
+        }, SetOptions(merge: true));
       });
     } on FirebaseException catch (e) {
       throw StateError('Failed to archive user: ${e.message ?? e.code}');
@@ -804,14 +758,9 @@ class UserManagementService {
       updatedByUid: restoredByUid,
     );
 
-    final companyRef = _companyUserDoc(
-      companyId: companyId,
-      userUid: userUid,
-    );
+    final companyRef = _companyUserDoc(companyId: companyId, userUid: userUid);
 
-    final globalRef = _globalUserDoc(
-      userUid: userUid,
-    );
+    final globalRef = _globalUserDoc(userUid: userUid);
 
     try {
       await firestore.runTransaction((transaction) async {
@@ -827,45 +776,88 @@ class UserManagementService {
           throw StateError('User document company scope mismatch.');
         }
 
-        final role = _normalizeText(data['role']).isEmpty ? UserRoles.viewer : data['role'];
+        final role = _normalizeText(data['role']).isEmpty
+            ? UserRoles.viewer
+            : data['role'];
 
-        transaction.set(
-          companyRef,
-          {
+        transaction.set(companyRef, {
+          'isActive': true,
+          'isDeleted': false,
+          'status': UserStatus.active,
+          'deletedAt': null,
+          'deletedByUid': null,
+          'restoredAt': FieldValue.serverTimestamp(),
+          'restoredByUid': restoredByUid,
+          ..._baseUpdateAudit(updatedByUid: restoredByUid),
+        }, SetOptions(merge: true));
+
+        transaction.set(globalRef, {
+          'memberships.$companyId': {
+            'companyId': companyId,
+            'role': _normalizeRole(role),
+            'roleLabel': _roleLabelFor(_normalizeRole(role), role),
+            'isAdmin': isSuperAccessRole(role),
             'isActive': true,
             'isDeleted': false,
             'status': UserStatus.active,
-            'deletedAt': null,
-            'deletedByUid': null,
-            'restoredAt': FieldValue.serverTimestamp(),
-            'restoredByUid': restoredByUid,
-            ..._baseUpdateAudit(updatedByUid: restoredByUid),
-          },
-          SetOptions(merge: true),
-        );
-
-        transaction.set(
-          globalRef,
-          {
-            'memberships.$companyId': {
-              'companyId': companyId,
-              'role': _normalizeRole(role),
-              'roleLabel': _roleLabelFor(_normalizeRole(role), role),
-              'isAdmin': isSuperAccessRole(role),
-              'isActive': true,
-              'isDeleted': false,
-              'status': UserStatus.active,
-              'updatedAt': FieldValue.serverTimestamp(),
-              'updatedByUid': restoredByUid,
-            },
             'updatedAt': FieldValue.serverTimestamp(),
             'updatedByUid': restoredByUid,
           },
-          SetOptions(merge: true),
-        );
+          'updatedAt': FieldValue.serverTimestamp(),
+          'updatedByUid': restoredByUid,
+        }, SetOptions(merge: true));
       });
     } on FirebaseException catch (e) {
       throw StateError('Failed to restore user: ${e.message ?? e.code}');
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<void> permanentlyDeleteUser({
+    required String companyId,
+    required String userUid,
+    required String deletedByUid,
+  }) async {
+    _assertCompanyScoped(
+      companyId: companyId,
+      userUid: userUid,
+      updatedByUid: deletedByUid,
+    );
+
+    final companyRef = _companyUserDoc(companyId: companyId, userUid: userUid);
+
+    final globalRef = _globalUserDoc(userUid: userUid);
+
+    try {
+      await firestore.runTransaction((transaction) async {
+        final companySnap = await transaction.get(companyRef);
+
+        if (!companySnap.exists) {
+          throw StateError('User not found in company scope.');
+        }
+
+        final data = companySnap.data() ?? <String, dynamic>{};
+        final existingCompanyId = _normalizeText(data['companyId']);
+        if (existingCompanyId.isNotEmpty && existingCompanyId != companyId) {
+          throw StateError('User document company scope mismatch.');
+        }
+
+        transaction.delete(companyRef);
+
+        final globalSnap = await transaction.get(globalRef);
+        if (globalSnap.exists) {
+          transaction.update(globalRef, {
+            'memberships.$companyId': FieldValue.delete(),
+            'updatedAt': FieldValue.serverTimestamp(),
+            'updatedByUid': deletedByUid,
+          });
+        }
+      });
+    } on FirebaseException catch (e) {
+      throw StateError(
+        'Failed to permanently delete user: ${e.message ?? e.code}',
+      );
     } catch (e) {
       rethrow;
     }
@@ -883,10 +875,7 @@ class UserManagementService {
       updatedByUid: updatedByUid,
     );
 
-    final companyRef = _companyUserDoc(
-      companyId: companyId,
-      userUid: userUid,
-    );
+    final companyRef = _companyUserDoc(companyId: companyId, userUid: userUid);
 
     try {
       await firestore.runTransaction((transaction) async {
@@ -911,27 +900,23 @@ class UserManagementService {
         final existingPermissionsRaw = data['permissions'];
         final existingPermissions = existingPermissionsRaw is Map
             ? normalizePermissionsForStorage(
-          _sanitizeRawNestedMap(
-            Map<String, dynamic>.from(existingPermissionsRaw),
-          ),
-          role: currentRole,
-        )
+                _sanitizeRawNestedMap(
+                  Map<String, dynamic>.from(existingPermissionsRaw),
+                ),
+                role: currentRole,
+              )
             : getDefaultPermissions(currentRole);
 
         if (_deepMapEquals(existingPermissions, normalizedPermissions)) {
           return;
         }
 
-        transaction.set(
-          companyRef,
-          {
-            'companyId': companyId,
-            'uid': userUid,
-            'permissions': normalizedPermissions,
-            ..._baseUpdateAudit(updatedByUid: updatedByUid),
-          },
-          SetOptions(merge: true),
-        );
+        transaction.set(companyRef, {
+          'companyId': companyId,
+          'uid': userUid,
+          'permissions': normalizedPermissions,
+          ..._baseUpdateAudit(updatedByUid: updatedByUid),
+        }, SetOptions(merge: true));
       });
     } on FirebaseException catch (e) {
       throw StateError(
@@ -956,14 +941,9 @@ class UserManagementService {
 
     final normalizedRole = _normalizeRole(role);
 
-    final companyRef = _companyUserDoc(
-      companyId: companyId,
-      userUid: userUid,
-    );
+    final companyRef = _companyUserDoc(companyId: companyId, userUid: userUid);
 
-    final globalRef = _globalUserDoc(
-      userUid: userUid,
-    );
+    final globalRef = _globalUserDoc(userUid: userUid);
 
     try {
       await firestore.runTransaction((transaction) async {
@@ -985,8 +965,8 @@ class UserManagementService {
         final existingPermissionsRaw = companyData['permissions'];
         final existingPermissions = existingPermissionsRaw is Map
             ? _sanitizeRawNestedMap(
-          Map<String, dynamic>.from(existingPermissionsRaw),
-        )
+                Map<String, dynamic>.from(existingPermissionsRaw),
+              )
             : <String, dynamic>{};
 
         final roleNormalizedPermissions = _normalizePermissionsForRole(
@@ -994,40 +974,29 @@ class UserManagementService {
           permissions: existingPermissions.isEmpty ? null : existingPermissions,
         );
 
-        transaction.set(
-          companyRef,
-          {
+        transaction.set(companyRef, {
+          'role': normalizedRole,
+          'roleLabel': _roleLabelFor(normalizedRole, role),
+          'isAdmin': isSuperAccessRole(normalizedRole),
+          'permissions': roleNormalizedPermissions,
+          ..._baseUpdateAudit(updatedByUid: updatedByUid),
+        }, SetOptions(merge: true));
+
+        transaction.set(globalRef, {
+          'memberships.$companyId': {
+            'companyId': companyId,
             'role': normalizedRole,
             'roleLabel': _roleLabelFor(normalizedRole, role),
             'isAdmin': isSuperAccessRole(normalizedRole),
-            'permissions': roleNormalizedPermissions,
-            ..._baseUpdateAudit(updatedByUid: updatedByUid),
-          },
-          SetOptions(merge: true),
-        );
-
-        transaction.set(
-          globalRef,
-          {
-            'memberships.$companyId': {
-              'companyId': companyId,
-              'role': normalizedRole,
-              'roleLabel': _roleLabelFor(normalizedRole, role),
-              'isAdmin': isSuperAccessRole(normalizedRole),
-              'isActive': isActive,
-              'isDeleted': isDeleted,
-              'status': _deriveStatus(
-                isActive: isActive,
-                isDeleted: isDeleted,
-              ),
-              'updatedAt': FieldValue.serverTimestamp(),
-              'updatedByUid': updatedByUid,
-            },
+            'isActive': isActive,
+            'isDeleted': isDeleted,
+            'status': _deriveStatus(isActive: isActive, isDeleted: isDeleted),
             'updatedAt': FieldValue.serverTimestamp(),
             'updatedByUid': updatedByUid,
           },
-          SetOptions(merge: true),
-        );
+          'updatedAt': FieldValue.serverTimestamp(),
+          'updatedByUid': updatedByUid,
+        }, SetOptions(merge: true));
       });
     } on FirebaseException catch (e) {
       throw StateError('Failed to update user role: ${e.message ?? e.code}');
@@ -1059,10 +1028,7 @@ class UserManagementService {
       updatedByUid: updatedByUid,
     );
 
-    final companyRef = _companyUserDoc(
-      companyId: companyId,
-      userUid: userUid,
-    );
+    final companyRef = _companyUserDoc(companyId: companyId, userUid: userUid);
     final globalRef = _globalUserDoc(userUid: userUid);
 
     try {
@@ -1082,7 +1048,8 @@ class UserManagementService {
         final companyUpdate = <String, dynamic>{
           if (department != null) 'department': _normalizeText(department),
           if (designation != null) 'designation': _normalizeText(designation),
-          if (employeeCode != null) 'employeeCode': _normalizeText(employeeCode),
+          if (employeeCode != null)
+            'employeeCode': _normalizeText(employeeCode),
           if (branchId != null || branchName != null)
             'branchId': _safeBranchId(branchId, branchName),
           if (branchName != null)
@@ -1113,17 +1080,9 @@ class UserManagementService {
           'updatedByUid': updatedByUid,
         };
 
-        transaction.set(
-          companyRef,
-          companyUpdate,
-          SetOptions(merge: true),
-        );
+        transaction.set(companyRef, companyUpdate, SetOptions(merge: true));
 
-        transaction.set(
-          globalRef,
-          globalUpdate,
-          SetOptions(merge: true),
-        );
+        transaction.set(globalRef, globalUpdate, SetOptions(merge: true));
       });
     } on FirebaseException catch (e) {
       throw StateError(
@@ -1201,10 +1160,9 @@ class UserManagementService {
 
     String inviteCode = _generateInviteCode();
     for (int i = 0; i < 5; i++) {
-      final existing = await _companyInvitesCollection(companyId)
-          .where('code', isEqualTo: inviteCode)
-          .limit(1)
-          .get();
+      final existing = await _companyInvitesCollection(
+        companyId,
+      ).where('code', isEqualTo: inviteCode).limit(1).get();
 
       if (existing.docs.isEmpty) break;
       inviteCode = _generateInviteCode();
@@ -1243,10 +1201,7 @@ class UserManagementService {
       throw StateError('Failed to create invite: ${e.message ?? e.code}');
     }
 
-    return InviteCreationResult(
-      inviteId: inviteRef.id,
-      inviteCode: inviteCode,
-    );
+    return InviteCreationResult(inviteId: inviteRef.id, inviteCode: inviteCode);
   }
 
   Future<void> cancelInvite({
@@ -1259,20 +1214,14 @@ class UserManagementService {
     _assertRequiredId('cancelledByUid', cancelledByUid);
 
     try {
-      await _inviteDoc(
-        companyId: companyId,
-        inviteId: inviteId,
-      ).set(
-        {
-          'status': 'cancelled',
-          'isDeleted': true,
-          'cancelledAt': FieldValue.serverTimestamp(),
-          'cancelledByUid': cancelledByUid,
-          'updatedAt': FieldValue.serverTimestamp(),
-          'updatedByUid': cancelledByUid,
-        },
-        SetOptions(merge: true),
-      );
+      await _inviteDoc(companyId: companyId, inviteId: inviteId).set({
+        'status': 'cancelled',
+        'isDeleted': true,
+        'cancelledAt': FieldValue.serverTimestamp(),
+        'cancelledByUid': cancelledByUid,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'updatedByUid': cancelledByUid,
+      }, SetOptions(merge: true));
     } on FirebaseException catch (e) {
       throw StateError('Failed to cancel invite: ${e.message ?? e.code}');
     }
@@ -1288,21 +1237,17 @@ class UserManagementService {
     _assertRequiredId('acceptedByUid', acceptedByUid);
 
     try {
-      await _inviteDoc(
-        companyId: companyId,
-        inviteId: inviteId,
-      ).set(
-        {
-          'status': 'accepted',
-          'acceptedAt': FieldValue.serverTimestamp(),
-          'acceptedByUid': acceptedByUid,
-          'updatedAt': FieldValue.serverTimestamp(),
-          'updatedByUid': acceptedByUid,
-        },
-        SetOptions(merge: true),
-      );
+      await _inviteDoc(companyId: companyId, inviteId: inviteId).set({
+        'status': 'accepted',
+        'acceptedAt': FieldValue.serverTimestamp(),
+        'acceptedByUid': acceptedByUid,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'updatedByUid': acceptedByUid,
+      }, SetOptions(merge: true));
     } on FirebaseException catch (e) {
-      throw StateError('Failed to mark invite accepted: ${e.message ?? e.code}');
+      throw StateError(
+        'Failed to mark invite accepted: ${e.message ?? e.code}',
+      );
     }
   }
 
@@ -1314,10 +1259,7 @@ class UserManagementService {
     _assertRequiredId('inviteId', inviteId);
 
     try {
-      await _inviteDoc(
-        companyId: companyId,
-        inviteId: inviteId,
-      ).delete();
+      await _inviteDoc(companyId: companyId, inviteId: inviteId).delete();
     } on FirebaseException catch (e) {
       throw StateError('Failed to delete invite: ${e.message ?? e.code}');
     }
@@ -1362,7 +1304,8 @@ class UserManagementService {
       query = query.where('branchId', isEqualTo: normalizedBranchId);
     }
 
-    final shouldOrder = params.orderByField.trim().isNotEmpty &&
+    final shouldOrder =
+        params.orderByField.trim().isNotEmpty &&
         params.orderByField.trim() == 'createdAt';
 
     if (shouldOrder) {
@@ -1399,10 +1342,7 @@ class UserManagementService {
     required String companyId,
     UserQueryParams params = const UserQueryParams(),
   }) {
-    return buildUsersQuery(
-      companyId: companyId,
-      params: params,
-    ).snapshots();
+    return buildUsersQuery(companyId: companyId, params: params).snapshots();
   }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> watchPendingInvites({
@@ -1423,9 +1363,9 @@ class UserManagementService {
   }) async {
     _assertRequiredId('companyId', companyId);
 
-    Query<Map<String, dynamic>> query = _companyUsersCollection(companyId)
-        .where('isDeleted', isEqualTo: false)
-        .where('isActive', isEqualTo: true);
+    Query<Map<String, dynamic>> query = _companyUsersCollection(
+      companyId,
+    ).where('isDeleted', isEqualTo: false).where('isActive', isEqualTo: true);
 
     final normalizedDepartment = _normalizeText(department);
     final normalizedBranchId = _normalizeText(branchId);
@@ -1442,25 +1382,25 @@ class UserManagementService {
 
     final results = snapshot.docs
         .map((doc) {
-      final data = doc.data();
-      final displayName = _normalizeText(data['displayName']);
-      final fallbackName = _normalizeText(data['name']);
+          final data = doc.data();
+          final displayName = _normalizeText(data['displayName']);
+          final fallbackName = _normalizeText(data['name']);
 
-      return ReportingManagerOption(
-        uid: doc.id,
-        name: displayName.isNotEmpty ? displayName : fallbackName,
-        role: _normalizeText(data['role']),
-        department: _normalizeText(data['department']),
-        designation: _normalizeText(data['designation']),
-        branchId: _normalizeText(data['branchId']),
-        branchName: _normalizeText(data['branchName']),
-      );
-    })
+          return ReportingManagerOption(
+            uid: doc.id,
+            name: displayName.isNotEmpty ? displayName : fallbackName,
+            role: _normalizeText(data['role']),
+            department: _normalizeText(data['department']),
+            designation: _normalizeText(data['designation']),
+            branchId: _normalizeText(data['branchId']),
+            branchName: _normalizeText(data['branchName']),
+          );
+        })
         .where((e) => e.name.isNotEmpty)
         .toList();
 
     results.sort(
-          (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+      (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
     );
 
     return results;
@@ -1474,15 +1414,13 @@ class UserManagementService {
     final List<BranchOption> branches = [];
 
     try {
-      final branchSnapshot = await _companyBranchesCollection(companyId)
-          .where('isDeleted', isEqualTo: false)
-          .get();
+      final branchSnapshot = await _companyBranchesCollection(
+        companyId,
+      ).where('isDeleted', isEqualTo: false).get();
 
       for (final doc in branchSnapshot.docs) {
         final data = doc.data();
-        final branchName = _normalizeText(
-          data['name'] ?? data['branchName'],
-        );
+        final branchName = _normalizeText(data['name'] ?? data['branchName']);
         final branchId = _normalizeText(data['branchId']).isNotEmpty
             ? _normalizeText(data['branchId'])
             : doc.id;
@@ -1499,9 +1437,8 @@ class UserManagementService {
       }
 
       branches.sort(
-            (a, b) => a.branchName.toLowerCase().compareTo(
-          b.branchName.toLowerCase(),
-        ),
+        (a, b) =>
+            a.branchName.toLowerCase().compareTo(b.branchName.toLowerCase()),
       );
     } catch (_) {}
 
@@ -1533,9 +1470,7 @@ class UserManagementService {
     return [_defaultHeadOfficeBranch()];
   }
 
-  Future<BranchOption> fetchDefaultBranch({
-    required String companyId,
-  }) async {
+  Future<BranchOption> fetchDefaultBranch({required String companyId}) async {
     final branches = await fetchCompanyBranches(companyId: companyId);
 
     for (final branch in branches) {
@@ -1614,7 +1549,8 @@ class UserManagementService {
           !isDeleted) {
         return false;
       }
-      if (normalizedStatus == UserStatus.active && status != UserStatus.active) {
+      if (normalizedStatus == UserStatus.active &&
+          status != UserStatus.active) {
         return false;
       }
       if (normalizedStatus == UserStatus.inactive &&

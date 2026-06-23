@@ -42,22 +42,19 @@ Future<void> showViewUserDialog({
 
   final currentStatus = storedStatus.isNotEmpty
       ? statusLabelFromValue(storedStatus)
-      : statusLabel(
-    isActive: isActive,
-    isDeleted: isDeleted,
-  );
+      : statusLabel(isActive: isActive, isDeleted: isDeleted);
 
   final currentStatusColor = storedStatus.isNotEmpty
       ? statusColorFromValue(storedStatus)
-      : statusColor(
-    isActive: isActive,
-    isDeleted: isDeleted,
-  );
+      : statusColor(isActive: isActive, isDeleted: isDeleted);
 
   final permissions = Map<String, dynamic>.from(data['permissions'] ?? {});
 
   final bool isExportImport = industry == 'export_import';
-  final enabledPermissions = _extractEnabledPermissions(permissions, isExportImport);
+  final enabledPermissions = _extractEnabledPermissions(
+    permissions,
+    isExportImport,
+  );
 
   await showDialog<void>(
     context: context,
@@ -112,7 +109,9 @@ Future<void> showViewUserDialog({
                             label: const Text('Close'),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: _viewHeadingTextColor,
-                              side: const BorderSide(color: _viewCardBorderColor),
+                              side: const BorderSide(
+                                color: _viewCardBorderColor,
+                              ),
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 18,
                                 vertical: 14,
@@ -140,15 +139,24 @@ Future<void> showViewUserDialog({
                         _buildSectionCard(
                           title: 'Profile Information',
                           subtitle:
-                          'Basic employee identity and organization mapping.',
+                              'Basic employee identity and organization mapping.',
                           child: Column(
                             children: [
                               _buildResponsiveTwoColumn(
                                 left: Column(
                                   children: [
-                                    _detailRow('Full Name', name.isEmpty ? '-' : name),
-                                    _detailRow('Email', email.isEmpty ? '-' : email),
-                                    _detailRow('Phone', phone.isEmpty ? '-' : phone),
+                                    _detailRow(
+                                      'Full Name',
+                                      name.isEmpty ? '-' : name,
+                                    ),
+                                    _detailRow(
+                                      'Email',
+                                      email.isEmpty ? '-' : email,
+                                    ),
+                                    _detailRow(
+                                      'Phone',
+                                      phone.isEmpty ? '-' : phone,
+                                    ),
                                   ],
                                 ),
                                 right: Column(
@@ -179,7 +187,7 @@ Future<void> showViewUserDialog({
                         _buildSectionCard(
                           title: 'Access Control',
                           subtitle:
-                          'Current role, access scope, and account state.',
+                              'Current role, access scope, and account state.',
                           child: Column(
                             children: [
                               _buildResponsiveTwoColumn(
@@ -209,7 +217,9 @@ Future<void> showViewUserDialog({
                                       'Account Type',
                                       isDeleted
                                           ? 'Deleted'
-                                          : (isActive ? 'Active User' : 'Inactive User'),
+                                          : (isActive
+                                                ? 'Active User'
+                                                : 'Inactive User'),
                                     ),
                                   ],
                                 ),
@@ -221,7 +231,7 @@ Future<void> showViewUserDialog({
                         _buildSectionCard(
                           title: 'System Activity',
                           subtitle:
-                          'Timeline details for creation, updates, and login activity.',
+                              'Timeline details for creation, updates, and login activity.',
                           child: Column(
                             children: [
                               _buildResponsiveTwoColumn(
@@ -248,37 +258,43 @@ Future<void> showViewUserDialog({
                         _buildSectionCard(
                           title: 'Enabled Permissions',
                           subtitle:
-                          'Permissions granted across ERP modules and submodules.',
+                              'Permissions granted across ERP modules and submodules.',
                           child: enabledPermissions.isEmpty
                               ? Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF8FAFC),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: _viewCardBorderColor),
-                            ),
-                            child: const Text(
-                              'No explicit permissions assigned.',
-                              style: TextStyle(
-                                color: _viewMutedTextColor,
-                                fontSize: 13,
-                              ),
-                            ),
-                          )
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF8FAFC),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: _viewCardBorderColor,
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'No explicit permissions assigned.',
+                                    style: TextStyle(
+                                      color: _viewMutedTextColor,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                )
                               : Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: enabledPermissions
-                                .map(
-                                  (permission) => MiniBadge(
-                                text: _permissionDisplayLabel(permission),
-                                textColor: _viewPrimaryColor,
-                                backgroundColor: const Color(0xFFF1F5F9),
-                              ),
-                            )
-                                .toList(),
-                          ),
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: enabledPermissions
+                                      .map(
+                                        (permission) => MiniBadge(
+                                          text: _permissionDisplayLabel(
+                                            permission,
+                                          ),
+                                          textColor: _viewPrimaryColor,
+                                          backgroundColor: const Color(
+                                            0xFFF1F5F9,
+                                          ),
+                                        ),
+                                      )
+                                      .toList(),
+                                ),
                         ),
                       ],
                     ),
@@ -343,10 +359,7 @@ Widget _buildDialogUserHeader(Map<String, dynamic> data) {
               ),
               if (phone.isNotEmpty) ...[
                 const SizedBox(height: 4),
-                Text(
-                  phone,
-                  style: const TextStyle(color: _viewMutedTextColor),
-                ),
+                Text(phone, style: const TextStyle(color: _viewMutedTextColor)),
               ],
               const SizedBox(height: 10),
               Wrap(
@@ -434,13 +447,7 @@ Widget _buildResponsiveTwoColumn({
   return LayoutBuilder(
     builder: (context, constraints) {
       if (constraints.maxWidth < 860) {
-        return Column(
-          children: [
-            left,
-            const SizedBox(height: 8),
-            right,
-          ],
-        );
+        return Column(children: [left, const SizedBox(height: 8), right]);
       }
 
       return Row(
@@ -455,11 +462,7 @@ Widget _buildResponsiveTwoColumn({
   );
 }
 
-Widget _detailRow(
-    String label,
-    String value, {
-      Color? valueColor,
-    }) {
+Widget _detailRow(String label, String value, {Color? valueColor}) {
   return Padding(
     padding: const EdgeInsets.only(bottom: 14),
     child: Row(
@@ -491,7 +494,10 @@ Widget _detailRow(
   );
 }
 
-List<String> _extractEnabledPermissions(Map<String, dynamic> permissions, bool isExportImport) {
+List<String> _extractEnabledPermissions(
+  Map<String, dynamic> permissions,
+  bool isExportImport,
+) {
   final enabled = <String>[];
 
   permissions.forEach((module, submodules) {
@@ -531,10 +537,19 @@ bool _isModuleAllowed(String module, String? submodule, bool isExportImport) {
   if (module == 'sales') return false; // Strictly blocked
   if (module == 'crm') return submodule == 'customers';
   if (module == 'finance') {
-    return ['taxInvoice', 'paymentReceived', 'outstanding', 'expenseEntries'].contains(submodule);
+    return [
+      'taxInvoice',
+      'paymentReceived',
+      'outstanding',
+      'expenseEntries',
+    ].contains(submodule);
   }
   if (module == 'reports') {
-    return ['salesReport', 'customerReport', 'paymentReport'].contains(submodule);
+    return [
+      'salesReport',
+      'customerReport',
+      'paymentReport',
+    ].contains(submodule);
   }
   return false;
 }
@@ -559,6 +574,8 @@ String _moduleLabel(String moduleKey) {
       return 'Dashboard';
     case 'sales':
       return 'Sales';
+    case 'service':
+      return 'Service';
     case 'crm':
       return 'CRM';
     case 'purchase':
@@ -584,13 +601,20 @@ String _submoduleLabel(String key) {
     'inquiries': 'Inquiries',
     'quotations': 'Quotations',
     'salesOrder': 'Sales Order',
-    'followUps': 'Follow-ups',
     'tasks': 'Tasks',
     'meetings': 'Meetings',
+    'serviceRequests': 'Service Calls',
+    'serviceCalls': 'Service Calls',
+    'serviceVisits': 'Service Visits',
+    'serviceTechnicians': 'Service Technicians',
+    'complaints': 'Complaints',
+    'amc': 'AMC',
+    'installationCommissioning': 'Installation',
+    'installation': 'Installation',
+    'serviceReports': 'Service Reports',
     'customers': 'Customers',
     'contacts': 'Contacts',
     'customerVisits': 'Customer Visits',
-    'communicationHistory': 'Communication History',
     'vendors': 'Vendors',
     'purchaseOrders': 'Purchase Orders',
     'grnMaterialReceipt': 'GRN / Material Receipt',

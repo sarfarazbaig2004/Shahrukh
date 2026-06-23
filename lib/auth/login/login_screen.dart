@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:QUIK/auth/register/register_screen_local.dart' as reg;
 import 'package:QUIK/core/theme/app_theme.dart';
 import 'package:QUIK/modules/administration/company/screen_join_company.dart';
+import 'package:QUIK/modules/authentication/forgot_password/screens/forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -22,6 +23,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _obscure = true;
   bool _loading = false;
+  bool _resettingPassword = false;
   bool _rememberMe = true;
 
   // Added ValueNotifier to sync background image index with marketing caption
@@ -39,12 +41,14 @@ class _LoginScreenState extends State<LoginScreen> {
   void _toast(String msg, {bool err = false, SnackBarAction? action}) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
       SnackBar(
         content: Text(msg),
         backgroundColor: err ? Colors.red : zSuccess,
         behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: err ? 3 : 2),
         action: action,
       ),
     );
@@ -71,6 +75,10 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _login() async {
     FocusScope.of(context).unfocus();
 
+    if (mounted) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+    }
+
     if (!_formKey.currentState!.validate()) {
       _toast('Please correct the highlighted fields', err: true);
       return;
@@ -90,6 +98,9 @@ class _LoginScreenState extends State<LoginScreen> {
         password: pass,
       );
 
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).clearSnackBars();
+
       // Company isolation must be enforced after login in:
       // 1) auth_wrapper.dart
       // 2) user/company profile fetch
@@ -100,32 +111,17 @@ class _LoginScreenState extends State<LoginScreen> {
       debugPrint('Firebase login error message: ${e.message}');
 
       final msg = switch (e.code) {
-        'user-not-found' =>
-        'Firebase Auth: user-not-found - No account found for this email.',
-        'wrong-password' =>
-        'Firebase Auth: wrong-password - Incorrect password.',
-        'invalid-email' =>
-        'Firebase Auth: invalid-email - Invalid email format.',
-        'invalid-credential' =>
-        'Firebase Auth: invalid-credential - Invalid email or password.',
-        'user-disabled' =>
-        'Firebase Auth: user-disabled - This account has been disabled.',
+        'invalid-email' => 'Wrong email address.',
         'too-many-requests' =>
-        'Firebase Auth: too-many-requests - Too many attempts. Please wait and try again.',
-        _ => 'Firebase Auth: ${e.code} - ${e.message ?? 'Sign in failed.'}',
+          'Too many wrong attempts. Please wait and try again.',
+        'user-disabled' => 'This account has been disabled.',
+        _ => 'Wrong email address or password.',
       };
-      _toast(
-        msg,
-        err: true,
-        action: SnackBarAction(
-          label: 'Reset password',
-          textColor: Colors.white,
-          onPressed: () => _sendPasswordReset(email),
-        ),
-      );
+
+      _toast(msg, err: true);
     } catch (e) {
       debugPrint('Login non-Firebase error: $e');
-      _toast('Sign in failed: $e', err: true);
+      _toast('Wrong email address or password.', err: true);
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -134,46 +130,31 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _forgot() async {
-    final email = _email.text.trim().toLowerCase();
-
-    if (email.isEmpty) {
-      _toast('Enter your work email first', err: true);
-      return;
-    }
-
-    final emailError = _validateEmail(email);
-    if (emailError != null) {
-      _toast(emailError, err: true);
-      return;
-    }
-
-    await _sendPasswordReset(email);
+    await _sendPasswordReset(_email.text);
   }
 
-  Future<void> _sendPasswordReset(String email) async {
-    final normalizedEmail = email.trim().toLowerCase();
-
-    if (normalizedEmail.isEmpty) {
-      _toast('Enter your work email first', err: true);
-      return;
-    }
+  Future<bool> _sendPasswordReset(
+    String email, {
+    bool showSuccessToast = true,
+  }) async {
+    if (mounted) setState(() => _resettingPassword = true);
 
     try {
-      debugPrint('Password reset requested for: $normalizedEmail');
-      await FirebaseAuth.instance.sendPasswordResetEmail(
-        email: normalizedEmail,
+      final completed = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => ForgotPasswordScreen(initialEmail: email),
+        ),
       );
-      _toast('Password reset link sent to $normalizedEmail');
-    } on FirebaseAuthException catch (e) {
-      debugPrint('Firebase reset error code: ${e.code}');
-      debugPrint('Firebase reset error message: ${e.message}');
-      _toast(
-        'Firebase Auth: ${e.code} - ${e.message ?? 'Unable to send password reset email.'}',
-        err: true,
-      );
-    } catch (e) {
-      debugPrint('Password reset non-Firebase error: $e');
-      _toast('Failed: $e', err: true);
+
+      if (completed == true && showSuccessToast) {
+        _toast(
+          'Password updated successfully. Please login with new password.',
+        );
+      }
+
+      return completed == true;
+    } finally {
+      if (mounted) setState(() => _resettingPassword = false);
     }
   }
 
@@ -190,7 +171,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return InputDecoration(
       hintText: placeholder,
       filled: true,
-      fillColor: Colors.white.withOpacity(0.9),
+      fillColor: Colors.white.withValues(alpha: 0.9),
       isDense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
@@ -226,12 +207,12 @@ class _LoginScreenState extends State<LoginScreen> {
       margin: const EdgeInsets.only(right: 8, bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
+        color: Colors.white.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -251,7 +232,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildMarketingSection(bool isWide) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: isWide ? 60.0 : 24.0, vertical: 40.0),
+      padding: EdgeInsets.symmetric(
+        horizontal: isWide ? 60.0 : 24.0,
+        vertical: 40.0,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
@@ -267,10 +251,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   color: Colors.white,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: Colors.black.withValues(alpha: 0.1),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
-                    )
+                    ),
                   ],
                 ),
                 child: ClipRRect(
@@ -278,11 +262,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Image.asset(
                     'assets/images/favicon.png',
                     fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const Icon(
-                      Icons.business,
-                      size: 24,
-                      color: zBlue,
-                    ),
+                    errorBuilder: (_, __, ___) =>
+                        const Icon(Icons.business, size: 24, color: zBlue),
                   ),
                 ),
               ),
@@ -331,7 +312,7 @@ class _LoginScreenState extends State<LoginScreen> {
           Text(
             'CRM, Inventory, Finance, Service Management and Analytics in one connected workspace.',
             style: TextStyle(
-              color: Colors.white.withOpacity(0.85),
+              color: Colors.white.withValues(alpha: 0.85),
               fontSize: 18,
               height: 1.5,
               fontWeight: FontWeight.w400,
@@ -411,15 +392,15 @@ class _LoginScreenState extends State<LoginScreen> {
           width: 380,
           padding: const EdgeInsets.all(40),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.80),
+            color: Colors.white.withValues(alpha: 0.80),
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
-              color: Colors.white.withOpacity(0.5),
+              color: Colors.white.withValues(alpha: 0.5),
               width: 1.5,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.08),
+                color: Colors.black.withValues(alpha: 0.08),
                 blurRadius: 30,
                 offset: const Offset(0, 10),
               ),
@@ -443,10 +424,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 6),
                 const Text(
                   'Enter your credentials to access your workspace.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Color(0xFF64748B),
-                  ),
+                  style: TextStyle(fontSize: 14, color: Color(0xFF64748B)),
                 ),
                 const SizedBox(height: 32),
 
@@ -524,7 +502,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       ],
                     ),
                     TextButton(
-                      onPressed: _loading ? null : _forgot,
+                      onPressed: (_loading || _resettingPassword)
+                          ? null
+                          : _forgot,
                       style: TextButton.styleFrom(
                         padding: EdgeInsets.zero,
                         minimumSize: Size.zero,
@@ -558,20 +538,20 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: _loading ? null : _login,
                     child: _loading
                         ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
                         : const Text(
-                      'Sign In',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                            'Sign In',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                   ),
                 ),
                 const SizedBox(height: 28),
@@ -584,13 +564,14 @@ class _LoginScreenState extends State<LoginScreen> {
                       onPressed: _loading
                           ? null
                           : () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const reg.RegisterScreenLocal(),
-                          ),
-                        );
-                      },
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const reg.RegisterScreenLocal(),
+                                ),
+                              );
+                            },
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                         minimumSize: Size.zero,
@@ -607,19 +588,22 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const Text(
                       '·',
-                      style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        color: Color(0xFF94A3B8),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     TextButton(
                       onPressed: _loading
                           ? null
                           : () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const ScreenJoinCompany(),
-                          ),
-                        );
-                      },
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const ScreenJoinCompany(),
+                                ),
+                              );
+                            },
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                         minimumSize: Size.zero,
@@ -668,44 +652,46 @@ class _LoginScreenState extends State<LoginScreen> {
             child: SafeArea(
               child: isWide
                   ? Row(
-                children: [
-                  Expanded(
-                    flex: 5,
-                    child: _buildMarketingSection(true),
-                  ),
-                  Expanded(
-                    flex: 4,
-                    child: Center(
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.all(40),
-                        child: _buildLoginCard(),
+                      children: [
+                        Expanded(flex: 5, child: _buildMarketingSection(true)),
+                        Expanded(
+                          flex: 4,
+                          child: Center(
+                            child: SingleChildScrollView(
+                              padding: const EdgeInsets.all(40),
+                              child: _buildLoginCard(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : SingleChildScrollView(
+                      child: Container(
+                        constraints: BoxConstraints(
+                          minHeight:
+                              media.size.height -
+                              media.padding.top -
+                              media.padding.bottom,
+                        ),
+                        padding: EdgeInsets.only(
+                          bottom: media.viewInsets.bottom > 0
+                              ? media.viewInsets.bottom + 20
+                              : 40,
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _buildMarketingSection(false),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                              ),
+                              child: _buildLoginCard(),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              )
-                  : SingleChildScrollView(
-                child: Container(
-                  constraints: BoxConstraints(
-                    minHeight: media.size.height - media.padding.top - media.padding.bottom,
-                  ),
-                  padding: EdgeInsets.only(
-                    bottom: media.viewInsets.bottom > 0
-                        ? media.viewInsets.bottom + 20
-                        : 40,
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildMarketingSection(false),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: _buildLoginCard(),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
             ),
           ),
         ],
@@ -788,9 +774,9 @@ class _LoginHeroCarouselState extends State<_LoginHeroCarousel> {
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
               colors: [
-                Colors.black.withOpacity(0.85),
-                Colors.black.withOpacity(0.40),
-                Colors.black.withOpacity(0.20),
+                Colors.black.withValues(alpha: 0.85),
+                Colors.black.withValues(alpha: 0.40),
+                Colors.black.withValues(alpha: 0.20),
               ],
               stops: const [0.0, 0.5, 1.0],
             ),

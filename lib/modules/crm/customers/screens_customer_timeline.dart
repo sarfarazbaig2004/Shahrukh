@@ -225,7 +225,12 @@ class _ScreensCustomerTimelineState extends State<ScreensCustomerTimeline> {
 
   void _openFutureModule(String moduleName) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$moduleName module coming soon in Enterprise Update.')),
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text(
+          '$moduleName is planned for the enterprise workflow upgrade. Current customer timeline records are available here.',
+        ),
+      ),
     );
   }
 

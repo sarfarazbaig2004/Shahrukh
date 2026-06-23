@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:QUIK/core/theme/app_theme.dart';
 
 /// -----------------------------------------------------------------
 /// 1. DASHBOARD CARD
@@ -22,13 +23,13 @@ class DashboardCard extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        borderRadius: BorderRadius.circular(kAppRadiusLg),
+        border: Border.all(color: zBorder),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: zText.withValues(alpha: 0.035),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -104,24 +105,22 @@ class KpiCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color trendColor = isPositive
-        ? const Color(0xFF10B981)
-        : const Color(0xFFEF4444);
+    final Color trendColor = isPositive ? zBlue : zMuted;
     final IconData trendIcon = isPositive
         ? Icons.trending_up_rounded
-        : Icons.trending_down_rounded;
+        : Icons.schedule_rounded;
 
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        borderRadius: BorderRadius.circular(kAppRadiusLg),
+        border: Border.all(color: zBorder),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: zText.withValues(alpha: 0.035),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -146,10 +145,14 @@ class KpiCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
+                  color: zBlueSoft,
+                  borderRadius: BorderRadius.circular(kAppRadiusSm),
                 ),
-                child: Icon(icon, size: 18, color: color),
+                child: const Icon(
+                  Icons.hexagon_outlined,
+                  size: 18,
+                  color: zBlue,
+                ),
               ),
             ],
           ),
@@ -204,20 +207,20 @@ class ActionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(kAppRadiusLg),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(kAppRadiusLg),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
+            borderRadius: BorderRadius.circular(kAppRadiusLg),
+            border: Border.all(color: zBorder),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 28, color: const Color(0xFF3B82F6)),
+              Icon(icon, size: 26, color: zBlue),
               const SizedBox(height: 12),
               Text(
                 label,
@@ -331,9 +334,7 @@ class TransactionItem extends StatelessWidget {
     final Color badgeTextColor = isPaid
         ? const Color(0xFF16A34A)
         : const Color(0xFFD97706);
-    final Color amountColor = isPositive
-        ? const Color(0xFF16A34A)
-        : const Color(0xFF0F172A);
+    final Color amountColor = isPositive ? const Color(0xFF16A34A) : zText;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,

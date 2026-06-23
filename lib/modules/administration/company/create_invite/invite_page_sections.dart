@@ -1,6 +1,29 @@
 part of '../screen_create_invite.dart';
 
 extension _CreateInvitePageSections on _ScreenCreateInviteState {
+  static const Set<String> _blockedInviteRoleKeys = {
+    'owner',
+    'founder',
+    'ceo',
+    'superadmin',
+  };
+
+  List<String> get _allowedInviteRoles => userRolesList.where((role) {
+        final normalizedRole = role
+            .toLowerCase()
+            .replaceAll('_', '')
+            .replaceAll('-', '')
+            .replaceAll(' ', '');
+        return !_blockedInviteRoleKeys.contains(normalizedRole);
+      }).toList(growable: false);
+
+  String get _safeSelectedRole {
+    if (_allowedInviteRoles.contains(selectedRole)) {
+      return selectedRole;
+    }
+    return UserRoles.sales;
+  }
+
   Widget _buildPageHeader() {
     return Row(
       children: [
@@ -94,8 +117,8 @@ extension _CreateInvitePageSections on _ScreenCreateInviteState {
           _buildDesktopTwoColumn(
             left: InviteDropdownField(
               label: 'Role',
-              value: selectedRole,
-              options: userRolesList,
+              value: _safeSelectedRole,
+              options: _allowedInviteRoles,
               icon: Icons.admin_panel_settings_outlined,
               labelBuilder: formatRole,
               onChanged: (value) {
