@@ -171,7 +171,11 @@ extension ShellPageX on ShellPage {
       case ShellPage.dispatchChallans:
         return 'Dispatch Challans';
       case ShellPage.dispatchShipmentTracking:
-        return 'Shipment Tracking';
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: ShipmentTrackingScreen(companyId: widget.companyId),
+        );
+
       case ShellPage.dispatchDelivered:
         return 'Delivered Orders';
 
