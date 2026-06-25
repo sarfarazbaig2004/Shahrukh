@@ -8,6 +8,10 @@ import 'add_service_visit_screen.dart';
 import 'upload_service_report_screen.dart';
 import '../service_requests/service_request_details_screen.dart';
 import '../service_technicians/service_technician_details_screen.dart';
+import '../service_quotations/create_service_quotation_screen.dart';
+import '../service_quotations/service_quotation_details_screen.dart';
+import '../service_sales_orders/create_service_sales_order_screen.dart';
+import '../service_sales_orders/service_sales_order_details_screen.dart';
 
 // ==========================================
 // ENTERPRISE HELPERS & SAFETY PARSERS
@@ -90,6 +94,8 @@ class _ServiceVisitDetailsScreenState extends State<ServiceVisitDetailsScreen> w
   bool _isAdminOrCoordinator = false;
   bool _isLoadingDependencies = true;
   Map<String, dynamic>? _requestData;
+  Map<String, dynamic>? _quoteData;
+  Map<String, dynamic>? _ssoData;
 
   @override
   void initState() {
@@ -108,17 +114,29 @@ class _ServiceVisitDetailsScreenState extends State<ServiceVisitDetailsScreen> w
     try {
       final db = FirebaseFirestore.instance;
       final reqId = _safeString(widget.visitData['requestId']);
+      final quoteId = _safeString(widget.visitData['serviceQuotationId']);
+      final ssoId = _safeString(widget.visitData['serviceSalesOrderId']);
 
       Future<DocumentSnapshot<Map<String, dynamic>>?> reqFuture = reqId.isNotEmpty
           ? db.collection('companies').doc(widget.companyId).collection('service_requests').doc(reqId).get()
           : Future.value(null);
 
+      Future<DocumentSnapshot<Map<String, dynamic>>?> quoteFuture = quoteId.isNotEmpty
+          ? db.collection('companies').doc(widget.companyId).collection('service_quotations').doc(quoteId).get()
+          : Future.value(null);
+
+      Future<DocumentSnapshot<Map<String, dynamic>>?> ssoFuture = ssoId.isNotEmpty
+          ? db.collection('companies').doc(widget.companyId).collection('service_sales_orders').doc(ssoId).get()
+          : Future.value(null);
+
       final userFuture = db.collection('companies').doc(widget.companyId).collection('users').doc(widget.currentUserUid).get();
 
-      final results = await Future.wait([userFuture, reqFuture]);
+      final results = await Future.wait([userFuture, reqFuture, quoteFuture, ssoFuture]);
 
       final userDoc = results[0];
       final reqDoc = results[1];
+      final quoteDoc = results[2];
+      final ssoDoc = results[3];
 
       if (mounted) {
         setState(() {
@@ -126,9 +144,10 @@ class _ServiceVisitDetailsScreenState extends State<ServiceVisitDetailsScreen> w
             final role = _safeString(userDoc.data()?['role']).toLowerCase();
             _isAdminOrCoordinator = ['admin', 'superadmin', 'manager', 'coordinator', 'service manager', 'service coordinator'].contains(role);
           }
-          if (reqDoc != null && reqDoc.exists) {
-            _requestData = reqDoc.data();
-          }
+          if (reqDoc != null && reqDoc.exists) _requestData = reqDoc.data();
+          if (quoteDoc != null && quoteDoc.exists) _quoteData = quoteDoc.data();
+          if (ssoDoc != null && ssoDoc.exists) _ssoData = ssoDoc.data();
+
           _isLoadingDependencies = false;
         });
       }
@@ -216,7 +235,7 @@ class _ServiceVisitDetailsScreenState extends State<ServiceVisitDetailsScreen> w
   void _openParentRequest(Map<String, dynamic> data) {
     final reqId = _safeString(data['requestId']);
     if (reqId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Request ID missing.'), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Request ID missing.'), backgroundColor: Colors.orange));
       return;
     }
 
@@ -226,6 +245,85 @@ class _ServiceVisitDetailsScreenState extends State<ServiceVisitDetailsScreen> w
       currentUserName: widget.currentUserName,
       requestId: reqId,
       requestData: _requestData ?? {},
+    )));
+  }
+
+  void _openQuotation(Map<String, dynamic> data) {
+    final quoteId = _safeString(data['serviceQuotationId']);
+    if (quoteId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Quotation ID missing.'), backgroundColor: Colors.orange));
+      return;
+    }
+
+    Navigator.push(context, MaterialPageRoute(builder: (_) => ServiceQuotationDetailsScreen(
+      companyId: widget.companyId,
+      currentUserUid: widget.currentUserUid,
+      currentUserName: widget.currentUserName,
+      quotationId: quoteId,
+      quotationData: _quoteData ?? {},
+    )));
+  }
+
+  void _openSalesOrder(Map<String, dynamic> data) {
+    final ssoId = _safeString(data['serviceSalesOrderId']);
+    if (ssoId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sales Order ID missing.'), backgroundColor: Colors.orange));
+      return;
+    }
+
+    Navigator.push(context, MaterialPageRoute(builder: (_) => ServiceSalesOrderDetailsScreen(
+      companyId: widget.companyId,
+      currentUserUid: widget.currentUserUid,
+      currentUserName: widget.currentUserName,
+      ssoId: ssoId,
+      ssoData: _ssoData ?? {},
+    )));
+  }
+
+  void _scheduleFollowUp(Map<String, dynamic> data) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => AddServiceVisitScreen(
+      companyId: widget.companyId,
+      currentUserUid: widget.currentUserUid,
+      currentUserName: widget.currentUserName,
+      serviceSalesOrderId: _safeString(data['serviceSalesOrderId']),
+      serviceSalesOrderNumber: _safeString(data['serviceSalesOrderNumber']),
+      serviceRequestId: _safeString(data['requestId']),
+      serviceRequestNumber: _safeString(data['requestNumber']),
+      serviceQuotationId: _safeString(data['serviceQuotationId']),
+      serviceQuotationNumber: _safeString(data['serviceQuotationNumber']),
+      customerId: _safeString(data['customerId']),
+      customerName: _safeString(data['customerName']),
+      siteAddress: _safeString(data['siteAddress'] ?? _requestData?['address']),
+      contactPerson: _safeString(data['contactPerson'] ?? _requestData?['contactPerson']),
+      complaint: _safeString(data['complaintDescription']),
+      scopeOfWork: _safeString(data['scopeOfWork']),
+      assignedTechnicians: data['assignedTechnicians'] != null ? List<String>.from(data['assignedTechnicians']) : null,
+    )));
+  }
+
+  void _createNewQuotation(Map<String, dynamic> data) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => CreateServiceQuotationScreen(
+      companyId: widget.companyId,
+      currentUserUid: widget.currentUserUid,
+      serviceRequestSeed: {'id': _safeString(data['requestId']), ...?_requestData},
+    )));
+  }
+
+  void _createNewSalesOrder(Map<String, dynamic> data) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => CreateServiceSalesOrderScreen(
+      companyId: widget.companyId,
+      currentUserUid: widget.currentUserUid,
+      currentUserName: widget.currentUserName,
+      prefillRequestId: _safeString(data['requestId']),
+      prefillRequestNumber: _safeString(data['requestNumber']),
+      prefillQuotationId: _safeString(data['serviceQuotationId']),
+      prefillQuotationNumber: _safeString(data['serviceQuotationNumber']),
+      prefillCustomerId: _safeString(data['customerId']),
+      prefillCustomerName: _safeString(data['customerName']),
+      prefillSiteAddress: _safeString(data['siteAddress'] ?? _requestData?['address']),
+      prefillContactPerson: _safeString(data['contactPerson'] ?? _requestData?['contactPerson']),
+      prefillComplaint: _safeString(data['complaintDescription']),
+      prefillScopeOfWork: _safeString(data['scopeOfWork']),
     )));
   }
 
@@ -296,7 +394,7 @@ class _ServiceVisitDetailsScreenState extends State<ServiceVisitDetailsScreen> w
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.indigo)),
+              Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.indigo))),
               if (action != null) action,
             ],
           ),
@@ -360,7 +458,7 @@ class _ServiceVisitDetailsScreenState extends State<ServiceVisitDetailsScreen> w
                     children: [
                       Row(
                         children: [
-                          Text(requestNo.isNotEmpty ? requestNo : 'Unknown Request', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueGrey)),
+                          Text(requestNo.isNotEmpty ? requestNo : 'Visit 360', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueGrey)),
                           const SizedBox(width: 6),
                           const Icon(Icons.arrow_forward, size: 12, color: Colors.grey),
                           const SizedBox(width: 6),
@@ -468,14 +566,16 @@ class _ServiceVisitDetailsScreenState extends State<ServiceVisitDetailsScreen> w
     );
   }
 
-  Widget _buildParentRequestCard(Map<String, dynamic> visitData) {
+  Widget _buildLinkedDocumentsCard(Map<String, dynamic> visitData) {
     final reqNo = _safeString(visitData['requestNumber']);
-    final custName = _safeString(visitData['customerName']);
-    final priority = _safeString(visitData['priority']);
-    final complaint = _safeString(visitData['complaintDescription']);
+    final quoteNo = _safeString(visitData['serviceQuotationNumber']);
+    final ssoNo = _safeString(visitData['serviceSalesOrderNumber']);
 
-    final reqStatus = _requestData != null ? _safeString(_requestData!['status']) : 'Unknown';
-    final reqCreated = _requestData != null ? _formatDateOnly(_extractDate(_requestData!['createdAt'])) : '-';
+    final custName = _safeString(visitData['customerName']);
+    final siteAddress = _safeString(visitData['siteAddress'] ?? _requestData?['address']);
+    final contactPerson = _safeString(visitData['contactPerson'] ?? _requestData?['contactPerson']);
+    final complaint = _safeString(visitData['complaintDescription']);
+    final scopeOfWork = _safeString(visitData['scopeOfWork']);
 
     return Container(
         padding: const EdgeInsets.all(20),
@@ -484,44 +584,52 @@ class _ServiceVisitDetailsScreenState extends State<ServiceVisitDetailsScreen> w
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Colors.blueGrey.shade200),
         ),
-        child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.assignment, size: 20, color: Colors.blueGrey),
-                            const SizedBox(width: 8),
-                            Text('Parent Request: $reqNo', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blueGrey)),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        Wrap(
-                            spacing: 24,
-                            runSpacing: 12,
-                            children: [
-                              _buildMiniInfo('Customer', custName),
-                              _buildMiniInfo('Status', reqStatus),
-                              _buildMiniInfo('Priority', priority),
-                              _buildMiniInfo('Created Date', reqCreated),
-                            ]
-                        ),
-                        const SizedBox(height: 12),
-                        Text('Complaint: $complaint', style: TextStyle(color: Colors.grey.shade800, fontSize: 13, fontStyle: FontStyle.italic)),
-                      ]
-                  )
-              ),
-              FilledButton.icon(
-                onPressed: () => _openParentRequest(visitData),
-                icon: const Icon(Icons.launch, size: 16),
-                label: const Text('Open Request'),
-                style: FilledButton.styleFrom(backgroundColor: Colors.blueGrey),
-              )
-            ]
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.link, size: 20, color: Colors.blueGrey),
+                SizedBox(width: 8),
+                Text('Linked Documents', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blueGrey)),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12, runSpacing: 12,
+              children: [
+                if (reqNo.isNotEmpty) _buildDocButton('Request: $reqNo', Icons.assignment, () => _openParentRequest(visitData)),
+                if (quoteNo.isNotEmpty) _buildDocButton('Quote: $quoteNo', Icons.request_quote, () => _openQuotation(visitData)),
+                if (ssoNo.isNotEmpty) _buildDocButton('Sales Order: $ssoNo', Icons.assignment_turned_in, () => _openSalesOrder(visitData)),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Wrap(
+              spacing: 24, runSpacing: 12,
+              children: [
+                _buildMiniInfo('Customer', custName),
+                _buildMiniInfo('Site Address', siteAddress),
+                _buildMiniInfo('Contact Person', contactPerson),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (complaint.isNotEmpty) Text('Complaint: $complaint', style: TextStyle(color: Colors.grey.shade800, fontSize: 13, fontStyle: FontStyle.italic)),
+            if (scopeOfWork.isNotEmpty) Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('Scope Of Work: $scopeOfWork', style: TextStyle(color: Colors.grey.shade800, fontSize: 13, fontStyle: FontStyle.italic)),
+            )
+          ],
         )
+    );
+  }
+
+  Widget _buildDocButton(String label, IconData icon, VoidCallback onTap) {
+    return ActionChip(
+      avatar: Icon(icon, size: 16, color: Colors.indigo),
+      label: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.indigo)),
+      backgroundColor: Colors.indigo.shade50,
+      side: BorderSide(color: Colors.indigo.shade200),
+      onPressed: onTap,
     );
   }
 
@@ -538,6 +646,8 @@ class _ServiceVisitDetailsScreenState extends State<ServiceVisitDetailsScreen> w
 
   Widget _buildBottomActions(Map<String, dynamic> data, String status) {
     Widget? smartAction;
+
+    bool isCompleted = status == 'Completed' || status == 'Resolved' || status == 'Closed';
 
     if (status == 'Scheduled' || status == 'New') {
       smartAction = FilledButton.icon(
@@ -560,7 +670,7 @@ class _ServiceVisitDetailsScreenState extends State<ServiceVisitDetailsScreen> w
         style: FilledButton.styleFrom(backgroundColor: Colors.green, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16), textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         onPressed: () => _uploadReport(data),
       );
-    } else if (status == 'Completed' || status == 'Resolved') {
+    } else if (isCompleted) {
       smartAction = OutlinedButton.icon(
         icon: const Icon(Icons.photo_library, size: 20),
         label: const Text('View Report Images'),
@@ -578,27 +688,60 @@ class _ServiceVisitDetailsScreenState extends State<ServiceVisitDetailsScreen> w
       ),
       child: SafeArea(
         top: false,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            OutlinedButton.icon(
-              onPressed: () => Navigator.pop(context, true),
-              icon: const Icon(Icons.arrow_back, size: 16),
-              label: const Text('Back To Request'),
-              style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16), textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            ),
-            const SizedBox(width: 12),
-            FilledButton.icon(
-              onPressed: () => _openParentRequest(data),
-              icon: const Icon(Icons.launch, size: 16),
-              label: const Text('Open Request'),
-              style: FilledButton.styleFrom(backgroundColor: Colors.indigo, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16), textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            ),
-            if (smartAction != null && status != 'Cancelled') ...[
-              const SizedBox(width: 12),
-              smartAction,
-            ]
-          ],
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          reverse: true,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => Navigator.pop(context, true),
+                icon: const Icon(Icons.arrow_back, size: 16),
+                label: const Text('Back'),
+                style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16), textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+              if (smartAction != null && status != 'Cancelled') ...[
+                const SizedBox(width: 12),
+                smartAction,
+              ],
+              const SizedBox(width: 16),
+              Container(width: 2, height: 30, color: Colors.grey.shade300),
+              const SizedBox(width: 16),
+
+              if (!isCompleted) ...[
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    if (value == 'followup') _scheduleFollowUp(data);
+                    if (value == 'quote') _createNewQuotation(data);
+                    if (value == 'sso') _createNewSalesOrder(data);
+                  },
+                  itemBuilder: (BuildContext context) => [
+                    const PopupMenuItem(value: 'followup', child: Row(children: [Icon(Icons.directions_car, size: 18), SizedBox(width: 8), Text('Schedule Follow-up Visit')])),
+                    const PopupMenuItem(value: 'quote', child: Row(children: [Icon(Icons.request_quote, size: 18), SizedBox(width: 8), Text('Create Quotation')])),
+                    const PopupMenuItem(value: 'sso', child: Row(children: [Icon(Icons.assignment_turned_in, size: 18), SizedBox(width: 8), Text('Create Service Sales Order')])),
+                  ],
+                  child: FilledButton.icon(
+                    onPressed: null,
+                    icon: const Icon(Icons.add_task),
+                    label: const Text('Next Actions'),
+                    style: FilledButton.styleFrom(
+                        disabledBackgroundColor: Colors.teal,
+                        disabledForegroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)
+                    ),
+                  ),
+                )
+              ] else ...[
+                OutlinedButton.icon(
+                  onPressed: () => _tabController.animateTo(3),
+                  icon: const Icon(Icons.folder_shared),
+                  label: const Text('View Related Documents'),
+                  style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16), textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                )
+              ]
+            ],
+          ),
         ),
       ),
     );
@@ -609,6 +752,9 @@ class _ServiceVisitDetailsScreenState extends State<ServiceVisitDetailsScreen> w
     final reqParts = data['partsRequired'] is List ? List<Map<String, dynamic>>.from(data['partsRequired']) : [];
 
     final assignedUid = _safeString(data['assignedTechnicianUid']).isNotEmpty ? _safeString(data['assignedTechnicianUid']) : _safeString(data['engineerUid']);
+    final assignedName = _safeString(data['assignedTechnicianName']).isNotEmpty ? _safeString(data['assignedTechnicianName']) : _safeString(data['engineerName']);
+    final visitDate = _extractDate(data['visitDate']);
+    final status = _safeString(data['visitStatus']).isNotEmpty ? _safeString(data['visitStatus']) : _safeString(data['status']);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -618,7 +764,7 @@ class _ServiceVisitDetailsScreenState extends State<ServiceVisitDetailsScreen> w
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildParentRequestCard(data),
+              _buildLinkedDocumentsCard(data),
               const SizedBox(height: 20),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -643,17 +789,18 @@ class _ServiceVisitDetailsScreenState extends State<ServiceVisitDetailsScreen> w
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
                       child: _buildDetailSection('Technician Information', {
-                        'Assigned Technician': _safeString(data['assignedTechnicianName']).isNotEmpty ? data['assignedTechnicianName'] : data['engineerName'],
-                        'Mobile': data['assignedTechnicianMobile'],
+                        'Assigned Technician': assignedName.isNotEmpty ? assignedName : 'Unassigned',
+                        'Mobile Number': _safeString(data['assignedTechnicianMobile']),
                         'Department': 'Service',
                         'Designation': 'Service Engineer / Technician',
+                        'Availability Status': 'Dispatched',
                       }, action: assignedUid.isNotEmpty ? OutlinedButton.icon(
                         onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ServiceTechnicianDetailsScreen(
                             companyId: widget.companyId,
                             currentUserUid: widget.currentUserUid,
                             currentUserName: widget.currentUserName,
                             userId: assignedUid,
-                            technicianData: {'id': assignedUid, 'name': _safeString(data['assignedTechnicianName'])}
+                            technicianData: {'id': assignedUid, 'name': assignedName}
                         ))),
                         icon: const Icon(Icons.person_pin, size: 16),
                         label: const Text('Technician 360'),
@@ -671,12 +818,15 @@ class _ServiceVisitDetailsScreenState extends State<ServiceVisitDetailsScreen> w
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: _buildDetailSection('Complaint & Visit Logic', {
-                        'Complaint Description': data['complaintDescription'],
-                        'Priority': data['priority'],
-                        'Service Type': data['visitType'],
-                        'Remarks': data['remarks'],
-                        'Internal Notes': data['internalNotes'],
+                      child: _buildDetailSection('Visit Execution Details', {
+                        'Visit Date': _formatDateOnly(visitDate),
+                        'Visit Type': _safeString(data['visitType']),
+                        'Priority': _safeString(data['priority']),
+                        'Visit Status': status,
+                        'Remarks': _safeString(data['remarks']),
+                        'Engineer Remarks': _safeString(data['engineerRemarks'] ?? data['reportRemarks']),
+                        'Customer Feedback': _safeString(data['customerFeedback']),
+                        'Resolution Summary': _safeString(data['resolutionSummary'] ?? data['actionTaken']),
                       }),
                     ),
                   ],
@@ -724,28 +874,22 @@ class _ServiceVisitDetailsScreenState extends State<ServiceVisitDetailsScreen> w
   }
 
   Widget _buildTimelineTab(Map<String, dynamic> data) {
-    final tsReqCreated = _requestData != null ? _formatDateTime(_extractDate(_requestData!['createdAt'])) : '-';
-    final tsCreated = _formatDateTime(data['createdAt']);
-    final tsTravel = _formatDateTime(data['travelStartedAt']);
-    final tsStarted = _formatDateTime(data['visitStartedAt']);
-    final tsReport = _formatDateTime(data['reportSubmittedAt'] ?? data['completedAt']);
-    final tsCompleted = _formatDateTime(data['completedAt']);
-
     final status = _safeString(data['visitStatus']).isNotEmpty ? _safeString(data['visitStatus']) : _safeString(data['status']);
 
-    bool isVisitCreated = true;
-    bool isTravel = status == 'Travel Started' || status == 'In Progress' || status == 'Report Submitted' || status == 'Completed' || status == 'Resolved' || status == 'Closed';
-    bool isStarted = status == 'In Progress' || status == 'Report Submitted' || status == 'Completed' || status == 'Resolved' || status == 'Closed';
-    bool isReport = status == 'Report Submitted' || status == 'Completed' || status == 'Resolved' || status == 'Closed';
-    bool isCompleted = status == 'Completed' || status == 'Resolved' || status == 'Closed';
+    bool isVisitCreated = data['createdAt'] != null;
+    bool isAssigned = data['assignedTechnicianUid'] != null || data['engineerUid'] != null;
+    bool isStarted = data['visitStartedAt'] != null || data['travelStartedAt'] != null;
+    bool isCompleted = data['completedAt'] != null || status == 'Completed' || status == 'Resolved' || status == 'Closed';
+    bool isReport = data['reportSubmittedAt'] != null || data['completedAt'] != null;
+    bool isClosed = status == 'Closed' || status == 'Resolved';
 
     final stages = [
-      {'label': 'Request Created', 'active': _requestData != null, 'time': tsReqCreated},
-      {'label': 'Visit Scheduled', 'active': isVisitCreated, 'time': tsCreated},
-      {'label': 'Travel Started', 'active': isTravel, 'time': tsTravel},
-      {'label': 'Service Started', 'active': isStarted, 'time': tsStarted},
-      {'label': 'Report Uploaded', 'active': isReport, 'time': tsReport},
-      {'label': 'Completed', 'active': isCompleted, 'time': tsCompleted},
+      {'label': 'Created', 'active': isVisitCreated, 'time': _formatDateTime(_extractDate(data['createdAt']))},
+      {'label': 'Assigned', 'active': isAssigned, 'time': _formatDateTime(_extractDate(data['assignedAt']) ?? _extractDate(data['createdAt']))},
+      {'label': 'Started', 'active': isStarted, 'time': _formatDateTime(_extractDate(data['visitStartedAt']) ?? _extractDate(data['travelStartedAt']))},
+      {'label': 'Completed', 'active': isCompleted, 'time': _formatDateTime(_extractDate(data['completedAt']))},
+      {'label': 'Report Submitted', 'active': isReport, 'time': _formatDateTime(_extractDate(data['reportSubmittedAt']) ?? _extractDate(data['completedAt']))},
+      {'label': 'Closed', 'active': isClosed, 'time': _formatDateTime(_extractDate(data['closedAt']) ?? _extractDate(data['updatedAt']))},
     ];
 
     return SingleChildScrollView(
@@ -919,15 +1063,101 @@ class _ServiceVisitDetailsScreenState extends State<ServiceVisitDetailsScreen> w
   }
 
   Widget _buildAttachmentsTab(Map<String, dynamic> data) {
-    return Center(
+    List<Map<String, dynamic>> allAtts = [];
+
+    void addGroup(String key, String type) {
+      if (data[key] is List) {
+        for (var item in data[key]) {
+          if (item is String) {
+            allAtts.add({'url': item, 'type': type, 'uploadedAt': data['updatedAt'], 'uploadedByName': 'System'});
+          } else if (item is Map) {
+            allAtts.add({
+              'url': _safeString(item['url']),
+              'type': type,
+              'uploadedAt': item['uploadedAt'] ?? data['updatedAt'],
+              'uploadedByName': _safeString(item['uploadedByName'])
+            });
+          }
+        }
+      }
+    }
+
+    addGroup('machinePhotos', 'Machine Photo');
+    addGroup('customerSignatures', 'Customer Signature');
+    addGroup('documents', 'Document');
+    addGroup('otherAttachments', 'Attachment');
+
+    if (allAtts.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.attachment, size: 64, color: Colors.grey.shade300),
+            const SizedBox(height: 16),
+            Text('No external attachments found', style: TextStyle(fontSize: 16, color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            const Text('Check Report Images tab for visit execution documents.', style: TextStyle(color: Colors.grey)),
+          ],
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.attachment, size: 64, color: Colors.grey.shade300),
-          const SizedBox(height: 16),
-          Text('No external attachments found', style: TextStyle(fontSize: 16, color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          const Text('Check Reports tab for visit execution documents.', style: TextStyle(color: Colors.grey)),
+          Text('Related Documents (${allAtts.length})', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 20),
+          Wrap(
+            spacing: 16,
+            runSpacing: 16,
+            children: allAtts.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final att = entry.value;
+              final url = _safeString(att['url']);
+              final type = _safeString(att['type']);
+              final ts = _formatDateTime(att['uploadedAt']);
+
+              return InkWell(
+                onTap: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => _FullScreenImageViewer(
+                    imageUrls: allAtts.map((e) => _safeString(e['url'])).toList(),
+                    initialIndex: idx,
+                  )));
+                },
+                child: Container(
+                  width: 200,
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade300)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ClipRRect(
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                        child: Container(
+                          height: 140, width: double.infinity, color: Colors.grey.shade100,
+                          child: url.startsWith('http')
+                              ? Image.network(url, fit: BoxFit.cover, errorBuilder: (c,e,s) => const Icon(Icons.broken_image))
+                              : const Icon(Icons.insert_drive_file, size: 40, color: Colors.grey),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(type, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                            const SizedBox(height: 4),
+                            Text(ts, style: TextStyle(fontSize: 10, color: Colors.grey.shade500)),
+                          ],
+                        ),
+                      )
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
         ],
       ),
     );

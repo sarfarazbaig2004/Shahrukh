@@ -1,4 +1,4 @@
-// lib/modules/administration/users/helpers/user_management_constants.dart
+// FILE PATH: lib/modules/administration/users/helpers/user_management_constants.dart
 import 'package:flutter/material.dart';
 
 /// ------------------------------------------------------------
@@ -239,14 +239,11 @@ class SalesSubmodules {
 }
 
 class ServiceSubmodules {
-  // Keep the established storage/runtime keys where they already exist.
-  static const String serviceCalls = 'serviceRequests';
+  static const String serviceRequests = 'serviceRequests';
+  static const String serviceQuotations = 'serviceQuotations';
+  static const String serviceSalesOrders = 'serviceSalesOrders';
   static const String serviceVisits = 'serviceVisits';
   static const String serviceTechnicians = 'serviceTechnicians';
-  static const String complaints = 'complaints';
-  static const String amc = 'amc';
-  static const String installation = 'installationCommissioning';
-  static const String serviceReports = 'serviceReports';
 }
 
 class CrmSubmodules {
@@ -257,9 +254,9 @@ class CrmSubmodules {
 
 class PurchaseSubmodules {
   static const String vendors = 'vendors';
+  static const String purchaseQuotations = 'purchaseQuotations';
   static const String purchaseOrders = 'purchaseOrders';
-  static const String grnMaterialReceipt = 'grnMaterialReceipt';
-  static const String vendorLedger = 'vendorLedger';
+  static const String purchaseBills = 'purchaseBills';
 }
 
 class InventorySubmodules {
@@ -280,7 +277,7 @@ class DispatchSubmodules {
 
 class FinanceSubmodules {
   static const String proformaInvoice = 'proformaInvoice';
-  static const String taxInvoice = 'taxInvoice'; // Key stays exactly the same
+  static const String taxInvoice = 'taxInvoice';
   static const String paymentReceived = 'paymentReceived';
   static const String outstanding = 'outstanding';
   static const String expenseEntries = 'expenseEntries';
@@ -296,9 +293,6 @@ class ReportsSubmodules {
 
 class AdministrationSubmodules {
   static const String users = 'users';
-  static const String rolesPermissions = 'rolesPermissions';
-  static const String companyProfile = 'companyProfile';
-  static const String branches = 'branches';
   static const String auditLogs = 'auditLogs';
 }
 
@@ -312,13 +306,11 @@ const Map<String, List<String>> permissionSubmoduleMap = {
     SalesSubmodules.meetings,
   ],
   PermissionModules.service: <String>[
-    ServiceSubmodules.serviceCalls,
+    ServiceSubmodules.serviceRequests,
+    ServiceSubmodules.serviceQuotations,
+    ServiceSubmodules.serviceSalesOrders,
     ServiceSubmodules.serviceVisits,
     ServiceSubmodules.serviceTechnicians,
-    ServiceSubmodules.complaints,
-    ServiceSubmodules.amc,
-    ServiceSubmodules.installation,
-    ServiceSubmodules.serviceReports,
   ],
   PermissionModules.crm: <String>[
     CrmSubmodules.customers,
@@ -327,9 +319,9 @@ const Map<String, List<String>> permissionSubmoduleMap = {
   ],
   PermissionModules.purchase: <String>[
     PurchaseSubmodules.vendors,
+    PurchaseSubmodules.purchaseQuotations,
     PurchaseSubmodules.purchaseOrders,
-    PurchaseSubmodules.grnMaterialReceipt,
-    PurchaseSubmodules.vendorLedger,
+    PurchaseSubmodules.purchaseBills,
   ],
   PermissionModules.inventory: <String>[
     InventorySubmodules.products,
@@ -361,9 +353,6 @@ const Map<String, List<String>> permissionSubmoduleMap = {
   ],
   PermissionModules.administration: <String>[
     AdministrationSubmodules.users,
-    AdministrationSubmodules.rolesPermissions,
-    AdministrationSubmodules.companyProfile,
-    AdministrationSubmodules.branches,
     AdministrationSubmodules.auditLogs,
   ],
 };
@@ -375,22 +364,20 @@ const Map<String, String> permissionSubmoduleLabels = {
   SalesSubmodules.tasks: 'Tasks',
   SalesSubmodules.meetings: 'Meetings',
 
-  ServiceSubmodules.serviceCalls: 'Service Calls',
+  ServiceSubmodules.serviceRequests: 'Service Requests',
+  ServiceSubmodules.serviceQuotations: 'Service Quotations',
+  ServiceSubmodules.serviceSalesOrders: 'Service Sales Orders',
   ServiceSubmodules.serviceVisits: 'Service Visits',
   ServiceSubmodules.serviceTechnicians: 'Service Technicians',
-  ServiceSubmodules.complaints: 'Complaints',
-  ServiceSubmodules.amc: 'AMC',
-  ServiceSubmodules.installation: 'Installation',
-  ServiceSubmodules.serviceReports: 'Service Reports',
 
   CrmSubmodules.customers: 'Customers',
   CrmSubmodules.contacts: 'Contacts',
   CrmSubmodules.customerVisits: 'Customer Visits',
 
   PurchaseSubmodules.vendors: 'Vendors',
+  PurchaseSubmodules.purchaseQuotations: 'Purchase Quotations',
   PurchaseSubmodules.purchaseOrders: 'Purchase Orders',
-  PurchaseSubmodules.grnMaterialReceipt: 'GRN / Material Receipt',
-  PurchaseSubmodules.vendorLedger: 'Vendor Ledger',
+  PurchaseSubmodules.purchaseBills: 'Purchase Bills',
 
   InventorySubmodules.products: 'Products',
   InventorySubmodules.stockSummary: 'Stock Summary',
@@ -405,8 +392,7 @@ const Map<String, String> permissionSubmoduleLabels = {
   DispatchSubmodules.deliveredOrders: 'Delivered Orders',
 
   FinanceSubmodules.proformaInvoice: 'Proforma Invoice',
-  FinanceSubmodules.taxInvoice:
-      'Invoice', // Changed from 'Tax Invoice' to 'Invoice'
+  FinanceSubmodules.taxInvoice: 'Invoice',
   FinanceSubmodules.paymentReceived: 'Payment Received',
   FinanceSubmodules.outstanding: 'Outstanding',
   FinanceSubmodules.expenseEntries: 'Expense Entries',
@@ -418,9 +404,6 @@ const Map<String, String> permissionSubmoduleLabels = {
   ReportsSubmodules.paymentReport: 'Payment Report',
 
   AdministrationSubmodules.users: 'Users',
-  AdministrationSubmodules.rolesPermissions: 'Roles & Permissions',
-  AdministrationSubmodules.companyProfile: 'Company Profile',
-  AdministrationSubmodules.branches: 'Branches',
   AdministrationSubmodules.auditLogs: 'Audit Logs',
 };
 
@@ -446,11 +429,7 @@ const List<String> serviceOperationalActions = [
   PermissionActions.view,
   PermissionActions.create,
   PermissionActions.edit,
-];
-
-const List<String> serviceComplaintActions = [
-  PermissionActions.view,
-  PermissionActions.create,
+  PermissionActions.delete,
 ];
 
 const Map<String, List<String>> permissionActionsByModule = {
@@ -464,25 +443,25 @@ const Map<String, List<String>> permissionActionsBySubmodule = {
   SalesSubmodules.tasks: standardCrudActions,
   SalesSubmodules.meetings: standardCrudActions,
 
-  // The Service card intentionally contains 12 visible actions in total.
-  ServiceSubmodules.serviceCalls: serviceOperationalActions,
+  ServiceSubmodules.serviceRequests: serviceOperationalActions,
+  ServiceSubmodules.serviceQuotations: serviceOperationalActions,
+  ServiceSubmodules.serviceSalesOrders: serviceOperationalActions,
   ServiceSubmodules.serviceVisits: serviceOperationalActions,
-  ServiceSubmodules.serviceTechnicians: [PermissionActions.view],
-  ServiceSubmodules.complaints: serviceComplaintActions,
-  ServiceSubmodules.amc: [PermissionActions.view],
-  ServiceSubmodules.installation: [PermissionActions.view],
-  ServiceSubmodules.serviceReports: [PermissionActions.view],
+  ServiceSubmodules.serviceTechnicians: [
+    PermissionActions.view,
+  ],
 
   CrmSubmodules.customers: standardCrudActions,
   CrmSubmodules.contacts: standardCrudActions,
   CrmSubmodules.customerVisits: standardCrudActions,
 
   PurchaseSubmodules.vendors: standardCrudActions,
+  PurchaseSubmodules.purchaseQuotations: standardCrudActions,
   PurchaseSubmodules.purchaseOrders: standardCrudActions,
-  PurchaseSubmodules.grnMaterialReceipt: standardCrudActions,
-  PurchaseSubmodules.vendorLedger: [
+  PurchaseSubmodules.purchaseBills: [
     PermissionActions.view,
-    PermissionActions.export,
+    PermissionActions.create,
+    PermissionActions.edit,
   ],
 
   InventorySubmodules.products: standardCrudActions,
@@ -530,16 +509,6 @@ const Map<String, List<String>> permissionActionsBySubmodule = {
   ReportsSubmodules.paymentReport: reportActions,
 
   AdministrationSubmodules.users: standardCrudActions,
-  AdministrationSubmodules.rolesPermissions: [
-    PermissionActions.view,
-    PermissionActions.edit,
-    PermissionActions.approve,
-  ],
-  AdministrationSubmodules.companyProfile: [
-    PermissionActions.view,
-    PermissionActions.edit,
-  ],
-  AdministrationSubmodules.branches: standardCrudActions,
   AdministrationSubmodules.auditLogs: [
     PermissionActions.view,
     PermissionActions.export,
@@ -551,9 +520,9 @@ const Map<String, List<String>> permissionActionsBySubmodule = {
 /// ------------------------------------------------------------
 
 Map<String, bool> buildActionMap(
-  List<String> actions, {
-  required bool enabled,
-}) {
+    List<String> actions, {
+      required bool enabled,
+    }) {
   return <String, bool>{for (final action in actions) action: enabled};
 }
 
@@ -608,8 +577,8 @@ Map<String, dynamic> buildFullPermissions() {
 }
 
 Map<String, dynamic> mergePermissionsWithCanonicalShape(
-  Map<String, dynamic>? incoming,
-) {
+    Map<String, dynamic>? incoming,
+    ) {
   final canonical = buildEmptyPermissions();
 
   if (incoming == null || incoming.isEmpty) {
@@ -618,6 +587,7 @@ Map<String, dynamic> mergePermissionsWithCanonicalShape(
 
   for (final module in permissionModuleOrder) {
     final incomingModule = incoming[module];
+    if (incomingModule == null) continue;
 
     if (module == PermissionModules.dashboard) {
       final moduleActions = Map<String, bool>.from(
@@ -626,8 +596,20 @@ Map<String, dynamic> mergePermissionsWithCanonicalShape(
 
       if (incomingModule is Map) {
         for (final action in moduleActions.keys) {
-          moduleActions[action] = incomingModule[action] == true;
+          if (incomingModule.containsKey(action)) {
+            moduleActions[action] = incomingModule[action] == true;
+          } else if (incomingModule.containsKey('dashboard') && action == PermissionActions.view) {
+            moduleActions[action] = incomingModule['dashboard'] == true;
+          }
         }
+        // Capture any extra/historical non-canonical actions safely
+        for (final entry in incomingModule.entries) {
+          if (entry.key != 'dashboard' && !moduleActions.containsKey(entry.key.toString())) {
+            moduleActions[entry.key.toString()] = entry.value == true;
+          }
+        }
+      } else if (incomingModule == true) {
+        moduleActions[PermissionActions.view] = true;
       }
 
       canonical[module] = moduleActions;
@@ -643,25 +625,23 @@ Map<String, dynamic> mergePermissionsWithCanonicalShape(
         final canonicalActions = Map<String, bool>.from(
           submoduleMap[submodule] as Map<String, bool>,
         );
-        final incomingSubmodules = module == PermissionModules.service
-            ? _servicePermissionAliasesFor(submodule)
-                  .map((key) => incomingModule[key])
-                  .where((value) => value != null)
-            : <dynamic>[incomingModule[submodule]];
+
+        final incomingSubmodules = _getAliasesFor(module, submodule)
+            .map((key) => incomingModule[key])
+            .where((value) => value != null);
 
         for (final incomingSubmodule in incomingSubmodules) {
           if (incomingSubmodule is Map) {
+            // Strictly assign exact value passed from the UI
             for (final action in canonicalActions.keys) {
-              if (incomingSubmodule[action] == true) {
-                canonicalActions[action] = true;
+              if (incomingSubmodule.containsKey(action)) {
+                canonicalActions[action] = incomingSubmodule[action] == true;
               }
             }
-
-            if (module == PermissionModules.service) {
-              for (final entry in incomingSubmodule.entries) {
-                if (!canonicalActions.containsKey(entry.key)) {
-                  canonicalActions[entry.key.toString()] = entry.value == true;
-                }
+            // Capture any extra/historical non-canonical actions safely
+            for (final entry in incomingSubmodule.entries) {
+              if (!canonicalActions.containsKey(entry.key.toString())) {
+                canonicalActions[entry.key.toString()] = entry.value == true;
               }
             }
           } else if (incomingSubmodule == true) {
@@ -672,50 +652,67 @@ Map<String, dynamic> mergePermissionsWithCanonicalShape(
         submoduleMap[submodule] = canonicalActions;
       }
 
-      if (module == PermissionModules.service) {
-        for (final entry in incomingModule.entries) {
-          final key = entry.key.toString();
-          if (!submoduleMap.containsKey(key) &&
-              !_isKnownServicePermissionAlias(key)) {
-            submoduleMap[entry.key.toString()] = _copyPermissionValue(
-              entry.value,
-            );
-          }
+      // Preserve unknown/legacy submodules mapping natively mapping back to string dynamically
+      for (final entry in incomingModule.entries) {
+        final key = entry.key.toString();
+        if (!submoduleMap.containsKey(key) &&
+            !_isKnownPermissionAlias(module, key)) {
+          submoduleMap[key] = _copyPermissionValue(entry.value);
         }
+      }
+    } else if (incomingModule == true) {
+      for (final submodule in submoduleMap.keys) {
+        final canonicalActions = Map<String, bool>.from(
+          submoduleMap[submodule] as Map<String, bool>,
+        );
+        canonicalActions[PermissionActions.view] = true;
+        submoduleMap[submodule] = canonicalActions;
       }
     }
 
     canonical[module] = submoduleMap;
   }
 
+  // Ensure fully unrecognized modules are also preserved instead of discarded
+  for (final entry in incoming.entries) {
+    if (!canonical.containsKey(entry.key.toString())) {
+      canonical[entry.key.toString()] = _copyPermissionValue(entry.value);
+    }
+  }
+
   return canonical;
 }
 
-Iterable<String> _servicePermissionAliasesFor(String submodule) {
-  switch (submodule) {
-    case ServiceSubmodules.serviceCalls:
-      return const ['serviceRequests', 'serviceCalls', 'serviceCall'];
-    case ServiceSubmodules.serviceVisits:
-      return const ['serviceVisits', 'serviceVisit'];
-    case ServiceSubmodules.serviceTechnicians:
-      return const ['serviceTechnicians', 'serviceTechnician'];
-    case ServiceSubmodules.complaints:
-      return const ['complaints', 'serviceComplaints'];
-    case ServiceSubmodules.amc:
-      return const ['amc', 'annualMaintenanceContracts'];
-    case ServiceSubmodules.installation:
-      return const ['installationCommissioning', 'installation'];
-    case ServiceSubmodules.serviceReports:
-      return const ['serviceReports', 'serviceReport'];
-    default:
-      return <String>[submodule];
+Iterable<String> _getAliasesFor(String module, String submodule) {
+  if (module == PermissionModules.sales) {
+    if (submodule == SalesSubmodules.salesOrders) return const ['salesOrders', 'salesOrder'];
+  } else if (module == PermissionModules.purchase) {
+    if (submodule == PurchaseSubmodules.purchaseOrders) return const ['purchaseOrders', 'purchaseOrder'];
+    if (submodule == PurchaseSubmodules.purchaseQuotations) return const ['purchaseQuotations', 'purchaseQuotation'];
+    if (submodule == PurchaseSubmodules.purchaseBills) return const ['purchaseBills', 'purchaseBill'];
+  } else if (module == PermissionModules.crm) {
+    if (submodule == CrmSubmodules.customers) return const ['customers', 'customer'];
+  } else if (module == PermissionModules.service) {
+    switch (submodule) {
+      case ServiceSubmodules.serviceRequests:
+        return const ['serviceRequests', 'serviceRequest', 'serviceCalls', 'serviceCall'];
+      case ServiceSubmodules.serviceQuotations:
+        return const ['serviceQuotations', 'serviceQuotation'];
+      case ServiceSubmodules.serviceSalesOrders:
+        return const ['serviceSalesOrders', 'serviceSalesOrder', 'workOrders', 'serviceWorkOrders'];
+      case ServiceSubmodules.serviceVisits:
+        return const ['serviceVisits', 'serviceVisit'];
+      case ServiceSubmodules.serviceTechnicians:
+        return const ['serviceTechnicians', 'serviceTechnician'];
+    }
   }
+  return <String>[submodule];
 }
 
-bool _isKnownServicePermissionAlias(String key) {
-  return permissionSubmoduleMap[PermissionModules.service]!.any(
-    (submodule) => _servicePermissionAliasesFor(submodule).contains(key),
-  );
+bool _isKnownPermissionAlias(String module, String key) {
+  final submodules = permissionSubmoduleMap[module];
+  if (submodules == null) return false;
+  return submodules.any((sub) => _getAliasesFor(module, sub).contains(key));
 }
 
 dynamic _copyPermissionValue(dynamic value) {
@@ -773,7 +770,7 @@ Map<String, dynamic> getDefaultPermissions(String role) {
         },
         PermissionModules.service: {
           for (final submodule
-              in permissionSubmoduleMap[PermissionModules.service]!)
+          in permissionSubmoduleMap[PermissionModules.service]!)
             submodule: buildActionMap(
               permissionActionsBySubmodule[submodule]!,
               enabled: true,
@@ -794,129 +791,48 @@ Map<String, dynamic> getDefaultPermissions(String role) {
           ),
         },
         PermissionModules.purchase: {
-          PurchaseSubmodules.vendors: buildActionMap(
-            permissionActionsBySubmodule[PurchaseSubmodules.vendors]!,
-            enabled: true,
-          ),
-          PurchaseSubmodules.purchaseOrders: buildActionMap(
-            permissionActionsBySubmodule[PurchaseSubmodules.purchaseOrders]!,
-            enabled: true,
-          ),
-          PurchaseSubmodules.grnMaterialReceipt: buildActionMap(
-            permissionActionsBySubmodule[PurchaseSubmodules
-                .grnMaterialReceipt]!,
-            enabled: true,
-          ),
-          PurchaseSubmodules.vendorLedger: buildActionMap(
-            permissionActionsBySubmodule[PurchaseSubmodules.vendorLedger]!,
-            enabled: true,
-          ),
+          for (final submodule
+          in permissionSubmoduleMap[PermissionModules.purchase]!)
+            submodule: buildActionMap(
+              permissionActionsBySubmodule[submodule]!,
+              enabled: true,
+            ),
         },
         PermissionModules.inventory: {
-          InventorySubmodules.products: buildActionMap(
-            permissionActionsBySubmodule[InventorySubmodules.products]!,
-            enabled: true,
-          ),
-          InventorySubmodules.stockSummary: buildActionMap(
-            permissionActionsBySubmodule[InventorySubmodules.stockSummary]!,
-            enabled: true,
-          ),
-          InventorySubmodules.stockIn: buildActionMap(
-            permissionActionsBySubmodule[InventorySubmodules.stockIn]!,
-            enabled: true,
-          ),
-          InventorySubmodules.stockOut: buildActionMap(
-            permissionActionsBySubmodule[InventorySubmodules.stockOut]!,
-            enabled: true,
-          ),
-          InventorySubmodules.warehouse: buildActionMap(
-            permissionActionsBySubmodule[InventorySubmodules.warehouse]!,
-            enabled: true,
-          ),
-          InventorySubmodules.lowStockAlerts: buildActionMap(
-            permissionActionsBySubmodule[InventorySubmodules.lowStockAlerts]!,
-            enabled: true,
-          ),
+          for (final submodule
+          in permissionSubmoduleMap[PermissionModules.inventory]!)
+            submodule: buildActionMap(
+              permissionActionsBySubmodule[submodule]!,
+              enabled: true,
+            ),
         },
         PermissionModules.dispatch: {
-          DispatchSubmodules.readyForDispatch: buildActionMap(
-            permissionActionsBySubmodule[DispatchSubmodules.readyForDispatch]!,
-            enabled: true,
-          ),
-          DispatchSubmodules.dispatchChallans: buildActionMap(
-            permissionActionsBySubmodule[DispatchSubmodules.dispatchChallans]!,
-            enabled: true,
-          ),
-          DispatchSubmodules.shipmentTracking: buildActionMap(
-            permissionActionsBySubmodule[DispatchSubmodules.shipmentTracking]!,
-            enabled: true,
-          ),
-          DispatchSubmodules.deliveredOrders: buildActionMap(
-            permissionActionsBySubmodule[DispatchSubmodules.deliveredOrders]!,
-            enabled: true,
-          ),
+          for (final submodule
+          in permissionSubmoduleMap[PermissionModules.dispatch]!)
+            submodule: buildActionMap(
+              permissionActionsBySubmodule[submodule]!,
+              enabled: true,
+            ),
         },
         PermissionModules.finance: {
-          FinanceSubmodules.proformaInvoice: buildActionMap(
-            permissionActionsBySubmodule[FinanceSubmodules.proformaInvoice]!,
-            enabled: true,
-          ),
-          FinanceSubmodules.taxInvoice: buildActionMap(
-            permissionActionsBySubmodule[FinanceSubmodules.taxInvoice]!,
-            enabled: true,
-          ),
-          FinanceSubmodules.paymentReceived: buildActionMap(
-            permissionActionsBySubmodule[FinanceSubmodules.paymentReceived]!,
-            enabled: true,
-          ),
-          FinanceSubmodules.outstanding: buildActionMap(
-            permissionActionsBySubmodule[FinanceSubmodules.outstanding]!,
-            enabled: true,
-          ),
-          FinanceSubmodules.expenseEntries: buildActionMap(
-            permissionActionsBySubmodule[FinanceSubmodules.expenseEntries]!,
-            enabled: true,
-          ),
+          for (final submodule
+          in permissionSubmoduleMap[PermissionModules.finance]!)
+            submodule: buildActionMap(
+              permissionActionsBySubmodule[submodule]!,
+              enabled: true,
+            ),
         },
         PermissionModules.reports: {
-          ReportsSubmodules.salesReport: buildActionMap(
-            permissionActionsBySubmodule[ReportsSubmodules.salesReport]!,
-            enabled: true,
-          ),
-          ReportsSubmodules.inquiryReport: buildActionMap(
-            permissionActionsBySubmodule[ReportsSubmodules.inquiryReport]!,
-            enabled: true,
-          ),
-          ReportsSubmodules.customerReport: buildActionMap(
-            permissionActionsBySubmodule[ReportsSubmodules.customerReport]!,
-            enabled: true,
-          ),
-          ReportsSubmodules.productReport: buildActionMap(
-            permissionActionsBySubmodule[ReportsSubmodules.productReport]!,
-            enabled: true,
-          ),
-          ReportsSubmodules.paymentReport: buildActionMap(
-            permissionActionsBySubmodule[ReportsSubmodules.paymentReport]!,
-            enabled: true,
-          ),
+          for (final submodule
+          in permissionSubmoduleMap[PermissionModules.reports]!)
+            submodule: buildActionMap(
+              permissionActionsBySubmodule[submodule]!,
+              enabled: true,
+            ),
         },
         PermissionModules.administration: {
           AdministrationSubmodules.users: buildActionMap(
             permissionActionsBySubmodule[AdministrationSubmodules.users]!,
-            enabled: false,
-          ),
-          AdministrationSubmodules.rolesPermissions: buildActionMap(
-            permissionActionsBySubmodule[AdministrationSubmodules
-                .rolesPermissions]!,
-            enabled: false,
-          ),
-          AdministrationSubmodules.companyProfile: buildActionMap(
-            permissionActionsBySubmodule[AdministrationSubmodules
-                .companyProfile]!,
-            enabled: false,
-          ),
-          AdministrationSubmodules.branches: buildActionMap(
-            permissionActionsBySubmodule[AdministrationSubmodules.branches]!,
             enabled: false,
           ),
           AdministrationSubmodules.auditLogs: buildActionMap(
@@ -993,15 +909,32 @@ Map<String, dynamic> getDefaultPermissions(String role) {
           enabled: true,
         ),
         PermissionModules.service: {
-          ServiceSubmodules.serviceCalls: {
+          ServiceSubmodules.serviceRequests: {
             PermissionActions.view: true,
             PermissionActions.create: true,
             PermissionActions.edit: true,
+            PermissionActions.delete: false,
+          },
+          ServiceSubmodules.serviceQuotations: {
+            PermissionActions.view: true,
+            PermissionActions.create: true,
+            PermissionActions.edit: true,
+            PermissionActions.delete: false,
+          },
+          ServiceSubmodules.serviceSalesOrders: {
+            PermissionActions.view: true,
+            PermissionActions.create: true,
+            PermissionActions.edit: true,
+            PermissionActions.delete: false,
           },
           ServiceSubmodules.serviceVisits: {
             PermissionActions.view: true,
             PermissionActions.create: true,
             PermissionActions.edit: false,
+            PermissionActions.delete: false,
+          },
+          ServiceSubmodules.serviceTechnicians: {
+            PermissionActions.view: true,
           },
         },
         PermissionModules.crm: {
@@ -1083,21 +1016,22 @@ Map<String, dynamic> getDefaultPermissions(String role) {
             PermissionActions.edit: true,
             PermissionActions.delete: false,
           },
+          PurchaseSubmodules.purchaseQuotations: {
+            PermissionActions.view: true,
+            PermissionActions.create: true,
+            PermissionActions.edit: true,
+            PermissionActions.delete: false,
+          },
           PurchaseSubmodules.purchaseOrders: {
             PermissionActions.view: true,
             PermissionActions.create: true,
             PermissionActions.edit: true,
             PermissionActions.delete: false,
           },
-          PurchaseSubmodules.grnMaterialReceipt: {
+          PurchaseSubmodules.purchaseBills: {
             PermissionActions.view: true,
             PermissionActions.create: true,
             PermissionActions.edit: true,
-            PermissionActions.delete: false,
-          },
-          PurchaseSubmodules.vendorLedger: {
-            PermissionActions.view: true,
-            PermissionActions.export: true,
           },
         },
         PermissionModules.inventory: {
@@ -1121,38 +1055,12 @@ Map<String, dynamic> getDefaultPermissions(String role) {
           enabled: true,
         ),
         PermissionModules.inventory: {
-          InventorySubmodules.products: {
-            PermissionActions.view: true,
-            PermissionActions.create: true,
-            PermissionActions.edit: true,
-            PermissionActions.delete: false,
-          },
-          InventorySubmodules.stockSummary: {
-            PermissionActions.view: true,
-            PermissionActions.export: true,
-          },
-          InventorySubmodules.stockIn: {
-            PermissionActions.view: true,
-            PermissionActions.create: true,
-            PermissionActions.edit: true,
-            PermissionActions.delete: false,
-          },
-          InventorySubmodules.stockOut: {
-            PermissionActions.view: true,
-            PermissionActions.create: true,
-            PermissionActions.edit: true,
-            PermissionActions.delete: false,
-          },
-          InventorySubmodules.warehouse: {
-            PermissionActions.view: true,
-            PermissionActions.create: true,
-            PermissionActions.edit: true,
-            PermissionActions.delete: false,
-          },
-          InventorySubmodules.lowStockAlerts: {
-            PermissionActions.view: true,
-            PermissionActions.edit: true,
-          },
+          for (final submodule
+          in permissionSubmoduleMap[PermissionModules.inventory]!)
+            submodule: buildActionMap(
+              permissionActionsBySubmodule[submodule]!,
+              enabled: true,
+            ),
         },
       });
 
@@ -1204,11 +1112,16 @@ Map<String, dynamic> getDefaultPermissions(String role) {
 /// ------------------------------------------------------------
 
 Map<String, dynamic> normalizePermissionsForStorage(
-  Map<String, dynamic>? permissions, {
-  String? role,
-}) {
+    Map<String, dynamic>? permissions, {
+      String? role,
+    }) {
   if (isSuperAccessRole(role)) {
     return buildFullPermissions();
+  }
+  // Only explicitly fetch defaults if the permission map is entirely missing (null).
+  // Do NOT reset to defaults if it is simply {} (which implies an explicit wipe via UI).
+  if (permissions == null) {
+    return getDefaultPermissions(role ?? UserRoles.viewer);
   }
   return mergePermissionsWithCanonicalShape(permissions);
 }
@@ -1233,11 +1146,11 @@ bool hasModuleAccess(Map<String, dynamic>? permissions, String moduleKey) {
 }
 
 bool hasPermission(
-  Map<String, dynamic>? permissions, {
-  required String moduleKey,
-  String? submoduleKey,
-  required String action,
-}) {
+    Map<String, dynamic>? permissions, {
+      required String moduleKey,
+      String? submoduleKey,
+      required String action,
+    }) {
   if (permissions == null || permissions.isEmpty) return false;
 
   final moduleData = permissions[moduleKey];

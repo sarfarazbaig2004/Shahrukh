@@ -1,3 +1,5 @@
+// FILE PATH: lib/modules/service/service_requests/service_request_details_screen.dart
+
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -12,6 +14,8 @@ import '../service_quotations/service_quotation_details_screen.dart';
 import '../service_quotations/service_quotation_pdf_generator.dart';
 import '../service_quotations/service_quotation_pdf_preview_screen.dart';
 import '../service_quotations/models/service_quotation_models.dart';
+import '../service_sales_orders/create_service_sales_order_screen.dart';
+import '../service_sales_orders/service_sales_order_details_screen.dart';
 
 // ==========================================
 // ENTERPRISE HELPERS & SAFETY PARSERS
@@ -99,6 +103,7 @@ class _ServiceRequestDetailsScreenState extends State<ServiceRequestDetailsScree
   List<Map<String, dynamic>> _allVisits = [];
   List<Map<String, dynamic>> _completedVisits = [];
   List<Map<String, dynamic>> _allQuotations = [];
+  List<Map<String, dynamic>> _allSalesOrders = [];
 
   // Cross Module Data State
   List<Map<String, dynamic>> _involvedTechnicians = [];
@@ -116,7 +121,7 @@ class _ServiceRequestDetailsScreenState extends State<ServiceRequestDetailsScree
   void initState() {
     super.initState();
     _requestData = widget.requestData;
-    _tabController = TabController(length: 7, vsync: this);
+    _tabController = TabController(length: 8, vsync: this);
     _checkPermissions();
     _loadData();
   }
@@ -155,11 +160,13 @@ class _ServiceRequestDetailsScreenState extends State<ServiceRequestDetailsScree
         db.collection('companies').doc(widget.companyId).collection('service_requests').doc(widget.requestId).get(),
         db.collection('companies').doc(widget.companyId).collection('service_visits').where('requestId', isEqualTo: widget.requestId).where('isDeleted', isEqualTo: false).get(),
         db.collection('companies').doc(widget.companyId).collection('service_quotations').where('serviceRequestId', isEqualTo: widget.requestId).where('isDeleted', isEqualTo: false).get(),
+        db.collection('companies').doc(widget.companyId).collection('service_sales_orders').where('serviceRequestId', isEqualTo: widget.requestId).where('isDeleted', isEqualTo: false).get(),
       ]);
 
       final reqDoc = results[0] as DocumentSnapshot<Map<String, dynamic>>;
       final visitsQuery = results[1] as QuerySnapshot<Map<String, dynamic>>;
       final quotesQuery = results[2] as QuerySnapshot<Map<String, dynamic>>;
+      final ssoQuery = results[3] as QuerySnapshot<Map<String, dynamic>>;
 
       if (reqDoc.exists && reqDoc.data() != null) {
         _requestData = reqDoc.data()!;
@@ -169,6 +176,12 @@ class _ServiceRequestDetailsScreenState extends State<ServiceRequestDetailsScree
       _allQuotations.clear();
       for (var doc in quotesQuery.docs) {
         _allQuotations.add({'id': doc.id, ...doc.data()});
+      }
+
+      // Process Sales Orders
+      _allSalesOrders.clear();
+      for (var doc in ssoQuery.docs) {
+        _allSalesOrders.add({'id': doc.id, ...doc.data()});
       }
 
       // Process Visits
@@ -291,7 +304,7 @@ class _ServiceRequestDetailsScreenState extends State<ServiceRequestDetailsScree
         _machineCount = mName.isNotEmpty ? 1 : 0;
       }
 
-      // Sort visits (latest first)
+      // Sort lists (latest first)
       _allVisits.sort((a, b) {
         final aDate = _extractDate(a['visitDate']) ?? DateTime(2000);
         final bDate = _extractDate(b['visitDate']) ?? DateTime(2000);
@@ -301,6 +314,12 @@ class _ServiceRequestDetailsScreenState extends State<ServiceRequestDetailsScree
       _completedVisits.sort((a, b) {
         final aDate = _extractDate(a['visitDate']) ?? DateTime(2000);
         final bDate = _extractDate(b['visitDate']) ?? DateTime(2000);
+        return bDate.compareTo(aDate);
+      });
+
+      _allSalesOrders.sort((a, b) {
+        final aDate = _extractDate(a['ssoDate']) ?? _extractDate(a['createdAt']) ?? DateTime(2000);
+        final bDate = _extractDate(b['ssoDate']) ?? _extractDate(b['createdAt']) ?? DateTime(2000);
         return bDate.compareTo(aDate);
       });
 
@@ -314,7 +333,6 @@ class _ServiceRequestDetailsScreenState extends State<ServiceRequestDetailsScree
   // --- ACTIONS ---
 
   Future<void> _closeRequest() async {
-    // Explicitly avoiding AlertDialog as requested. We proceed directly with execution.
     try {
       final reqRef = FirebaseFirestore.instance.collection('companies').doc(widget.companyId).collection('service_requests').doc(widget.requestId);
 
@@ -345,6 +363,13 @@ class _ServiceRequestDetailsScreenState extends State<ServiceRequestDetailsScree
         currentUserUid: widget.currentUserUid,
         currentUserName: widget.currentUserName,
         prefillRequestId: widget.requestId,
+        serviceRequestId: widget.requestId,
+        serviceRequestNumber: _safeString(_requestData['requestNumber']),
+        customerId: _safeString(_requestData['customerId']),
+        customerName: _safeString(_requestData['customerName']),
+        siteAddress: _safeString(_requestData['address']),
+        contactPerson: _safeString(_requestData['contactPerson']),
+        complaint: _safeString(_requestData['complaintDescription']),
       )),
     ).then((_) => _loadData());
   }
@@ -356,6 +381,24 @@ class _ServiceRequestDetailsScreenState extends State<ServiceRequestDetailsScree
         companyId: widget.companyId,
         currentUserUid: widget.currentUserUid,
         serviceRequestSeed: {'id': widget.requestId, ..._requestData},
+      )),
+    ).then((_) => _loadData());
+  }
+
+  void _createNewSalesOrder() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => CreateServiceSalesOrderScreen(
+        companyId: widget.companyId,
+        currentUserUid: widget.currentUserUid,
+        currentUserName: widget.currentUserName,
+        prefillRequestId: widget.requestId,
+        prefillRequestNumber: _safeString(_requestData['requestNumber']),
+        prefillCustomerId: _safeString(_requestData['customerId']),
+        prefillCustomerName: _safeString(_requestData['customerName']),
+        prefillSiteAddress: _safeString(_requestData['address']),
+        prefillContactPerson: _safeString(_requestData['contactPerson']),
+        prefillComplaint: _safeString(_requestData['complaintDescription']),
       )),
     ).then((_) => _loadData());
   }
@@ -542,6 +585,7 @@ class _ServiceRequestDetailsScreenState extends State<ServiceRequestDetailsScree
             Tab(text: 'OVERVIEW'),
             Tab(text: 'VISITS'),
             Tab(text: 'QUOTATIONS'),
+            Tab(text: 'SALES ORDERS'),
             Tab(text: 'REPORTS'),
             Tab(text: 'TIMELINE'),
             Tab(text: 'ATTACHMENTS'),
@@ -559,6 +603,7 @@ class _ServiceRequestDetailsScreenState extends State<ServiceRequestDetailsScree
                 _buildOverviewTab(),
                 _buildVisitsTab(),
                 _buildQuotationsTab(),
+                _buildSalesOrdersTab(),
                 _buildReportsTab(),
                 _buildTimelineTab(),
                 _buildAttachmentsTab(),
@@ -586,8 +631,8 @@ class _ServiceRequestDetailsScreenState extends State<ServiceRequestDetailsScree
             _buildKpiCard('Machines', _machineCount.toString(), Icons.settings, Colors.orange),
             _buildKpiCard('Total Visits', _visitCount.toString(), Icons.event, Colors.indigo),
             _buildKpiCard('Open Visits', _openVisitsCount.toString(), Icons.directions_car, Colors.purple),
-            _buildKpiCard('Completed', _completedVisitsCount.toString(), Icons.check_circle, Colors.teal),
             _buildKpiCard('Quotations', _allQuotations.length.toString(), Icons.request_quote, Colors.green),
+            _buildKpiCard('Sales Orders', _allSalesOrders.length.toString(), Icons.assignment_turned_in, Colors.brown),
             _buildKpiCard('Report Status', _reportSubmitted ? 'Submitted' : 'Pending', Icons.description, _reportSubmitted ? Colors.green : Colors.blueGrey),
           ],
         ),
@@ -782,51 +827,62 @@ class _ServiceRequestDetailsScreenState extends State<ServiceRequestDetailsScree
                   elevation: 1,
                   margin: const EdgeInsets.only(bottom: 12),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: Colors.grey.shade200)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        CircleAvatar(backgroundColor: Colors.purple.shade50, child: const Icon(Icons.directions_car, color: Colors.purple)),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Text(visitNo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                                  const SizedBox(width: 8),
-                                  _buildStatusBadge(status),
-                                  const SizedBox(width: 8),
-                                  if (priority.isNotEmpty) _buildPriorityBadge(priority),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Text('Tech: ${tech.isEmpty ? 'Unassigned' : tech}', style: TextStyle(color: Colors.grey.shade800, fontWeight: FontWeight.w600)),
-                              Text('Type: $type', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-                            ],
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ServiceVisitDetailsScreen(
+                      companyId: widget.companyId,
+                      currentUserUid: widget.currentUserUid,
+                      currentUserName: widget.currentUserName,
+                      visitId: v['id'].toString(),
+                      visitData: v,
+                    ))).then((_) => _loadData()),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          CircleAvatar(backgroundColor: Colors.purple.shade50, child: const Icon(Icons.directions_car, color: Colors.purple)),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(visitNo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                    const SizedBox(width: 8),
+                                    _buildStatusBadge(status),
+                                    const SizedBox(width: 8),
+                                    if (priority.isNotEmpty) _buildPriorityBadge(priority),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Text('Tech: ${tech.isEmpty ? 'Unassigned' : tech}', style: TextStyle(color: Colors.grey.shade800, fontWeight: FontWeight.w600)),
+                                Text('Type: $type', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                              ],
+                            ),
                           ),
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(_formatDateOnly(date), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                            if (time.isNotEmpty) Text(time, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-                            const SizedBox(height: 8),
-                            OutlinedButton(
-                              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ServiceVisitDetailsScreen(
-                                companyId: widget.companyId,
-                                currentUserUid: widget.currentUserUid,
-                                currentUserName: widget.currentUserName,
-                                visitId: v['id'].toString(),
-                                visitData: v,
-                              ))).then((_) => _loadData()),
-                              style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
-                              child: const Text('View Visit'),
-                            )
-                          ],
-                        )
-                      ],
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(_formatDateOnly(date), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                              if (time.isNotEmpty) Text(time, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                              const SizedBox(height: 8),
+                              OutlinedButton.icon(
+                                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ServiceVisitDetailsScreen(
+                                  companyId: widget.companyId,
+                                  currentUserUid: widget.currentUserUid,
+                                  currentUserName: widget.currentUserName,
+                                  visitId: v['id'].toString(),
+                                  visitData: v,
+                                ))).then((_) => _loadData()),
+                                icon: const Icon(Icons.launch, size: 16),
+                                label: const Text('View Visit'),
+                                style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
+                              )
+                            ],
+                          )
+                        ],
+                      ),
                     ),
                   ),
                 );
@@ -947,106 +1003,228 @@ class _ServiceRequestDetailsScreenState extends State<ServiceRequestDetailsScree
         elevation: 0,
         margin: const EdgeInsets.only(bottom: 12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: Colors.grey.shade200)),
-        child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Text(qNo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                            if (showVersionBadge) ...[
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.blue.shade200)),
-                                child: Text('v$version', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blue.shade800)),
-                              ),
-                            ]
-                          ],
-                        ),
-                        Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ServiceQuotationDetailsScreen(
+            companyId: widget.companyId,
+            currentUserUid: widget.currentUserUid,
+            currentUserName: widget.currentUserName,
+            quotationId: data['id'],
+            quotationData: data,
+          ))).then((_) => _loadData()),
+          child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
                             children: [
-                              Text(_formatDateOnly(createdAt), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                              const SizedBox(height: 4),
-                              Text('Next: $nextAction', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.orange.shade800)),
-                            ]
-                        )
-                      ]
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                      children: [
-                        Expanded(
-                            child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Type: ${type.isEmpty ? 'Service' : type}', style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
-                                  const SizedBox(height: 4),
-                                  Text('Amount: ${_formatCurrency(amount)}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.green)),
-                                ]
-                            )
-                        ),
-                        Expanded(
-                            child: Wrap(
-                                spacing: 6, runSpacing: 6,
-                                alignment: WrapAlignment.end,
-                                children: [
-                                  _buildMiniBadge(status, _getQuoteStatusColor(status)),
-                                  _buildMiniBadge(approval, _getApprovalColor(approval)),
-                                  _buildMiniBadge(payment, _getPaymentColor(payment)),
-                                  if (dispatch != 'N/A') _buildMiniBadge('Disp: $dispatch', Colors.brown),
-                                  if (installation != 'N/A') _buildMiniBadge('Inst: $installation', Colors.teal),
-                                ]
-                            )
-                        )
-                      ]
-                  ),
-                  const Divider(height: 24),
-                  Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        OutlinedButton.icon(
-                          onPressed: () => _previewPdf(data),
-                          icon: const Icon(Icons.picture_as_pdf, size: 16, color: Colors.red),
-                          label: const Text('Preview PDF', style: TextStyle(color: Colors.red)),
-                          style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
-                        ),
-                        const SizedBox(width: 8),
-                        OutlinedButton.icon(
-                          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ServiceQuotationDetailsScreen(
-                            companyId: widget.companyId,
-                            currentUserUid: widget.currentUserUid,
-                            currentUserName: widget.currentUserName,
-                            quotationId: data['id'],
-                            quotationData: data,
-                          ))).then((_) => _loadData()),
-                          icon: const Icon(Icons.launch, size: 16),
-                          label: const Text('Quote 360'),
-                          style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
-                        ),
-                        const SizedBox(width: 8),
-                        if (_isAdminOrCoordinator)
-                          FilledButton.icon(
-                            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CreateServiceQuotationScreen(
+                              Text(qNo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                              if (showVersionBadge) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.blue.shade200)),
+                                  child: Text('v$version', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blue.shade800)),
+                                ),
+                              ]
+                            ],
+                          ),
+                          Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(_formatDateOnly(createdAt), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                                const SizedBox(height: 4),
+                                Text('Next: $nextAction', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.orange.shade800)),
+                              ]
+                          )
+                        ]
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                        children: [
+                          Expanded(
+                              child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Type: ${type.isEmpty ? 'Service' : type}', style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
+                                    const SizedBox(height: 4),
+                                    Text('Amount: ${_formatCurrency(amount)}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.green)),
+                                  ]
+                              )
+                          ),
+                          Expanded(
+                              child: Wrap(
+                                  spacing: 6, runSpacing: 6,
+                                  alignment: WrapAlignment.end,
+                                  children: [
+                                    _buildMiniBadge(status, _getQuoteStatusColor(status)),
+                                    _buildMiniBadge(approval, _getApprovalColor(approval)),
+                                    _buildMiniBadge(payment, _getPaymentColor(payment)),
+                                    if (dispatch != 'N/A') _buildMiniBadge('Disp: $dispatch', Colors.brown),
+                                    if (installation != 'N/A') _buildMiniBadge('Inst: $installation', Colors.teal),
+                                  ]
+                              )
+                          )
+                        ]
+                    ),
+                    const Divider(height: 24),
+                    Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: () => _previewPdf(data),
+                            icon: const Icon(Icons.picture_as_pdf, size: 16, color: Colors.red),
+                            label: const Text('Preview PDF', style: TextStyle(color: Colors.red)),
+                            style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
+                          ),
+                          const SizedBox(width: 8),
+                          OutlinedButton.icon(
+                            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ServiceQuotationDetailsScreen(
                               companyId: widget.companyId,
                               currentUserUid: widget.currentUserUid,
+                              currentUserName: widget.currentUserName,
                               quotationId: data['id'],
-                              existingQuotation: data,
+                              quotationData: data,
                             ))).then((_) => _loadData()),
-                            icon: const Icon(Icons.edit, size: 16),
-                            label: const Text('Edit'),
-                            style: FilledButton.styleFrom(visualDensity: VisualDensity.compact, backgroundColor: Colors.blueGrey),
-                          )
-                      ]
-                  )
-                ]
-            )
+                            icon: const Icon(Icons.launch, size: 16),
+                            label: const Text('Quote 360'),
+                            style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
+                          ),
+                          const SizedBox(width: 8),
+                          if (_isAdminOrCoordinator)
+                            FilledButton.icon(
+                              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CreateServiceQuotationScreen(
+                                companyId: widget.companyId,
+                                currentUserUid: widget.currentUserUid,
+                                quotationId: data['id'],
+                                existingQuotation: data,
+                              ))).then((_) => _loadData()),
+                              icon: const Icon(Icons.edit, size: 16),
+                              label: const Text('Edit'),
+                              style: FilledButton.styleFrom(visualDensity: VisualDensity.compact, backgroundColor: Colors.blueGrey),
+                            )
+                        ]
+                    )
+                  ]
+              )
+          ),
         )
+    );
+  }
+
+  Widget _buildSalesOrdersTab() {
+    if (_allSalesOrders.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.assignment_outlined, size: 64, color: Colors.grey.shade300),
+            const SizedBox(height: 16),
+            Text('No service sales orders created.', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey.shade600)),
+            if (_isAdminOrCoordinator) ...[
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: _createNewSalesOrder,
+                icon: const Icon(Icons.add),
+                label: const Text('Create Service Sales Order'),
+              )
+            ]
+          ],
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1000),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (_isAdminOrCoordinator)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: FilledButton.icon(
+                    onPressed: _createNewSalesOrder,
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Create Service Sales Order'),
+                  ),
+                ),
+              ..._allSalesOrders.map((sso) {
+                final ssoNo = _safeString(sso['ssoNumber']);
+                final status = _safeString(sso['status']);
+                final poNo = _safeString(sso['poNumber']);
+                final date = _extractDate(sso['ssoDate']) ?? _extractDate(sso['createdAt']);
+
+                return Card(
+                  elevation: 1,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: Colors.grey.shade200)),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ServiceSalesOrderDetailsScreen(
+                      companyId: widget.companyId,
+                      currentUserUid: widget.currentUserUid,
+                      currentUserName: widget.currentUserName,
+                      ssoId: sso['id'],
+                      ssoData: sso,
+                    ))).then((_) => _loadData()),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          CircleAvatar(backgroundColor: Colors.brown.shade50, child: const Icon(Icons.assignment_turned_in, color: Colors.brown)),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(ssoNo.isNotEmpty ? ssoNo : 'Draft SSO', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                                    const SizedBox(width: 8),
+                                    _buildStatusBadge(status),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Text('PO No: ${poNo.isEmpty ? 'N/A' : poNo}', style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(_formatDateOnly(date), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                              const SizedBox(height: 8),
+                              OutlinedButton.icon(
+                                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ServiceSalesOrderDetailsScreen(
+                                  companyId: widget.companyId,
+                                  currentUserUid: widget.currentUserUid,
+                                  currentUserName: widget.currentUserName,
+                                  ssoId: sso['id'],
+                                  ssoData: sso,
+                                ))).then((_) => _loadData()),
+                                icon: const Icon(Icons.launch, size: 16),
+                                label: const Text('View Order'),
+                                style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
+                              )
+                            ],
+                          )
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList()
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -1230,14 +1408,23 @@ class _ServiceRequestDetailsScreenState extends State<ServiceRequestDetailsScree
       }
     }
 
+    DateTime? firstSalesOrderCreated;
+    for(var sso in _allSalesOrders) {
+      final tCreated = _extractDate(sso['createdAt']) ?? _extractDate(sso['ssoDate']);
+      if (tCreated != null && (firstSalesOrderCreated == null || tCreated.isBefore(firstSalesOrderCreated))) {
+        firstSalesOrderCreated = tCreated;
+      }
+    }
+
     final isClosed = _safeString(_requestData['status']) == 'Closed';
     final tsClosed = _formatDateTime(_extractDate(_requestData['closedAt'] ?? _requestData['updatedAt']));
 
     final stages = [
       {'label': 'Request Created', 'active': true, 'time': tsReqCreated},
-      {'label': 'Visit Completed', 'active': lastVisitCompleted != null, 'time': _formatDateTime(lastVisitCompleted)},
       {'label': 'Quotation Created', 'active': firstQuoteCreated != null, 'time': _formatDateTime(firstQuoteCreated)},
       {'label': 'Quotation Approved', 'active': lastQuoteApproved != null, 'time': _formatDateTime(lastQuoteApproved)},
+      {'label': 'Sales Order Created', 'active': firstSalesOrderCreated != null, 'time': _formatDateTime(firstSalesOrderCreated)},
+      {'label': 'Visit Completed', 'active': lastVisitCompleted != null, 'time': _formatDateTime(lastVisitCompleted)},
       {'label': 'Payment Received', 'active': lastPayment != null, 'time': _formatDateTime(lastPayment)},
       {'label': 'Dispatch Started', 'active': lastDispatch != null, 'time': _formatDateTime(lastDispatch)},
       {'label': 'Installation Completed', 'active': lastInstall != null, 'time': _formatDateTime(lastInstall)},

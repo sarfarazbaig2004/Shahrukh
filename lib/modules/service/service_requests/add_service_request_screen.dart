@@ -1366,9 +1366,37 @@ class _AddServiceRequestScreenState extends State<AddServiceRequestScreen> {
                 builder: (context, snap) {
                   List<QueryDocumentSnapshot<Map<String, dynamic>>> docs = snap.data?.docs ?? [];
 
-                  if (item.categoryId != null) docs = docs.where((d) => d.data()['categoryId'] == item.categoryId).toList();
-                  if (item.subcategoryId != null) docs = docs.where((d) => d.data()['subcategoryId'] == item.subcategoryId).toList();
-                  if (isMachine && item.machineTypeId != null) docs = docs.where((d) => d.data()['machineTypeId'] == item.machineTypeId).toList();
+                  if (item.categoryId != null) {
+                    docs = docs.where((d) {
+                      final data = d.data();
+                      return data['categoryId'] == item.categoryId || (data['category'] != null && data['category'] == item.categoryName);
+                    }).toList();
+                  }
+
+                  if (item.subcategoryId != null) {
+                    docs = docs.where((d) {
+                      final data = d.data();
+                      return data['subcategoryId'] == item.subcategoryId || (data['subcategory'] != null && data['subcategory'] == item.subcategoryName);
+                    }).toList();
+                  }
+
+                  if (isMachine && (item.machineTypeId != null || item.machineTypeName != null)) {
+                    docs = docs.where((d) {
+                      final data = d.data();
+                      final pTypeId = data['machineTypeId']?.toString();
+                      final pType = data['machineType']?.toString().toLowerCase().trim();
+                      final pTypeLower = data['machineTypeLower']?.toString().trim();
+
+                      final iTypeId = item.machineTypeId?.toString();
+                      final iTypeName = item.machineTypeName?.toString().toLowerCase().trim();
+
+                      if (pTypeId != null && iTypeId != null && pTypeId == iTypeId) return true;
+                      if (pTypeLower != null && iTypeName != null && pTypeLower == iTypeName) return true;
+                      if (pType != null && iTypeName != null && pType == iTypeName) return true;
+
+                      return false;
+                    }).toList();
+                  }
 
                   // Advanced Customer-Owned Product Filtering Logic
                   // Ensures customer products appear first, but never hides global products completely.
@@ -1939,4 +1967,3 @@ class _SectionBlock extends StatelessWidget {
     );
   }
 }
-

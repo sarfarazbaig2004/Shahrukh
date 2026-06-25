@@ -1,3 +1,5 @@
+// FILE PATH: lib/modules/service/service_quotations/service_quotation_list_screen.dart
+
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +13,20 @@ import 'service_quotation_pdf_preview_screen.dart';
 import '../service_requests/service_request_details_screen.dart';
 import '../service_visits/service_visit_details_screen.dart';
 import 'models/service_quotation_models.dart';
+
+// ==========================================
+// CACHED ENTERPRISE STYLES (ZOHO / CRM STYLE)
+// ==========================================
+const _kCompanyNameStyle = TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF1E293B));
+const _kSecondaryTextStyle = TextStyle(fontSize: 12, color: Color(0xFF475569), fontWeight: FontWeight.w500);
+const _kActivityTextStyle = TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.w500);
+const _kTableTextStyle = TextStyle(fontSize: 13, color: Color(0xFF1E293B));
+const _kTableMutedStyle = TextStyle(fontSize: 12, color: Color(0xFF64748B));
+const _kTableHeaderStyle = TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF334155));
+
+final _kRowBorder = Border(bottom: BorderSide(color: Colors.grey.shade200));
+final _kRowDecoration = BoxDecoration(color: Colors.white, border: _kRowBorder);
+final _kSelectedRowDecoration = BoxDecoration(color: Colors.indigo.shade50.withOpacity(0.3), border: _kRowBorder);
 
 // ==========================================
 // ENTERPRISE HELPERS & SAFETY PARSERS
@@ -31,6 +47,16 @@ DateTime? _extractDate(dynamic value) {
   if (value is DateTime) return value;
   if (value is String) return DateTime.tryParse(value);
   return null;
+}
+
+String _timeAgoStrict(DateTime? d) {
+  if (d == null) return '-';
+  final diff = DateTime.now().difference(d);
+  if (diff.inDays == 1) return 'Yesterday';
+  if (diff.inDays > 1) return '${diff.inDays} days ago';
+  if (diff.inHours > 0) return '${diff.inHours}h ago';
+  if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
+  return 'Just now';
 }
 
 String _formatDateOnly(DateTime? dt) {
@@ -512,31 +538,13 @@ class _ServiceQuotationListScreenState extends State<ServiceQuotationListScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
-      appBar: AppBar(
-        elevation: 1,
-        backgroundColor: Colors.white,
-        title: const Text('Quotation Control Tower', style: TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold, fontSize: 18)),
-        actions: [
-          if (_selectedIds.isNotEmpty) ...[
-            Text('${_selectedIds.length} selected', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold)),
-            const SizedBox(width: 8),
-            IconButton(icon: const Icon(Icons.send, color: Colors.blue), onPressed: _bulkSend, tooltip: 'Bulk Send'),
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.file_download, color: Colors.green),
-              tooltip: 'Bulk Export',
-              onSelected: _bulkExport,
-              itemBuilder: (_) => [
-                const PopupMenuItem(value: 'Excel', child: Text('Export as Excel')),
-                const PopupMenuItem(value: 'PDF', child: Text('Export as PDF')),
-                const PopupMenuItem(value: 'CSV', child: Text('Export as CSV')),
-              ],
-            ),
-            IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: _bulkDelete, tooltip: 'Bulk Delete'),
-            IconButton(icon: const Icon(Icons.close, color: Colors.grey), onPressed: _clearSelection, tooltip: 'Clear Selection'),
-            const SizedBox(width: 16),
-          ]
-        ],
+      appBar: AppBar(elevation: 0, toolbarHeight: 6, automaticallyImplyLeading: false, backgroundColor: Colors.white),
+      floatingActionButton: FloatingActionButton(
+        tooltip: 'New Quotation',
+        onPressed: _navigateToCreate,
+        child: const Icon(Icons.add),
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: _getQuotationsStream(),
         builder: (context, snapshot) {
@@ -549,8 +557,7 @@ class _ServiceQuotationListScreenState extends State<ServiceQuotationListScreen>
 
           return Column(
             children: [
-              _buildTopDashboardCards(stats),
-              _buildTopStickyBar(),
+              _buildHeader(stats),
               if (_hasActiveFilters) _buildActiveFiltersBar(),
               const Divider(height: 1, thickness: 1),
               Expanded(
@@ -560,7 +567,6 @@ class _ServiceQuotationListScreenState extends State<ServiceQuotationListScreen>
                     ? _buildEmptyState()
                     : _buildWorkspaceContent(filteredDocs),
               ),
-              _buildBottomSummary(stats),
             ],
           );
         },
@@ -568,105 +574,55 @@ class _ServiceQuotationListScreenState extends State<ServiceQuotationListScreen>
     );
   }
 
-  Widget _buildTopDashboardCards(Map<String, dynamic> stats) {
+  Widget _buildHeader(Map<String, dynamic> stats) {
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.all(16),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            _buildKpiCard('Total Quotes', stats['Total'].toString(), Icons.request_quote, Colors.blueGrey),
-            _buildKpiCard('Pending Appr.', stats['PendingApproval'].toString(), Icons.hourglass_empty, Colors.orange),
-            _buildKpiCard('Draft', stats['Draft'].toString(), Icons.edit_document, Colors.grey),
-            _buildKpiCard('Sent', stats['Sent'].toString(), Icons.send, Colors.blue),
-            _buildKpiCard('Approved', stats['Approved'].toString(), Icons.thumb_up, Colors.green),
-            _buildKpiCard('Paid', stats['Paid'].toString(), Icons.payments, Colors.teal),
-            _buildKpiCard('Rejected', stats['Rejected'].toString(), Icons.thumb_down, Colors.red),
-            _buildKpiCard('Completed', stats['Completed'].toString(), Icons.done_all, Colors.indigo),
-            _buildKpiCard('Avg Value', _formatCurrency(stats['AvgValue'] as double), Icons.analytics, Colors.purple),
-            _buildKpiCard('This Month', _formatCurrency(stats['ThisMonthValue'] as double), Icons.calendar_month, Colors.brown),
-            _buildKpiCard('Total Value', _formatCurrency(stats['Value'] as double), Icons.monetization_on, Colors.green),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildKpiCard(String title, String value, IconData icon, MaterialColor color) {
-    return Container(
-      width: 140,
-      margin: const EdgeInsets.only(right: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.shade50,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.shade100),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 16, color: color.shade700),
-              const SizedBox(width: 6),
-              Expanded(child: Text(title, style: TextStyle(fontSize: 11, color: color.shade800, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis)),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: color.shade900), maxLines: 1, overflow: TextOverflow.ellipsis),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTopStickyBar() {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
       child: Row(
         children: [
-          Expanded(
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 320),
             child: SizedBox(
-              height: 40,
+              height: 38,
               child: TextField(
                 controller: _searchController,
                 onChanged: _onSearchChanged,
                 decoration: InputDecoration(
-                  hintText: 'Global Search (Quote No, Customer, Machine, Serial, Request, Mobile...)',
+                  hintText: 'Search Quote, Customer, Serial...',
                   prefixIcon: const Icon(Icons.search, size: 18),
-                  suffixIcon: _searchQuery.isNotEmpty ? IconButton(
-                    icon: const Icon(Icons.close, size: 16),
-                    onPressed: () {
-                      _searchController.clear();
-                      _onSearchChanged('');
-                    },
-                  ) : null,
-                  filled: true,
-                  fillColor: Colors.grey.shade100,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                  suffixIcon: _searchQuery.trim().isEmpty ? null : IconButton(icon: const Icon(Icons.close, size: 17), onPressed: () { _searchController.clear(); _onSearchChanged(''); }),
+                  isDense: true, filled: true, fillColor: Colors.grey.shade100,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                 ),
                 style: const TextStyle(fontSize: 13),
               ),
             ),
           ),
           const SizedBox(width: 8),
-          Container(
-            height: 40,
-            decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
-            child: IconButton(
-              icon: const Icon(Icons.filter_list, size: 20),
-              tooltip: 'Filters',
-              onPressed: _openFilterSheet,
-              color: _hasActiveFilters ? Colors.indigo : Colors.grey.shade700,
-            ),
+          SizedBox(
+              height: 38, width: 38,
+              child: Material(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(10),
+                  child: InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: () => _openFilterSheet(stats),
+                      child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Icon(Icons.tune_rounded, size: 18, color: Colors.grey.shade800),
+                            if (_hasActiveFilters) Positioned(right: 8, top: 8, child: Container(width: 7, height: 7, decoration: BoxDecoration(color: Colors.indigo.shade700, shape: BoxShape.circle))),
+                          ]
+                      )
+                  )
+              )
           ),
           const SizedBox(width: 8),
           Container(
-            height: 40,
+            height: 38,
             padding: const EdgeInsets.symmetric(horizontal: 8),
-            decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(10)),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
                 value: _sortBy,
@@ -679,10 +635,13 @@ class _ServiceQuotationListScreenState extends State<ServiceQuotationListScreen>
           ),
           const SizedBox(width: 8),
           Container(
-            height: 40,
-            decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
+            height: 38,
+            decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(10)),
             child: PopupMenuButton<String>(
-              icon: Icon(_viewMode == 'Table' ? Icons.table_rows : Icons.grid_view, size: 20),
+              icon: Icon(
+                  _viewMode == 'Table' ? Icons.table_rows : Icons.grid_view,
+                  size: 20, color: Colors.grey.shade700
+              ),
               tooltip: 'View Mode',
               onSelected: _setViewMode,
               itemBuilder: (context) => [
@@ -693,21 +652,13 @@ class _ServiceQuotationListScreenState extends State<ServiceQuotationListScreen>
           ),
           const SizedBox(width: 8),
           Container(
-            height: 40,
-            decoration: BoxDecoration(color: Colors.indigo, borderRadius: BorderRadius.circular(8)),
+            height: 38,
+            width: 38,
+            decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(10)),
             child: IconButton(
-              icon: const Icon(Icons.add, color: Colors.white, size: 20),
-              tooltip: 'Create New Quotation',
-              onPressed: _navigateToCreate,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            height: 40,
-            decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
-            child: IconButton(
-              icon: const Icon(Icons.refresh, size: 20),
+              icon: const Icon(Icons.refresh, size: 18, color: Colors.blueGrey),
               tooltip: 'Refresh',
+              padding: EdgeInsets.zero,
               onPressed: () {
                 setState(() {
                   _currentLimit = 50;
@@ -716,6 +667,33 @@ class _ServiceQuotationListScreenState extends State<ServiceQuotationListScreen>
               },
             ),
           ),
+          if (_selectedIds.isNotEmpty) ...[
+            const SizedBox(width: 16),
+            Text('${_selectedIds.length} selected', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold, fontSize: 13)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    IconButton(icon: const Icon(Icons.send, color: Colors.blue, size: 20), onPressed: _bulkSend, tooltip: 'Bulk Send'),
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.file_download, color: Colors.green, size: 20),
+                      tooltip: 'Bulk Export',
+                      onSelected: _bulkExport,
+                      itemBuilder: (_) => [
+                        const PopupMenuItem(value: 'Excel', child: Text('Export as Excel')),
+                        const PopupMenuItem(value: 'PDF', child: Text('Export as PDF')),
+                        const PopupMenuItem(value: 'CSV', child: Text('Export as CSV')),
+                      ],
+                    ),
+                    IconButton(icon: const Icon(Icons.delete, color: Colors.red, size: 20), onPressed: _bulkDelete, tooltip: 'Bulk Delete'),
+                    IconButton(icon: const Icon(Icons.close, color: Colors.grey, size: 20), onPressed: _clearSelection, tooltip: 'Clear Selection'),
+                  ],
+                ),
+              ),
+            )
+          ]
         ],
       ),
     );
@@ -724,26 +702,23 @@ class _ServiceQuotationListScreenState extends State<ServiceQuotationListScreen>
   Widget _buildActiveFiltersBar() {
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
       child: Row(
         children: [
           Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Wrap(
-                spacing: 8,
-                children: [
-                  if (_statusFilter != 'All') _buildFilterChip('Status: $_statusFilter'),
-                  if (_approvalFilter != 'All') _buildFilterChip('Approval: $_approvalFilter'),
-                  if (_paymentFilter != 'All') _buildFilterChip('Pay: $_paymentFilter'),
-                  if (_typeFilter != 'All') _buildFilterChip('Type: $_typeFilter'),
-                  if (_dateRangeFilter != null) _buildFilterChip('Date: ${_formatDateOnly(_dateRangeFilter!.start)} - ${_formatDateOnly(_dateRangeFilter!.end)}'),
-                  if (_filterCreatedByCtrl.text.isNotEmpty) _buildFilterChip('Creator: ${_filterCreatedByCtrl.text}'),
-                  if (_filterCustomerCtrl.text.isNotEmpty) _buildFilterChip('Cust: ${_filterCustomerCtrl.text}'),
-                  if (_filterMachineCtrl.text.isNotEmpty) _buildFilterChip('Mach: ${_filterMachineCtrl.text}'),
-                  if (_amountRange.start > 0 || _amountRange.end < 5000000) _buildFilterChip('Amt: ₹${_amountRange.start.toInt()} - ₹${_amountRange.end.toInt()}'),
-                ],
-              ),
+            child: Wrap(
+              spacing: 8,
+              children: [
+                if (_statusFilter != 'All') _buildFilterChip('Status: $_statusFilter'),
+                if (_approvalFilter != 'All') _buildFilterChip('Approval: $_approvalFilter'),
+                if (_paymentFilter != 'All') _buildFilterChip('Pay: $_paymentFilter'),
+                if (_typeFilter != 'All') _buildFilterChip('Type: $_typeFilter'),
+                if (_dateRangeFilter != null) _buildFilterChip('Date: ${_formatDateOnly(_dateRangeFilter!.start)} - ${_formatDateOnly(_dateRangeFilter!.end)}'),
+                if (_filterCreatedByCtrl.text.isNotEmpty) _buildFilterChip('Creator: ${_filterCreatedByCtrl.text}'),
+                if (_filterCustomerCtrl.text.isNotEmpty) _buildFilterChip('Cust: ${_filterCustomerCtrl.text}'),
+                if (_filterMachineCtrl.text.isNotEmpty) _buildFilterChip('Mach: ${_filterMachineCtrl.text}'),
+                if (_amountRange.start > 0 || _amountRange.end < 5000000) _buildFilterChip('Amt: ₹${_amountRange.start.toInt()} - ₹${_amountRange.end.toInt()}'),
+              ],
             ),
           ),
           TextButton(onPressed: _resetFilters, child: const Text('Clear', style: TextStyle(fontSize: 12))),
@@ -768,37 +743,9 @@ class _ServiceQuotationListScreenState extends State<ServiceQuotationListScreen>
           Icon(Icons.request_quote_outlined, size: 64, color: Colors.grey.shade300),
           const SizedBox(height: 16),
           Text('No quotations found.', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey.shade600)),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: _navigateToCreate,
-            icon: const Icon(Icons.add),
-            label: const Text('Create New Quotation'),
-            style: FilledButton.styleFrom(backgroundColor: Colors.indigo),
-          )
+          const SizedBox(height: 8),
+          Text('Try adjusting your search or filters.', style: TextStyle(color: Colors.grey.shade500)),
         ],
-      ),
-    );
-  }
-
-  Widget _buildBottomSummary(Map<String, dynamic> stats) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Colors.grey.shade200)),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, -2))],
-      ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            Text('Records: ${stats['Total']}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey)),
-            Text('Draft: ${stats['Draft']}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
-            Text('Approved: ${stats['Approved']}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
-            Text('Total Value: ${_formatCurrency(stats['Value'] as double)}', style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.indigo, fontSize: 16)),
-          ],
-        ),
       ),
     );
   }
@@ -809,11 +756,9 @@ class _ServiceQuotationListScreenState extends State<ServiceQuotationListScreen>
     if (_viewMode == 'Table') {
       return _buildTableView(docs);
     }
-    return ListView.separated(
+    return ListView.builder(
       controller: _scrollController,
-      padding: const EdgeInsets.all(16),
       itemCount: docs.length + (_isLoadingMore ? 1 : 0),
-      separatorBuilder: (_, __) => const SizedBox(height: 16),
       itemBuilder: (ctx, i) {
         if (i == docs.length) {
           return const Padding(
@@ -832,6 +777,7 @@ class _ServiceQuotationListScreenState extends State<ServiceQuotationListScreen>
           onDuplicate: _duplicateQuotation,
           onDelete: _softDelete,
           onUpdateStatus: _updateStatus,
+          currentUserId: widget.currentUserUid,
         );
       },
     );
@@ -874,6 +820,23 @@ class _ServiceQuotationListScreenState extends State<ServiceQuotationListScreen>
               final status = _safeString(data['status']);
               final approval = _safeString(data['approvalStatus']).isNotEmpty ? _safeString(data['approvalStatus']) : 'Pending';
               final payment = _safeString(data['paymentStatus']).isNotEmpty ? _safeString(data['paymentStatus']) : 'Pending';
+
+              // OWNERSHIP FALLBACK LOGIC
+              final salesOwner = _safeString(data['salesPersonName']).isNotEmpty
+                  ? _safeString(data['salesPersonName'])
+                  : _safeString(data['customerOwnerName']).isNotEmpty
+                  ? _safeString(data['customerOwnerName'])
+                  : _safeString(data['recordOwnerName']);
+
+              final serviceOwner = _safeString(data['assignedManagerName']).isNotEmpty
+                  ? _safeString(data['assignedManagerName'])
+                  : (_safeString(data['assignedCoordinatorName']).isNotEmpty
+                  ? _safeString(data['assignedCoordinatorName'])
+                  : _safeString(data['assignedToName']));
+
+              final techName = _safeString(data['currentTechnicianName']).isNotEmpty
+                  ? _safeString(data['currentTechnicianName'])
+                  : _safeString(data['assignedTechnicianName'] ?? data['engineerName']);
 
               final isSelected = _selectedIds.contains(docId);
               final isApproved = approval == 'Approved';
@@ -955,8 +918,27 @@ class _ServiceQuotationListScreenState extends State<ServiceQuotationListScreen>
     );
   }
 
+  Widget _buildStatChip(String title, dynamic value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('$title:', style: TextStyle(fontSize: 12, color: Colors.grey.shade800, fontWeight: FontWeight.w600)),
+          const SizedBox(width: 4),
+          Text(value.toString(), style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color)),
+        ],
+      ),
+    );
+  }
+
   // --- FILTERS SHEET ---
-  Future<void> _openFilterSheet() async {
+  Future<void> _openFilterSheet(Map<String, dynamic> stats) async {
     String tStatus = _statusFilter;
     String tApproval = _approvalFilter;
     String tPayment = _paymentFilter;
@@ -978,8 +960,30 @@ class _ServiceQuotationListScreenState extends State<ServiceQuotationListScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('Advanced Filters', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                  const Text('Quotation Analytics', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.blueGrey)),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8, runSpacing: 8,
+                    children: [
+                      _buildStatChip('Total', stats['Total'], Colors.blueGrey.shade800),
+                      _buildStatChip('Draft', stats['Draft'], Colors.grey.shade700),
+                      _buildStatChip('Sent', stats['Sent'], Colors.blue.shade600),
+                      _buildStatChip('Approved', stats['Approved'], Colors.green.shade600),
+                      _buildStatChip('Pending Appr.', stats['PendingApproval'], Colors.orange.shade600),
+                      _buildStatChip('Rejected', stats['Rejected'], Colors.red.shade600),
+                      _buildStatChip('Completed', stats['Completed'], Colors.indigo.shade600),
+                      _buildStatChip('Paid', stats['Paid'], Colors.teal.shade600),
+                      _buildStatChip('Total Value', _formatCurrency(stats['Value']), Colors.green.shade700),
+                      _buildStatChip('Avg Value', _formatCurrency(stats['AvgValue']), Colors.purple.shade600),
+                      _buildStatChip('This Month', _formatCurrency(stats['ThisMonthValue']), Colors.brown.shade600),
+                    ],
+                  ),
                   const SizedBox(height: 20),
+                  const Divider(),
+                  const SizedBox(height: 16),
+
+                  const Text('Advanced Filters', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 16),
 
                   // Date Range Picker
                   InkWell(
@@ -1122,7 +1126,7 @@ class _ServiceQuotationListScreenState extends State<ServiceQuotationListScreen>
 }
 
 // ==========================================
-// OPTIMIZED QUOTATION CARD (STATELESS)
+// OPTIMIZED QUOTATION ROW WIDGET (STATELESS)
 // ==========================================
 
 class _QuotationCard extends StatelessWidget {
@@ -1136,6 +1140,7 @@ class _QuotationCard extends StatelessWidget {
   final Function(Map<String, dynamic>) onDuplicate;
   final Function(String) onDelete;
   final Function(String, Map<String, dynamic>, String) onUpdateStatus;
+  final String currentUserId;
 
   const _QuotationCard({
     required this.docId,
@@ -1148,6 +1153,7 @@ class _QuotationCard extends StatelessWidget {
     required this.onDuplicate,
     required this.onDelete,
     required this.onUpdateStatus,
+    required this.currentUserId,
   });
 
   static Color getStatusColor(String status) {
@@ -1170,6 +1176,48 @@ class _QuotationCard extends StatelessWidget {
     if (status == 'Paid') return Colors.green;
     if (status == 'Partial Payment' || status == 'Advance Received') return Colors.teal;
     return Colors.red; // Pending
+  }
+
+  Widget _buildWorkflowRow(String status, String approval, String payment) {
+    Widget buildStep(String state, String type) {
+      bool isComplete = false;
+      bool isRejected = false;
+
+      if (type == 'status') {
+        isComplete = ['Sent', 'Approved', 'Completed'].contains(state);
+        isRejected = ['Rejected', 'Cancelled'].contains(state);
+      } else if (type == 'approval') {
+        isComplete = state == 'Approved';
+        isRejected = state == 'Rejected';
+      } else if (type == 'payment') {
+        isComplete = state == 'Paid';
+      }
+
+      String mark = isComplete ? '✓' : (isRejected ? '✗' : '○');
+      Color color = isComplete ? Colors.green.shade700 : (isRejected ? Colors.red.shade700 : Colors.orange.shade700);
+
+      return Text('$state $mark', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: color));
+    }
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          buildStep(status, 'status'),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+            child: Icon(Icons.chevron_right, size: 10, color: Colors.grey.shade400),
+          ),
+          buildStep(approval, 'approval'),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+            child: Icon(Icons.chevron_right, size: 10, color: Colors.grey.shade400),
+          ),
+          buildStep(payment, 'payment'),
+        ],
+      ),
+    );
   }
 
   @override
@@ -1198,161 +1246,188 @@ class _QuotationCard extends StatelessWidget {
     final approval = _safeString(data['approvalStatus']).isNotEmpty ? _safeString(data['approvalStatus']) : 'Pending';
     final payment = _safeString(data['paymentStatus']).isNotEmpty ? _safeString(data['paymentStatus']) : 'Pending';
 
-    // Read Only Logic
+    // OWNERSHIP LOGIC
+    final salesOwner = _safeString(data['salesPersonName']).isNotEmpty
+        ? _safeString(data['salesPersonName'])
+        : _safeString(data['customerOwnerName']).isNotEmpty
+        ? _safeString(data['customerOwnerName'])
+        : _safeString(data['recordOwnerName']);
+
+    final serviceOwner = _safeString(data['assignedManagerName']).isNotEmpty
+        ? _safeString(data['assignedManagerName'])
+        : (_safeString(data['assignedCoordinatorName']).isNotEmpty
+        ? _safeString(data['assignedCoordinatorName'])
+        : _safeString(data['assignedToName']));
+
     final bool isApproved = approval == 'Approved';
 
-    return Card(
-      elevation: 1,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: isSelected ? Colors.indigo : Colors.grey.shade200, width: isSelected ? 2 : 1)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
+    // Build Contact/Req Line
+    List<String> contactLine = [];
+    if (contactPerson.isNotEmpty) contactLine.add('Attn: $contactPerson');
+    if (reqNo.isNotEmpty) contactLine.add('Req: $reqNo');
+    if (visitNo.isNotEmpty) contactLine.add('Vis: $visitNo');
+
+    // Build Ownership Line
+    List<String> ownerLine = [];
+    if (salesOwner.isNotEmpty) ownerLine.add('Sales: $salesOwner');
+    if (serviceOwner.isNotEmpty) ownerLine.add('Svc: $serviceOwner');
+    ownerLine.add('By: $createdBy');
+
+    return InkWell(
+      onTap: () => onView(docId, data),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: isSelected ? _kSelectedRowDecoration : _kRowDecoration,
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Checkbox(
-                      value: isSelected,
-                      onChanged: (_) => onSelect(docId),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(color: Colors.indigo.shade50, borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.indigo.shade100)),
-                      child: Text(quoteNo.isNotEmpty ? quoteNo : 'DRAFT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.indigo.shade900)),
-                    ),
-                    if (rev.isNotEmpty && rev != '1') ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                        decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(6)),
-                        child: Text('Rev: $rev', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.grey.shade800)),
-                      ),
-                    ]
-                  ],
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(_formatDateOnly(date), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                    const SizedBox(height: 4),
-                    Text('By: $createdBy', style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
-                  ],
-                )
-              ],
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: Checkbox(
+                visualDensity: VisualDensity.compact,
+                value: isSelected,
+                onChanged: (_) => onSelect(docId),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
             ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                CircleAvatar(radius: 20, backgroundColor: Colors.blueGrey.shade50, child: const Icon(Icons.business, color: Colors.blueGrey, size: 20)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // HEADER ROW
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Text(customer.isNotEmpty ? customer : 'Unknown Customer', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      if (contactPerson.isNotEmpty) Text('Attn: $contactPerson', style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
-                      const SizedBox(height: 2),
-                      Text(machineInfo.isNotEmpty ? machineInfo : 'Unspecified Machine', style: TextStyle(color: Colors.indigo.shade600, fontSize: 13, fontWeight: FontWeight.w600)),
-                      if (reqNo.isNotEmpty || visitNo.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            if (reqNo.isNotEmpty) Text('Req: $reqNo', style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
-                            if (reqNo.isNotEmpty && visitNo.isNotEmpty) const SizedBox(width: 8),
-                            if (visitNo.isNotEmpty) Text('Visit: $visitNo', style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
-                          ],
-                        )
-                      ]
+                      Text(quoteNo.isNotEmpty ? quoteNo : 'DRAFT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blue.shade700)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '•  Rev ${rev.isNotEmpty ? rev : '1'}  •  ${_timeAgoStrict(date)}',
+                          style: _kActivityTextStyle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      )
                     ],
                   ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    const Text('Grand Total', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                    Text(_formatCurrency(val), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.green)),
+                  const SizedBox(height: 4),
+
+                  // CUSTOMER HIERARCHY
+                  Text(customer.isNotEmpty ? customer : 'Unknown Customer', style: _kCompanyNameStyle, maxLines: 1, overflow: TextOverflow.ellipsis),
+
+                  if (machineInfo.isNotEmpty) ...[
+                    const SizedBox(height: 1),
+                    Text(machineInfo, style: _kSecondaryTextStyle, maxLines: 1, overflow: TextOverflow.ellipsis),
                   ],
-                )
-              ],
+
+                  if (contactLine.isNotEmpty) ...[
+                    const SizedBox(height: 1),
+                    Text(contactLine.join('  •  '), style: TextStyle(fontSize: 10.5, color: Colors.grey.shade700, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
+
+                  const SizedBox(height: 3),
+                  // OWNERSHIP
+                  Text(
+                      ownerLine.join('  •  '),
+                      style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  // WORKFLOW
+                  _buildWorkflowRow(status, approval, payment),
+                ],
+              ),
             ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _buildMiniBadge(status, getStatusColor(status)),
-                _buildMiniBadge(approval, getApprovalColor(approval)),
-                _buildMiniBadge(payment, getPaymentColor(payment)),
-              ],
-            ),
-            const Divider(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            const SizedBox(width: 8),
+
+            // RIGHT STATUS PANEL
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    OutlinedButton.icon(
-                      onPressed: () => onView(docId, data),
-                      icon: const Icon(Icons.launch, size: 16),
-                      label: const Text('View 360'),
-                      style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
+                    Text(
+                      _formatCurrency(val).replaceAll('₹', '').trim(),
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.green.shade700),
+                      textAlign: TextAlign.right,
                     ),
-                    const SizedBox(width: 8),
-                    if (!isApproved)
-                      OutlinedButton.icon(
-                        onPressed: () => onEdit(docId, data),
-                        icon: const Icon(Icons.edit, size: 16),
-                        label: const Text('Edit'),
-                        style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
+                    const SizedBox(width: 4),
+                    SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: PopupMenuButton<String>(
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        icon: const Icon(Icons.more_vert, size: 20, color: Color(0xFF64748B)),
+                        onSelected: (val) {
+                          if (val == '360') onView(docId, data);
+                          if (val == 'edit') onEdit(docId, data);
+                          if (val == 'pdf') onPreviewPdf(data);
+                          if (val == 'dup') onDuplicate(data);
+                          if (!isApproved) {
+                            if (val == 'send') onUpdateStatus(docId, {'status': 'Sent'}, 'Quotation Marked as Sent');
+                            if (val == 'approve') onUpdateStatus(docId, {'approvalStatus': 'Approved', 'status': 'Approved'}, 'Quotation Approved');
+                            if (val == 'reject') onUpdateStatus(docId, {'approvalStatus': 'Rejected', 'status': 'Rejected'}, 'Quotation Rejected');
+                            if (val == 'del') onDelete(docId);
+                          }
+                        },
+                        itemBuilder: (ctx) => [
+                          const PopupMenuItem(value: '360', child: Text('Open Quotation 360')),
+                          if (!isApproved) const PopupMenuItem(value: 'edit', child: Text('Edit Quotation')),
+                          const PopupMenuItem(value: 'pdf', child: Text('Preview PDF')),
+                          const PopupMenuItem(value: 'dup', child: Text('Duplicate')),
+                          if (!isApproved) ...[
+                            const PopupMenuDivider(),
+                            const PopupMenuItem(value: 'send', child: Text('Mark Sent')),
+                            const PopupMenuItem(value: 'approve', child: Text('Approve', style: TextStyle(color: Colors.green))),
+                            const PopupMenuItem(value: 'reject', child: Text('Reject', style: TextStyle(color: Colors.red))),
+                            const PopupMenuDivider(),
+                            const PopupMenuItem(value: 'del', child: Text('Delete Quotation', style: TextStyle(color: Colors.red))),
+                          ],
+                        ],
                       ),
+                    ),
                   ],
                 ),
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert, color: Colors.grey),
-                  onSelected: (val) {
-                    if (val == 'pdf') onPreviewPdf(data);
-                    if (val == 'dup') onDuplicate(data);
-                    if (!isApproved) {
-                      if (val == 'send') onUpdateStatus(docId, {'status': 'Sent'}, 'Quotation Marked as Sent');
-                      if (val == 'approve') onUpdateStatus(docId, {'approvalStatus': 'Approved', 'status': 'Approved'}, 'Quotation Approved');
-                      if (val == 'reject') onUpdateStatus(docId, {'approvalStatus': 'Rejected', 'status': 'Rejected'}, 'Quotation Rejected');
-                      if (val == 'del') onDelete(docId);
-                    }
-                  },
-                  itemBuilder: (ctx) => [
-                    const PopupMenuItem(value: 'pdf', child: Row(children: [Icon(Icons.picture_as_pdf, size: 18, color: Colors.red), SizedBox(width: 8), Text('Preview PDF')])),
-                    const PopupMenuItem(value: 'dup', child: Row(children: [Icon(Icons.copy, size: 18), SizedBox(width: 8), Text('Duplicate')])),
-                    if (!isApproved) ...[
-                      const PopupMenuDivider(),
-                      const PopupMenuItem(value: 'send', child: Row(children: [Icon(Icons.send, size: 18, color: Colors.blue), SizedBox(width: 8), Text('Mark Sent')])),
-                      const PopupMenuItem(value: 'approve', child: Row(children: [Icon(Icons.thumb_up, size: 18, color: Colors.green), SizedBox(width: 8), Text('Approve')])),
-                      const PopupMenuItem(value: 'reject', child: Row(children: [Icon(Icons.thumb_down, size: 18, color: Colors.red), SizedBox(width: 8), Text('Reject')])),
-                      const PopupMenuDivider(),
-                      const PopupMenuItem(value: 'del', child: Row(children: [Icon(Icons.delete, size: 18, color: Colors.red), SizedBox(width: 8), Text('Delete', style: TextStyle(color: Colors.red))])),
-                    ],
-                    const PopupMenuDivider(),
-                    const PopupMenuItem(value: 'convert', enabled: false, child: Row(children: [Icon(Icons.handyman, size: 18, color: Colors.grey), SizedBox(width: 8), Text('Convert to Work Order', style: TextStyle(color: Colors.grey))])),
-                  ],
-                )
+                const SizedBox(height: 8),
+                Text('STATUS', style: TextStyle(fontSize: 8.5, color: Colors.grey.shade500, fontWeight: FontWeight.bold)),
+                Text(
+                  status.toUpperCase(),
+                  style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: getStatusColor(status)),
+                  textAlign: TextAlign.right,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 6),
+                Text('APPROVAL', style: TextStyle(fontSize: 8.5, color: Colors.grey.shade500, fontWeight: FontWeight.bold)),
+                Text(
+                  approval.toUpperCase(),
+                  style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: getApprovalColor(approval)),
+                  textAlign: TextAlign.right,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 6),
+                Text('PAYMENT', style: TextStyle(fontSize: 8.5, color: Colors.grey.shade500, fontWeight: FontWeight.bold)),
+                Text(
+                  payment.toUpperCase(),
+                  style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: getPaymentColor(payment)),
+                  textAlign: TextAlign.right,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ],
-            )
+            ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildMiniBadge(String text, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4), border: Border.all(color: color.withValues(alpha: 0.3))),
-      child: Text(text.toUpperCase(), style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: color)),
     );
   }
 }

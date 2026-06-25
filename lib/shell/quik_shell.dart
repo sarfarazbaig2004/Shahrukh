@@ -1,3 +1,4 @@
+// FILE PATH: lib/modules/shell/quik_shell.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -36,6 +37,7 @@ import 'package:QUIK/modules/reports/sales_report/sales_report_screen.dart';
 // Service Sub-Modules
 import 'package:QUIK/modules/service/service_requests/service_request_list_screen.dart';
 import 'package:QUIK/modules/service/service_quotations/service_quotation_list_screen.dart';
+import 'package:QUIK/modules/service/service_sales_orders/service_sales_order_list_screen.dart';
 import 'package:QUIK/modules/service/service_visits/service_visit_list_screen.dart';
 import 'package:QUIK/modules/service/service_technicians/service_technician_list_screen.dart';
 
@@ -49,21 +51,19 @@ enum ShellPage {
   salesInquiries,
   salesQuotations,
   salesOrders,
-  salesFollowUps,
   salesTasks,
   salesMeetings,
 
   // Professional Service Workflow
   serviceRequests,
-  serviceWorkOrders,
   serviceQuotations,
+  serviceSalesOrders,
   serviceVisits,
   serviceTechnicians,
 
   crmCustomers,
   crmContacts,
   crmVisits,
-  crmCommunication,
 
   purchaseVendors,
   purchaseQuotations,
@@ -97,9 +97,6 @@ enum ShellPage {
   reportsPayment,
 
   adminUsers,
-  adminRoles,
-  adminCompanyProfile,
-  adminBranches,
   adminAuditLogs,
 
   settingsGeneral,
@@ -117,8 +114,6 @@ extension ShellPageX on ShellPage {
         return 'Quotations';
       case ShellPage.salesOrders:
         return 'Sales Orders';
-      case ShellPage.salesFollowUps:
-        return 'Follow-ups';
       case ShellPage.salesTasks:
         return 'Tasks';
       case ShellPage.salesMeetings:
@@ -126,10 +121,10 @@ extension ShellPageX on ShellPage {
 
       case ShellPage.serviceRequests:
         return 'Service Requests';
-      case ShellPage.serviceWorkOrders:
-        return 'Service Sales Orders';
       case ShellPage.serviceQuotations:
         return 'Service Quotations';
+      case ShellPage.serviceSalesOrders:
+        return 'Service Sales Orders';
       case ShellPage.serviceVisits:
         return 'Service Visits';
       case ShellPage.serviceTechnicians:
@@ -141,8 +136,6 @@ extension ShellPageX on ShellPage {
         return 'Contacts';
       case ShellPage.crmVisits:
         return 'Customer Visits';
-      case ShellPage.crmCommunication:
-        return 'Communication History';
 
       case ShellPage.purchaseVendors:
         return 'Vendors';
@@ -203,12 +196,6 @@ extension ShellPageX on ShellPage {
 
       case ShellPage.adminUsers:
         return 'Users';
-      case ShellPage.adminRoles:
-        return 'Roles & Permissions';
-      case ShellPage.adminCompanyProfile:
-        return 'Company Profile';
-      case ShellPage.adminBranches:
-        return 'Branches';
       case ShellPage.adminAuditLogs:
         return 'Audit Logs';
 
@@ -227,8 +214,6 @@ extension ShellPageX on ShellPage {
         return Icons.receipt_long_outlined;
       case ShellPage.salesOrders:
         return Icons.shopping_bag_outlined;
-      case ShellPage.salesFollowUps:
-        return Icons.event_repeat_outlined;
       case ShellPage.salesTasks:
         return Icons.task_alt_outlined;
       case ShellPage.salesMeetings:
@@ -236,10 +221,10 @@ extension ShellPageX on ShellPage {
 
       case ShellPage.serviceRequests:
         return Icons.support_agent_outlined;
-      case ShellPage.serviceWorkOrders:
-        return Icons.handyman_outlined;
       case ShellPage.serviceQuotations:
         return Icons.request_quote_outlined;
+      case ShellPage.serviceSalesOrders:
+        return Icons.assignment_turned_in_outlined;
       case ShellPage.serviceVisits:
         return Icons.directions_car_outlined;
       case ShellPage.serviceTechnicians:
@@ -251,8 +236,7 @@ extension ShellPageX on ShellPage {
         return Icons.contact_phone_outlined;
       case ShellPage.crmVisits:
         return Icons.location_on_outlined;
-      case ShellPage.crmCommunication:
-        return Icons.chat_bubble_outline;
+
       case ShellPage.purchaseVendors:
         return Icons.business_outlined;
       case ShellPage.purchaseQuotations:
@@ -307,12 +291,6 @@ extension ShellPageX on ShellPage {
         return Icons.pie_chart_outline;
       case ShellPage.adminUsers:
         return Icons.manage_accounts_outlined;
-      case ShellPage.adminRoles:
-        return Icons.admin_panel_settings_outlined;
-      case ShellPage.adminCompanyProfile:
-        return Icons.apartment_outlined;
-      case ShellPage.adminBranches:
-        return Icons.account_tree_outlined;
       case ShellPage.adminAuditLogs:
         return Icons.fact_check_outlined;
       case ShellPage.settingsGeneral:
@@ -468,6 +446,32 @@ class _ZohoShellState extends State<ZohoShell> {
     return false;
   }
 
+  List<String> _getAliasesFor(String module, String submodule) {
+    if (module == 'service') {
+      switch (submodule) {
+        case 'serviceRequests':
+          return const ['serviceRequests', 'serviceRequest', 'serviceCalls', 'serviceCall', 'complaints', 'serviceComplaints'];
+        case 'serviceQuotations':
+          return const ['serviceQuotations', 'serviceQuotation', 'quotations'];
+        case 'serviceSalesOrders':
+          return const ['serviceSalesOrders', 'serviceSalesOrder', 'workOrders', 'serviceWorkOrders'];
+        case 'serviceVisits':
+          return const ['serviceVisits', 'serviceVisit'];
+        case 'serviceTechnicians':
+          return const ['serviceTechnicians', 'serviceTechnician'];
+      }
+    } else if (module == 'sales') {
+      if (submodule == 'salesOrders') return const ['salesOrders', 'salesOrder'];
+    } else if (module == 'purchase') {
+      if (submodule == 'purchaseOrders') return const ['purchaseOrders', 'purchaseOrder'];
+      if (submodule == 'purchaseQuotations') return const ['purchaseQuotations', 'purchaseQuotation'];
+      if (submodule == 'purchaseBills') return const ['purchaseBills', 'purchaseBill'];
+    } else if (module == 'crm') {
+      if (submodule == 'customers') return const ['customers', 'customer'];
+    }
+    return [submodule];
+  }
+
   bool _hasPermission(
       String module,
       String submodule, {
@@ -475,23 +479,27 @@ class _ZohoShellState extends State<ZohoShell> {
       }) {
     if (isAdminOrManager) return true;
 
-    // 1. Exact match check
-    if (_checkPerm(module, submodule, action)) return true;
+    final aliases = _getAliasesFor(module, submodule);
 
-    // 2. Fallback: Check Plural version if singular failed
-    if (!submodule.endsWith('s') &&
-        _checkPerm(module, '${submodule}s', action)) {
-      return true;
-    }
+    for (final alias in aliases) {
+      // 1. Exact match check
+      if (_checkPerm(module, alias, action)) return true;
 
-    // 3. Fallback: Check Singular version if plural failed
-    if (submodule.endsWith('s') &&
-        _checkPerm(
-          module,
-          submodule.substring(0, submodule.length - 1),
-          action,
-        )) {
-      return true;
+      // 2. Fallback: Check Plural version if singular failed
+      if (!alias.endsWith('s') &&
+          _checkPerm(module, '${alias}s', action)) {
+        return true;
+      }
+
+      // 3. Fallback: Check Singular version if plural failed
+      if (alias.endsWith('s') &&
+          _checkPerm(
+            module,
+            alias.substring(0, alias.length - 1),
+            action,
+          )) {
+        return true;
+      }
     }
 
     return false;
@@ -516,9 +524,7 @@ class _ZohoShellState extends State<ZohoShell> {
       case ShellPage.salesQuotations:
         return _hasPermission('sales', 'quotations');
       case ShellPage.salesOrders:
-        return _hasPermission('sales', 'salesOrder');
-      case ShellPage.salesFollowUps:
-        return _hasPermission('sales', 'followUps');
+        return _hasPermission('sales', 'salesOrders');
       case ShellPage.salesTasks:
         return _hasPermission('sales', 'tasks');
       case ShellPage.salesMeetings:
@@ -527,10 +533,10 @@ class _ZohoShellState extends State<ZohoShell> {
     // Service (Industrial Workflow)
       case ShellPage.serviceRequests:
         return _hasPermission('service', 'serviceRequests');
-      case ShellPage.serviceWorkOrders:
-        return _hasPermission('service', 'workOrders');
       case ShellPage.serviceQuotations:
-        return _hasPermission('service', 'quotations');
+        return _hasPermission('service', 'serviceQuotations');
+      case ShellPage.serviceSalesOrders:
+        return _hasPermission('service', 'serviceSalesOrders');
       case ShellPage.serviceVisits:
         return _hasPermission('service', 'serviceVisits');
       case ShellPage.serviceTechnicians:
@@ -543,8 +549,6 @@ class _ZohoShellState extends State<ZohoShell> {
         return _hasPermission('crm', 'contacts');
       case ShellPage.crmVisits:
         return _hasPermission('crm', 'customerVisits');
-      case ShellPage.crmCommunication:
-        return _hasPermission('crm', 'communicationHistory');
 
     // Purchase
       case ShellPage.purchaseVendors:
@@ -609,12 +613,6 @@ class _ZohoShellState extends State<ZohoShell> {
     // Administration
       case ShellPage.adminUsers:
         return _hasPermission('administration', 'users');
-      case ShellPage.adminRoles:
-        return _hasPermission('administration', 'rolesPermissions');
-      case ShellPage.adminCompanyProfile:
-        return _hasPermission('administration', 'companyProfile');
-      case ShellPage.adminBranches:
-        return _hasPermission('administration', 'branches');
       case ShellPage.adminAuditLogs:
         return _hasPermission('administration', 'auditLogs');
     }
@@ -630,7 +628,6 @@ class _ZohoShellState extends State<ZohoShell> {
           ShellPage.salesInquiries,
           ShellPage.salesQuotations,
           ShellPage.salesOrders,
-          ShellPage.salesFollowUps,
           ShellPage.salesTasks,
           ShellPage.salesMeetings,
         ],
@@ -641,8 +638,8 @@ class _ZohoShellState extends State<ZohoShell> {
         icon: Icons.build_outlined,
         children: [
           ShellPage.serviceRequests,
-          ShellPage.serviceWorkOrders,
           ShellPage.serviceQuotations,
+          ShellPage.serviceSalesOrders,
           ShellPage.serviceVisits,
           ShellPage.serviceTechnicians,
         ],
@@ -655,7 +652,6 @@ class _ZohoShellState extends State<ZohoShell> {
           ShellPage.crmCustomers,
           ShellPage.crmContacts,
           ShellPage.crmVisits,
-          ShellPage.crmCommunication,
         ],
       ),
       SidebarGroup(
@@ -723,9 +719,6 @@ class _ZohoShellState extends State<ZohoShell> {
         icon: Icons.admin_panel_settings_outlined,
         children: [
           ShellPage.adminUsers,
-          ShellPage.adminRoles,
-          ShellPage.adminCompanyProfile,
-          ShellPage.adminBranches,
           ShellPage.adminAuditLogs,
         ],
       ),
@@ -795,6 +788,7 @@ class _ZohoShellState extends State<ZohoShell> {
       case ShellPage.reportsSales:
       case ShellPage.serviceRequests:
       case ShellPage.serviceQuotations:
+      case ShellPage.serviceSalesOrders:
       case ShellPage.serviceVisits:
       case ShellPage.serviceTechnicians:
         return true;
@@ -1414,6 +1408,16 @@ class _ZohoShellState extends State<ZohoShell> {
           ),
         );
 
+      case ShellPage.serviceSalesOrders:
+        return Padding(
+          padding: const EdgeInsets.all(10),
+          child: ServiceSalesOrderListScreen(
+            companyId: widget.companyId,
+            currentUserUid: widget.userUid,
+            currentUserName: _resolvedEmployeeName(),
+          ),
+        );
+
       case ShellPage.serviceVisits:
         return Padding(
           padding: const EdgeInsets.all(10),
@@ -1432,12 +1436,6 @@ class _ZohoShellState extends State<ZohoShell> {
             currentUserUid: widget.userUid,
             currentUserName: _resolvedEmployeeName(),
           ),
-        );
-
-      case ShellPage.serviceWorkOrders:
-        return Padding(
-          padding: const EdgeInsets.all(10),
-          child: _moduleLandingPage(activePage),
         );
 
     // --- CRM Mapping ---
@@ -1628,8 +1626,6 @@ class _ZohoShellState extends State<ZohoShell> {
             permissions: _currentPermissions,
             industry: _resolvedIndustry,
             onOpenUsers: () => _selectPage(ShellPage.adminUsers),
-            onOpenCompanyProfile: () =>
-                _selectPage(ShellPage.adminCompanyProfile),
             onOpenAuditLogs: () => _selectPage(ShellPage.adminAuditLogs),
           ),
         );
@@ -1841,8 +1837,8 @@ class _ZohoShellState extends State<ZohoShell> {
       case ShellPage.settingsGeneral:
         return ['Company', 'Security', 'Users', 'Audit'];
       case ShellPage.serviceRequests:
-      case ShellPage.serviceWorkOrders:
       case ShellPage.serviceQuotations:
+      case ShellPage.serviceSalesOrders:
       case ShellPage.serviceVisits:
       case ShellPage.serviceTechnicians:
         return [
@@ -1876,10 +1872,10 @@ class _ZohoShellState extends State<ZohoShell> {
     // Professional Service Module Descriptions
       case ShellPage.serviceRequests:
         return 'Log incoming customer complaints, verify warranty status, and generate initial service requests for the engineering team.';
-      case ShellPage.serviceWorkOrders:
-        return 'Manage active work orders, assign service engineers, and track repair status for industrial equipment.';
       case ShellPage.serviceQuotations:
         return 'Manage cost estimations for out-of-warranty services, spare parts, labor, and engineer field visits.';
+      case ShellPage.serviceSalesOrders:
+        return 'Manage active work orders, assign service engineers, and track repair status for industrial equipment.';
       case ShellPage.serviceVisits:
         return 'Schedule and monitor field visits for service engineers, including site check-ins, travel logs, and utilized spares.';
       case ShellPage.serviceTechnicians:
@@ -1921,16 +1917,8 @@ class _ZohoShellState extends State<ZohoShell> {
           'Reminder schedule',
           'Collection dashboard',
         ];
-      case ShellPage.adminCompanyProfile:
-        return [
-          'GST / VAT details',
-          'Address and branches',
-          'Branding',
-          'Default numbering formats',
-        ];
       case ShellPage.settingsGeneral:
         return [
-          'Company profile',
           'Users and permissions',
           'Security and access',
           'Audit and integrations',
@@ -1944,19 +1932,19 @@ class _ZohoShellState extends State<ZohoShell> {
           'Customer mapping',
           'Priority assignment',
         ];
-      case ShellPage.serviceWorkOrders:
-        return [
-          'Engineer assignment',
-          'Spares requirement',
-          'Work order status',
-          'Time tracking',
-        ];
       case ShellPage.serviceQuotations:
         return [
           'Spares estimation',
           'Labor pricing',
           'Visit fees',
           'Customer approval flow',
+        ];
+      case ShellPage.serviceSalesOrders:
+        return [
+          'Engineer assignment',
+          'Spares requirement',
+          'Work order status',
+          'Time tracking',
         ];
       case ShellPage.serviceVisits:
         return [
