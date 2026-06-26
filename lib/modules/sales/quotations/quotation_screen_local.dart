@@ -399,6 +399,20 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
           data['clientMobile']?.toString() ??
           '';
       _contactPersonController.text = _contactPersonSnapshot;
+
+      final existingCustomerGstin =
+          (data['customerGstin'] ??
+                  data['customerGSTIN'] ??
+                  data['customerGstNo'] ??
+                  data['partyGstin'] ??
+                  data['billingGstin'] ??
+                  '')
+              .toString()
+              .trim();
+
+      if (existingCustomerGstin.isNotEmpty) {
+        _gstController.text = existingCustomerGstin;
+      }
       _gstController.text =
           (data['customerGstin'] ??
                   data['customerGSTIN'] ??
@@ -1968,6 +1982,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         'companyId': _companyId,
         'referenceQuotationId': widget.quotationId,
         'referenceQuotationNo': currentNo,
+        'customerGstin': _gstController.text.trim(),
+        'customerGSTIN': _gstController.text.trim(),
+        'customerGstNo': _gstController.text.trim(),
         'customerId': _selectedCustomerId,
         'clientName': _clientNameController.text.trim(),
         'items': _items.map((e) {

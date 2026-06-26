@@ -241,10 +241,7 @@ class ExcelQuotationFormat {
           bold: true,
         ),
         _centerLine(website, bold: true),
-        _centerLine(
-          'Customer GSTIN: $gst I PAN No.: $pan I CIN: $cin',
-          bold: true,
-        ),
+        _centerLine('GSTIN: $gst I PAN No.: $pan I CIN: $cin', bold: true),
       ],
     );
   }
