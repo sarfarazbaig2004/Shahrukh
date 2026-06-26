@@ -1,3 +1,4 @@
+import 'package:QUIK/modules/sales/quotations/quotation_excel_format.dart';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
@@ -323,18 +324,40 @@ class QuotationPdfGenerator {
   }
 
   static String _cleanPdfText(String value) {
-    return value
-        .replaceAll('☒', '-')
-        .replaceAll('☑', '-')
-        .replaceAll('✅', '-')
-        .replaceAll('✔', '-')
-        .replaceAll('✓', '-')
-        .replaceAll('■', '-')
-        .replaceAll('▪', '-')
-        .replaceAll('●', '-')
-        .replaceAll('◦', '-')
+    var text = value;
+
+    // Remove symbols that appear as square boxes in PDF.
+    text = text
+        .replaceAll('Ø', '')
+        .replaceAll('ø', '')
+        .replaceAll('⌀', '')
+        .replaceAll('⏀', '')
+        .replaceAll('∅', '')
+        .replaceAll('Φ', '')
+        .replaceAll('φ', '')
+        .replaceAll('�', '')
+        .replaceAll('□', '');
+
+    // Remove unsupported punctuation/symbols completely.
+    text = text
+        .replaceAll('–', '-')
+        .replaceAll('—', '-')
+        .replaceAll('“', '"')
+        .replaceAll('”', '"')
+        .replaceAll('‘', "'")
+        .replaceAll('’', "'")
         .replaceAll('•', '-')
-        .replaceAll('\r\n', '\n');
+        .replaceAll('₹', 'Rs.');
+
+    // Remove all hidden/control characters and unsupported non-ASCII characters.
+    text = text.replaceAll(RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]'), '');
+    text = text.replaceAll(RegExp(r'[^\x09\x0A\x0D\x20-\x7E]'), '');
+
+    return text
+        .replaceAll(RegExp(r'[ \t]+'), ' ')
+        .replaceAll(' .', '.')
+        .replaceAll(' ,', ',')
+        .trim();
   }
 
   static String _safeString(dynamic value) {
@@ -477,7 +500,28 @@ class QuotationPdfGenerator {
           margin: const pw.EdgeInsets.fromLTRB(28, 24, 28, 28),
           buildBackground: (context) => pw.FullPage(
             ignoreMargins: true,
-            child: pw.Container(color: PdfColors.white),
+            child: pw.Stack(
+              children: [
+                pw.Container(color: PdfColors.white),
+                pw.Center(
+                  child: pw.Opacity(
+                    opacity: 0.08,
+                    child: pw.Transform.rotate(
+                      angle: -0.45,
+                      child: pw.Text(
+                        'MEMCO',
+                        style: pw.TextStyle(
+                          fontSize: 90,
+                          color: PdfColors.grey400,
+                          fontWeight: pw.FontWeight.bold,
+                          letterSpacing: 8,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         header: (context) {
@@ -512,9 +556,9 @@ class QuotationPdfGenerator {
               isSO ? soNumber : quoteNumber,
               docDateStr,
             ),
-            pw.SizedBox(height: 8),
-            _buildLegacyIntro(),
-            pw.SizedBox(height: 4),
+            pw.SizedBox(height: 6),
+            ExcelQuotationFormat.scopeOfSupply(quotation),
+            pw.SizedBox(height: 6),
             _buildLegacyProductsTable(items),
             pw.SizedBox(height: 8),
             _buildLegacyAmountSummary(quotation, isInterState, roundOff, items),
@@ -630,89 +674,99 @@ class QuotationPdfGenerator {
   ) {
     final companyName = _legacyFirstNonEmpty(quotation, [
       'companyName',
+      'workspaceName',
     ], 'Miraj Electrical And Mechanical Company Private Limited');
-    final regAddress = _legacyFirstNonEmpty(
+
+    final address = _legacyFirstNonEmpty(
       quotation,
-      ['companyRegisteredAddress', 'registeredAddress', 'companyAddress'],
-      'Regd Address : A35, Ansa Industrial Estate, Saki Vihar Road, Sakinaka, Mumbai – 400 072',
+      ['companyAddress', 'address'],
+      'A-35, Ansal Industrial Estate, Saki Vihar Road, Sakinaka,\nSales Office: 2, Swastik Chambers, Ground Floor, C. S. T. Road, Chembur, Mumbai 400 071.',
     );
-    final salesOffice = _legacyFirstNonEmpty(
-      quotation,
-      ['companySalesOffice', 'salesOffice'],
-      'Sales Office:2, Swastik Chambers, Ground Floor, C. S. T. Road, Chembur, Mumbai – 400 071.',
-    );
+
     final phone = _legacyFirstNonEmpty(quotation, [
       'companyPhone',
-    ], '022–35315586 / 35040498');
+      'companyMobile',
+      'phone',
+      'mobile',
+    ], '+91 90290 74303');
+
     final email = _legacyFirstNonEmpty(quotation, [
       'companyEmail',
-    ], 'memcosales@memcoin.com');
+      'email',
+    ], 'memcosaraz@memcoin.com');
+
     final gst = _legacyFirstNonEmpty(quotation, [
-      'companyGst',
-      'companyGST',
       'companyGstin',
+      'gstin',
+      'gstNo',
     ], '27AAACM8022D1ZU');
 
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-      children: [
-        pw.Align(
-          alignment: pw.Alignment.centerRight,
-          child: logoImage != null
-              ? pw.Image(
-                  logoImage,
-                  width: 100,
-                  height: 34,
-                  fit: pw.BoxFit.contain,
-                )
-              : pw.Text(
-                  'memco',
+    pw.Widget logoWidget;
+    if (logoImage != null) {
+      logoWidget = pw.Image(
+        logoImage,
+        width: 78,
+        height: 46,
+        fit: pw.BoxFit.contain,
+      );
+    } else {
+      logoWidget = pw.Text(
+        'MEMCO',
+        style: pw.TextStyle(
+          fontSize: 13,
+          fontWeight: pw.FontWeight.bold,
+          color: PdfColors.red800,
+        ),
+      );
+    }
+
+    return pw.Container(
+      height: 86,
+      child: pw.Stack(
+        children: [
+          pw.Positioned(
+            top: 0,
+            right: 0,
+            child: pw.Container(
+              width: 82,
+              height: 50,
+              alignment: pw.Alignment.topRight,
+              child: logoWidget,
+            ),
+          ),
+          pw.Positioned(
+            left: 60,
+            right: 60,
+            top: 18,
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              children: [
+                pw.Text(
+                  companyName,
+                  textAlign: pw.TextAlign.center,
                   style: pw.TextStyle(
-                    color: PdfColor.fromInt(0xFFE31E24),
-                    fontSize: 22,
+                    fontSize: 14.5,
                     fontWeight: pw.FontWeight.bold,
-                    fontStyle: pw.FontStyle.italic,
+                    color: PdfColors.red800,
                   ),
                 ),
-        ),
-        pw.Text(
-          companyName,
-          textAlign: pw.TextAlign.center,
-          style: pw.TextStyle(
-            color: PdfColor.fromInt(0xFFE31E24),
-            fontSize: 15.5,
-            fontWeight: pw.FontWeight.bold,
-          ),
-        ),
-        pw.SizedBox(height: 2),
-        pw.Text(
-          regAddress,
-          textAlign: pw.TextAlign.center,
-          style: _legacyStyle(size: 8.2),
-        ),
-        pw.Text(
-          salesOffice,
-          textAlign: pw.TextAlign.center,
-          style: _legacyStyle(size: 8.2),
-        ),
-        pw.RichText(
-          textAlign: pw.TextAlign.center,
-          text: pw.TextSpan(
-            style: _legacyStyle(size: 8.2),
-            children: [
-              pw.TextSpan(text: 'Tel No:$phone .E: '),
-              pw.TextSpan(
-                text: email,
-                style: pw.TextStyle(
-                  color: PdfColors.blue,
-                  decoration: pw.TextDecoration.underline,
+                pw.SizedBox(height: 3),
+                pw.Text(
+                  address,
+                  textAlign: pw.TextAlign.center,
+                  style: _legacyStyle(size: 7.4),
                 ),
-              ),
-              pw.TextSpan(text: ' *GSTIN:$gst'),
-            ],
+                pw.SizedBox(height: 2),
+                pw.Text(
+                  'Contact No.: $phone   E: $email   GSTIN: $gst',
+                  textAlign: pw.TextAlign.center,
+                  style: _legacyStyle(size: 7.5),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -869,20 +923,7 @@ class QuotationPdfGenerator {
   }
 
   static pw.Widget _buildLegacyIntro() {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Text('Dear Sir,', style: _legacyStyle(size: 8.8)),
-        pw.Padding(
-          padding: const pw.EdgeInsets.only(left: 20, top: 2),
-          child: pw.Text(
-            'In response to your valued enquiry, we have pleasure in submitting our Quotation as under and feel sure you will find the same to be competitive and be pleased to favour us with your valued order.',
-            style: _legacyStyle(size: 8.6, bold: true),
-            textAlign: pw.TextAlign.justify,
-          ),
-        ),
-      ],
-    );
+    return pw.SizedBox.shrink();
   }
 
   static List<String> _legacyDescriptionLines(QuotationLineItem item) {
@@ -900,77 +941,32 @@ class QuotationPdfGenerator {
     QuotationLineItem item,
     int index,
   ) {
-    final lines = _legacyDescriptionLines(item);
+    final title = _cleanPdfText(_safeString(item.name));
+    final description = _cleanPdfText(_safeString(item.description));
 
-    return pw.Padding(
-      padding: const pw.EdgeInsets.fromLTRB(5, 4, 5, 4),
+    final lines = description
+        .split(RegExp(r'\r?\n'))
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+
+    return pw.Container(
+      constraints: const pw.BoxConstraints(minHeight: 30),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.Text(
-            '${index + 1}). ${item.name}',
-            style: _legacyStyle(size: 9.3),
+            title.isEmpty ? 'Product / Service' : title,
+            style: _legacyStyle(size: 9.4, bold: true),
           ),
-          if (lines.isNotEmpty) pw.SizedBox(height: 5),
-          if (lines.isNotEmpty)
-            pw.Table(
-              border: pw.TableBorder.all(color: PdfColors.black, width: 0.35),
-              columnWidths: const {
-                0: pw.FlexColumnWidth(1.05),
-                1: pw.FlexColumnWidth(1.25),
-              },
-              children: lines.map((line) {
-                final split = line.contains(':')
-                    ? line.split(RegExp(r':\s*'))
-                    : line.contains('-')
-                    ? line.split(RegExp(r'\s+-\s+'))
-                    : <String>[line];
-
-                if (split.length >= 2) {
-                  return pw.TableRow(
-                    children: [
-                      _legacyTextCell(
-                        split.first.trim(),
-                        size: 8.2,
-                        padding: const pw.EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 2,
-                        ),
-                      ),
-                      _legacyTextCell(
-                        split.sublist(1).join(' ').trim(),
-                        size: 8.2,
-                        padding: const pw.EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 2,
-                        ),
-                      ),
-                    ],
-                  );
-                }
-
-                return pw.TableRow(
-                  children: [
-                    _legacyTextCell(
-                      line,
-                      size: 8.2,
-                      padding: const pw.EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 2,
-                      ),
-                    ),
-                    _legacyTextCell(
-                      '',
-                      size: 8.2,
-                      padding: const pw.EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 2,
-                      ),
-                    ),
-                  ],
-                );
-              }).toList(),
+          if (lines.isNotEmpty) pw.SizedBox(height: 3),
+          ...lines.map(
+            (line) => pw.Padding(
+              padding: const pw.EdgeInsets.only(bottom: 2),
+              child: pw.Text(line, style: _legacyStyle(size: 8.5)),
             ),
+          ),
         ],
       ),
     );
@@ -1129,7 +1125,7 @@ class QuotationPdfGenerator {
       child: pw.Container(
         width: 270,
         child: pw.Table(
-          border: pw.TableBorder.all(color: PdfColors.black, width: 0.55),
+          border: pw.TableBorder.all(color: PdfColors.black, width: 0.60),
           columnWidths: const {
             0: pw.FlexColumnWidth(1.15),
             1: pw.FlexColumnWidth(1),
@@ -1203,7 +1199,7 @@ class QuotationPdfGenerator {
         ),
         pw.SizedBox(height: 8),
         pw.Table(
-          border: pw.TableBorder.all(color: PdfColors.black, width: 0.55),
+          border: pw.TableBorder.all(color: PdfColors.black, width: 0.60),
           columnWidths: const {
             0: pw.FlexColumnWidth(1.05),
             1: pw.FlexColumnWidth(1),
@@ -1260,7 +1256,7 @@ class QuotationPdfGenerator {
         pw.Text(sigName, style: _legacyStyle(size: 10.2, bold: true)),
         pw.Text(sigDesignation, style: _legacyStyle(size: 9.3, bold: true)),
         pw.Text(
-          'Mobile No.$sigPhone',
+          'Mobile No. $sigPhone',
           style: _legacyStyle(size: 9.3, bold: true),
         ),
       ],
@@ -1287,7 +1283,7 @@ class QuotationPdfGenerator {
     final email = _safeString(quotation['companyEmail']);
     final website = _safeString(quotation['companyWebsite']);
 
-    if (phone.isNotEmpty) contacts.add('Ph: $phone');
+    if (phone.isNotEmpty) contacts.add('Contact No.: $phone');
     if (email.isNotEmpty) contacts.add('Email: $email');
     if (website.isNotEmpty) contacts.add('Web: $website');
 
@@ -2140,7 +2136,7 @@ class QuotationPdfGenerator {
             if (sigPhone.isNotEmpty) ...[
               pw.SizedBox(height: 3),
               pw.Text(
-                'Ph: $sigPhone',
+                'Contact No.: $sigPhone',
                 style: pw.TextStyle(fontSize: 8, color: _textMuted),
               ),
             ],
