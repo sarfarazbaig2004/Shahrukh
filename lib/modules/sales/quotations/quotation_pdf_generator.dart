@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:QUIK/modules/sales/quotations/quotation_excel_format.dart';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -308,6 +309,24 @@ class QuotationDataService {
 // 3. PREMIUM PDF GENERATOR (Layout Engine)
 // ==========================================
 
+Future<pw.ImageProvider?> _loadMemcoWatermark() async {
+  try {
+    final bytes = await rootBundle.load('assets/images/memco_watermark.png');
+    return pw.MemoryImage(bytes.buffer.asUint8List());
+  } catch (_) {
+    return null;
+  }
+}
+
+Future<pw.ImageProvider?> _loadMemcoHeaderLogo() async {
+  try {
+    final bytes = await rootBundle.load('assets/images/memco_logo.png');
+    return pw.MemoryImage(bytes.buffer.asUint8List());
+  } catch (_) {
+    return null;
+  }
+}
+
 class QuotationPdfGenerator {
   static double _toDouble(dynamic value) {
     if (value == null) return 0.0;
@@ -418,6 +437,8 @@ class QuotationPdfGenerator {
     Map<String, dynamic> quotation,
     List<QuotationLineItem> items,
   ) async {
+    final memcoWatermark = await _loadMemcoWatermark();
+    final memcoHeaderLogo = await _loadMemcoHeaderLogo();
     final doc = pw.Document();
 
     pw.ImageProvider? logoImage;
@@ -498,31 +519,8 @@ class QuotationPdfGenerator {
         pageTheme: pw.PageTheme(
           pageFormat: format,
           margin: const pw.EdgeInsets.fromLTRB(28, 24, 28, 28),
-          buildBackground: (context) => pw.FullPage(
-            ignoreMargins: true,
-            child: pw.Stack(
-              children: [
-                pw.Container(color: PdfColors.white),
-                pw.Center(
-                  child: pw.Opacity(
-                    opacity: 0.08,
-                    child: pw.Transform.rotate(
-                      angle: -0.45,
-                      child: pw.Text(
-                        'MEMCO',
-                        style: pw.TextStyle(
-                          fontSize: 90,
-                          color: PdfColors.grey400,
-                          fontWeight: pw.FontWeight.bold,
-                          letterSpacing: 8,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          buildBackground: (context) =>
+              ExcelQuotationFormat.watermarkImage(memcoWatermark),
         ),
         header: (context) {
           if (context.pageNumber <= 1) return pw.SizedBox.shrink();
@@ -547,7 +545,7 @@ class QuotationPdfGenerator {
         },
         build: (context) {
           return [
-            _buildLegacyMemcoHeader(quotation, logoImage),
+            _buildLegacyMemcoHeader(quotation, memcoHeaderLogo ?? logoImage),
             pw.SizedBox(height: 4),
             _buildLegacyQuotationTitle(),
             pw.SizedBox(height: 4),
@@ -672,244 +670,19 @@ class QuotationPdfGenerator {
     Map<String, dynamic> quotation,
     pw.ImageProvider? logoImage,
   ) {
-    final companyName = _legacyFirstNonEmpty(quotation, [
-      'companyName',
-      'workspaceName',
-    ], 'Miraj Electrical And Mechanical Company Private Limited');
-
-    final address = _legacyFirstNonEmpty(
-      quotation,
-      ['companyAddress', 'address'],
-      'A-35, Ansal Industrial Estate, Saki Vihar Road, Sakinaka,\nSales Office: 2, Swastik Chambers, Ground Floor, C. S. T. Road, Chembur, Mumbai 400 071.',
-    );
-
-    final phone = _legacyFirstNonEmpty(quotation, [
-      'companyPhone',
-      'companyMobile',
-      'phone',
-      'mobile',
-    ], '+91 90290 74303');
-
-    final email = _legacyFirstNonEmpty(quotation, [
-      'companyEmail',
-      'email',
-    ], 'memcosaraz@memcoin.com');
-
-    final gst = _legacyFirstNonEmpty(quotation, [
-      'companyGstin',
-      'gstin',
-      'gstNo',
-    ], '27AAACM8022D1ZU');
-
-    pw.Widget logoWidget;
-    if (logoImage != null) {
-      logoWidget = pw.Image(
-        logoImage,
-        width: 78,
-        height: 46,
-        fit: pw.BoxFit.contain,
-      );
-    } else {
-      logoWidget = pw.Text(
-        'MEMCO',
-        style: pw.TextStyle(
-          fontSize: 13,
-          fontWeight: pw.FontWeight.bold,
-          color: PdfColors.red800,
-        ),
-      );
-    }
-
-    return pw.Container(
-      height: 86,
-      child: pw.Stack(
-        children: [
-          pw.Positioned(
-            top: 0,
-            right: 0,
-            child: pw.Container(
-              width: 82,
-              height: 50,
-              alignment: pw.Alignment.topRight,
-              child: logoWidget,
-            ),
-          ),
-          pw.Positioned(
-            left: 60,
-            right: 60,
-            top: 18,
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.center,
-              children: [
-                pw.Text(
-                  companyName,
-                  textAlign: pw.TextAlign.center,
-                  style: pw.TextStyle(
-                    fontSize: 14.5,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.red800,
-                  ),
-                ),
-                pw.SizedBox(height: 3),
-                pw.Text(
-                  address,
-                  textAlign: pw.TextAlign.center,
-                  style: _legacyStyle(size: 7.4),
-                ),
-                pw.SizedBox(height: 2),
-                pw.Text(
-                  'Contact No.: $phone   E: $email   GSTIN: $gst',
-                  textAlign: pw.TextAlign.center,
-                  style: _legacyStyle(size: 7.5),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+    return ExcelQuotationFormat.header(quotation, logoImage);
   }
 
   static pw.Widget _buildLegacyQuotationTitle() {
-    return pw.Center(
-      child: pw.Text(
-        'QUOTATION',
-        style: pw.TextStyle(
-          fontSize: 13.5,
-          fontWeight: pw.FontWeight.bold,
-          decoration: pw.TextDecoration.underline,
-          letterSpacing: 1.2,
-        ),
-      ),
-    );
+    return ExcelQuotationFormat.titleBar();
   }
 
   static pw.Widget _buildLegacyInfoBox(
     Map<String, dynamic> quotation,
-    String docNo,
+    String docNumber,
     String docDate,
   ) {
-    final customerName = _legacyFirstNonEmpty(quotation, [
-      'customerName',
-      'clientName',
-      'partyName',
-      'billingName',
-      'customerCompanyName',
-    ]);
-    final customerAddress = _legacyFirstNonEmpty(quotation, [
-      'customerAddress',
-      'clientAddress',
-      'billingAddress',
-      'address',
-    ]);
-    final mobile = _legacyFirstNonEmpty(quotation, [
-      'customerPhone',
-      'clientPhone',
-      'mobile',
-      'phone',
-      'contactPhone',
-    ]);
-    final email = _legacyFirstNonEmpty(quotation, [
-      'customerEmail',
-      'clientEmail',
-      'email',
-      'contactEmail',
-    ]);
-    final attention = _legacyFirstNonEmpty(quotation, [
-      'contactPersonName',
-      'contactPerson',
-      'kindAttention',
-      'attention',
-    ]);
-    final customerGst = _legacyFirstNonEmpty(quotation, [
-      'customerGst',
-      'customerGST',
-      'customerGstin',
-      'gstin',
-      'clientGst',
-    ]);
-    final enquiry = _legacyFirstNonEmpty(quotation, [
-      'enquiryNo',
-      'enquiryNumber',
-      'enquiryReference',
-      'reference',
-    ], 'VERBAL');
-    final enquiryDate = _legacyFirstNonEmpty(quotation, [
-      'enquiryDate',
-      'enquiryDateStr',
-      'referenceDate',
-    ]);
-
-    final leftLines = <String>[
-      if (customerName.isNotEmpty) customerName.toUpperCase(),
-      if (customerAddress.isNotEmpty) customerAddress,
-      if (mobile.isNotEmpty) 'Mobile No:  $mobile',
-      if (email.isNotEmpty) 'Email: $email',
-    ];
-
-    return pw.Table(
-      border: pw.TableBorder.all(color: PdfColors.black, width: 0.6),
-      columnWidths: const {
-        0: pw.FlexColumnWidth(1.05),
-        1: pw.FlexColumnWidth(0.95),
-      },
-      children: [
-        pw.TableRow(
-          children: [
-            _legacyCell(
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: leftLines.isEmpty
-                    ? [pw.Text('', style: _legacyStyle(size: 9))]
-                    : leftLines
-                          .map(
-                            (line) => pw.Text(
-                              line,
-                              style: _legacyStyle(
-                                size: line == leftLines.first ? 9.5 : 8.8,
-                                bold: line == leftLines.first,
-                              ),
-                            ),
-                          )
-                          .toList(),
-              ),
-              padding: const pw.EdgeInsets.fromLTRB(6, 4, 6, 4),
-            ),
-            _legacyCell(
-              pw.Table(
-                columnWidths: const {
-                  0: pw.FixedColumnWidth(62),
-                  1: pw.FixedColumnWidth(10),
-                  2: pw.FlexColumnWidth(),
-                },
-                children: [
-                  _legacyInfoRow('NO', docNo),
-                  _legacyInfoRow('DATE', docDate),
-                  _legacyInfoRow('ENQUIRY', enquiry),
-                  _legacyInfoRow('DATE', enquiryDate),
-                ],
-              ),
-              padding: const pw.EdgeInsets.fromLTRB(6, 3, 6, 3),
-            ),
-          ],
-        ),
-        pw.TableRow(
-          children: [
-            _legacyTextCell(
-              'Kind Attention : ${attention.isNotEmpty ? attention : ''}',
-              size: 8.8,
-              bold: true,
-              padding: const pw.EdgeInsets.fromLTRB(6, 3, 6, 3),
-            ),
-            _legacyTextCell(
-              'GST NO. : ${customerGst.isNotEmpty ? customerGst : ''}',
-              size: 8.8,
-              padding: const pw.EdgeInsets.fromLTRB(6, 3, 6, 3),
-            ),
-          ],
-        ),
-      ],
-    );
+    return ExcelQuotationFormat.infoBox(quotation, docNumber, docDate);
   }
 
   static pw.TableRow _legacyInfoRow(String label, String value) {
@@ -926,144 +699,15 @@ class QuotationPdfGenerator {
     return pw.SizedBox.shrink();
   }
 
-  static List<String> _legacyDescriptionLines(QuotationLineItem item) {
-    final description = _cleanPdfText(item.description);
-    if (description.isEmpty) return <String>[];
-
-    return description
-        .split(RegExp(r'\r?\n'))
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
-  }
-
   static pw.Widget _legacyProductDescription(
     QuotationLineItem item,
     int index,
   ) {
-    final title = _cleanPdfText(_safeString(item.name));
-    final description = _cleanPdfText(_safeString(item.description));
-
-    final lines = description
-        .split(RegExp(r'\r?\n'))
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
-
-    return pw.Container(
-      constraints: const pw.BoxConstraints(minHeight: 30),
-      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Text(
-            title.isEmpty ? 'Product / Service' : title,
-            style: _legacyStyle(size: 9.4, bold: true),
-          ),
-          if (lines.isNotEmpty) pw.SizedBox(height: 3),
-          ...lines.map(
-            (line) => pw.Padding(
-              padding: const pw.EdgeInsets.only(bottom: 2),
-              child: pw.Text(line, style: _legacyStyle(size: 8.5)),
-            ),
-          ),
-        ],
-      ),
-    );
+    return ExcelQuotationFormat.productDescription(item);
   }
 
   static pw.Widget _buildLegacyProductsTable(List<QuotationLineItem> items) {
-    final rows = <pw.TableRow>[
-      pw.TableRow(
-        children: [
-          _legacyTextCell(
-            'Sr\nNo.',
-            size: 9,
-            bold: true,
-            alignment: pw.Alignment.center,
-            textAlign: pw.TextAlign.center,
-          ),
-          _legacyTextCell(
-            'DESCRIPTION',
-            size: 9.5,
-            bold: true,
-            alignment: pw.Alignment.center,
-            textAlign: pw.TextAlign.center,
-          ),
-          _legacyTextCell(
-            'QTY',
-            size: 9.5,
-            bold: true,
-            alignment: pw.Alignment.center,
-            textAlign: pw.TextAlign.center,
-          ),
-          _legacyTextCell(
-            'RATE\nEACH',
-            size: 9.5,
-            bold: true,
-            alignment: pw.Alignment.center,
-            textAlign: pw.TextAlign.center,
-          ),
-        ],
-      ),
-    ];
-
-    if (items.isEmpty) {
-      rows.add(
-        pw.TableRow(
-          children: [
-            _legacyTextCell('1).', size: 9, alignment: pw.Alignment.topCenter),
-            _legacyTextCell('', size: 9),
-            _legacyTextCell('', size: 9),
-            _legacyTextCell('', size: 9),
-          ],
-        ),
-      );
-    } else {
-      rows.addAll(
-        List.generate(items.length, (index) {
-          final item = items[index];
-          return pw.TableRow(
-            verticalAlignment: pw.TableCellVerticalAlignment.middle,
-            children: [
-              _legacyTextCell(
-                '${index + 1}).',
-                size: 9,
-                alignment: pw.Alignment.topCenter,
-                textAlign: pw.TextAlign.center,
-                padding: const pw.EdgeInsets.only(top: 5),
-              ),
-              _legacyProductDescription(item, index),
-              _legacyTextCell(
-                _legacyQty(item),
-                size: 9,
-                bold: true,
-                alignment: pw.Alignment.center,
-                textAlign: pw.TextAlign.center,
-              ),
-              _legacyTextCell(
-                _legacyRate(item.unitPrice),
-                size: 9.2,
-                bold: true,
-                alignment: pw.Alignment.center,
-                textAlign: pw.TextAlign.center,
-              ),
-            ],
-          );
-        }),
-      );
-    }
-
-    return pw.Table(
-      border: pw.TableBorder.all(color: PdfColors.black, width: 0.6),
-      columnWidths: const {
-        0: pw.FixedColumnWidth(44),
-        1: pw.FlexColumnWidth(),
-        2: pw.FixedColumnWidth(56),
-        3: pw.FixedColumnWidth(86),
-      },
-      children: rows,
-    );
+    return ExcelQuotationFormat.productTable(items);
   }
 
   static double _legacyFallbackSubtotal(List<QuotationLineItem> items) {
@@ -1076,74 +720,11 @@ class QuotationPdfGenerator {
     double roundOff,
     List<QuotationLineItem> items,
   ) {
-    final subtotal = _toDouble(quotation['totalSubtotal']);
-    final itemDiscount = _toDouble(quotation['totalItemDiscount']);
-    final taxableValue = _toDouble(quotation['totalTaxableAmount']);
-    final cgst = _toDouble(quotation['totalCgst']);
-    final sgst = _toDouble(quotation['totalSgst']);
-    final igst = _toDouble(quotation['totalIgst']);
-
-    final fallbackSubtotal = _legacyFallbackSubtotal(items);
-    final effectiveSubtotal = subtotal > 0 ? subtotal : fallbackSubtotal;
-    final effectiveTaxable = taxableValue > 0
-        ? taxableValue
-        : (effectiveSubtotal - itemDiscount);
-
-    final calculatedTotal =
-        effectiveTaxable + (isInterState ? igst : (cgst + sgst)) + roundOff;
-
-    final finalTotal = _toDouble(
-      quotation['finalTotal'] ?? quotation['grandTotal'],
-    );
-    final effectiveTotal = finalTotal > 0 ? finalTotal : calculatedTotal;
-
-    pw.TableRow amountRow(String label, double value, {bool bold = false}) {
-      return pw.TableRow(
-        children: [
-          _legacyTextCell(
-            label,
-            size: bold ? 9.5 : 8.8,
-            bold: bold,
-            alignment: pw.Alignment.centerRight,
-            textAlign: pw.TextAlign.right,
-            padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-          ),
-          _legacyTextCell(
-            _legacyRate(value),
-            size: bold ? 9.5 : 8.8,
-            bold: bold,
-            alignment: pw.Alignment.centerRight,
-            textAlign: pw.TextAlign.right,
-            padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-          ),
-        ],
-      );
-    }
-
-    return pw.Align(
-      alignment: pw.Alignment.centerRight,
-      child: pw.Container(
-        width: 270,
-        child: pw.Table(
-          border: pw.TableBorder.all(color: PdfColors.black, width: 0.60),
-          columnWidths: const {
-            0: pw.FlexColumnWidth(1.15),
-            1: pw.FlexColumnWidth(1),
-          },
-          children: [
-            amountRow('SUB TOTAL', effectiveSubtotal),
-            if (itemDiscount > 0) amountRow('DISCOUNT', -itemDiscount),
-            amountRow('TAXABLE VALUE', effectiveTaxable, bold: true),
-            if (!isInterState) ...[
-              amountRow('CGST', cgst),
-              amountRow('SGST', sgst),
-            ] else
-              amountRow('IGST', igst),
-            if (roundOff != 0) amountRow('ROUND OFF', roundOff),
-            amountRow('GRAND TOTAL', effectiveTotal, bold: true),
-          ],
-        ),
-      ),
+    return ExcelQuotationFormat.amountSummary(
+      quotation,
+      isInterState,
+      roundOff,
+      items,
     );
   }
 
@@ -1184,83 +765,11 @@ class QuotationPdfGenerator {
     Map<String, dynamic> quotation,
     int number,
   ) {
-    final rows = _legacyTermsRows(quotation);
-
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Text(
-          '$number). TERMS & CONDITIONS',
-          style: pw.TextStyle(
-            fontSize: 11,
-            fontWeight: pw.FontWeight.bold,
-            letterSpacing: 0.8,
-          ),
-        ),
-        pw.SizedBox(height: 8),
-        pw.Table(
-          border: pw.TableBorder.all(color: PdfColors.black, width: 0.60),
-          columnWidths: const {
-            0: pw.FlexColumnWidth(1.05),
-            1: pw.FlexColumnWidth(1),
-          },
-          children: rows.map((row) {
-            return pw.TableRow(
-              children: [
-                _legacyTextCell(
-                  row['title'] ?? '',
-                  size: 9.4,
-                  padding: const pw.EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2.5,
-                  ),
-                ),
-                _legacyTextCell(
-                  row['value'] ?? '',
-                  size: 9.4,
-                  padding: const pw.EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2.5,
-                  ),
-                ),
-              ],
-            );
-          }).toList(),
-        ),
-      ],
-    );
+    return ExcelQuotationFormat.terms(quotation);
   }
 
   static pw.Widget _buildLegacySignature(Map<String, dynamic> quotation) {
-    final companyName = _legacyFirstNonEmpty(quotation, [
-      'companyName',
-    ], 'MIRAJ ELECTRICAL & MECHANICAL COMPANY PRIVATE LIMITED').toUpperCase();
-    final sigName = _legacyFirstNonEmpty(quotation, [
-      'signatureName',
-    ], 'SARFARAZ BAIG').toUpperCase();
-    final sigDesignation = _legacyFirstNonEmpty(quotation, [
-      'signatureDesignation',
-    ], 'C.E.O.').toUpperCase();
-    final sigPhone = _legacyFirstNonEmpty(quotation, [
-      'signaturePhone',
-    ], '90829 07433');
-
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Text(
-          'FOR $companyName,',
-          style: _legacyStyle(size: 10.2, bold: true),
-        ),
-        pw.SizedBox(height: 12),
-        pw.Text(sigName, style: _legacyStyle(size: 10.2, bold: true)),
-        pw.Text(sigDesignation, style: _legacyStyle(size: 9.3, bold: true)),
-        pw.Text(
-          'Mobile No. $sigPhone',
-          style: _legacyStyle(size: 9.3, bold: true),
-        ),
-      ],
-    );
+    return ExcelQuotationFormat.signature(quotation);
   }
 
   static pw.Widget _buildEnterpriseHeader(
