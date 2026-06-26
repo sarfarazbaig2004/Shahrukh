@@ -171,11 +171,7 @@ extension ShellPageX on ShellPage {
       case ShellPage.dispatchChallans:
         return 'Dispatch Challans';
       case ShellPage.dispatchShipmentTracking:
-        return Padding(
-          padding: const EdgeInsets.all(16),
-          child: ShipmentTrackingScreen(companyId: widget.companyId),
-        );
-
+        return 'Shipment Tracking';
       case ShellPage.dispatchDelivered:
         return 'Delivered Orders';
 
@@ -1549,11 +1545,8 @@ class _ZohoShellState extends State<ZohoShell> {
 
       case ShellPage.dispatchShipmentTracking:
         return Padding(
-          padding: const EdgeInsets.all(10),
-          child: ShipmentTrackingScreen(
-            companyId: widget.companyId,
-            userUid: widget.userUid,
-          ),
+          padding: const EdgeInsets.all(16),
+          child: ShipmentTrackingScreen(companyId: widget.companyId),
         );
 
       case ShellPage.dispatchDelivered:

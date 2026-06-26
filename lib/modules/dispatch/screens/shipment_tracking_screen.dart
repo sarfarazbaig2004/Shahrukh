@@ -7,7 +7,7 @@ class ShipmentTrackingScreen extends StatefulWidget {
   const ShipmentTrackingScreen({
     super.key,
     required this.companyId,
-    required this.userUid,
+    this.userUid = '',
   });
 
   final String companyId;
