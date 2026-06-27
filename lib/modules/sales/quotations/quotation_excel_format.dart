@@ -507,62 +507,165 @@ class ExcelQuotationFormat {
   }
 
   static pw.Widget productTable(List<dynamic> items) {
-    String itemDesc(dynamic item) {
-      final productName = read(item, 'productName').isNotEmpty
-          ? read(item, 'productName')
-          : read(item, 'name');
+    String field(dynamic item, String key) {
+      if (item == null) return '';
 
-      final description = read(item, 'description');
-      final model = read(item, 'model');
-      final capacity = read(item, 'capacity');
+      if (item is Map) {
+        final value = item[key];
+        if (value == null) return '';
+        final text = value.toString().trim();
+        return text == 'null' ? '' : text;
+      }
 
-      final parts = <String>[
-        productName,
-        description,
-        if (model.isNotEmpty) 'Model: $model',
-        if (capacity.isNotEmpty) 'Capacity: $capacity',
-      ].where((e) => e.trim().isNotEmpty).toList();
+      try {
+        final d = item as dynamic;
+        switch (key) {
+          case 'id':
+            return safe(d.id);
+          case 'productId':
+            return safe(d.productId);
+          case 'itemCode':
+            return safe(d.itemCode);
+          case 'sku':
+            return safe(d.sku);
+          case 'name':
+          case 'productName':
+            return safe(d.name);
+          case 'description':
+            return safe(d.description);
+          case 'hsnCode':
+          case 'hsn':
+            return safe(d.hsnCode);
+          case 'quantity':
+          case 'qty':
+            return safe(d.quantity);
+          case 'unitPrice':
+          case 'unitRate':
+          case 'price':
+          case 'rate':
+            return safe(d.unitPrice);
+          case 'subtotal':
+          case 'amount':
+          case 'lineTotal':
+            return safe(d.subtotal);
+          case 'taxableAmount':
+          case 'netAmount':
+            return safe(d.taxableAmount);
+          case 'totalAmount':
+          case 'finalAmount':
+            return safe(d.totalAmount);
+        }
+      } catch (_) {}
 
-      return parts.join('\n');
+      return '';
     }
 
-    double itemNumber(dynamic item, List<String> keys) {
+    double parseNumber(dynamic value) {
+      if (value == null) return 0;
+      if (value is num) return value.toDouble();
+
+      final raw = value.toString().trim();
+      if (raw.isEmpty || raw == 'null') return 0;
+
+      final cleaned = raw
+          .replaceAll(',', '')
+          .replaceAll(RegExp(r'[^0-9.\-]'), '');
+
+      if (cleaned.isEmpty || cleaned == '-' || cleaned == '.') return 0;
+      return double.tryParse(cleaned) ?? 0;
+    }
+
+    double numberFrom(dynamic item, List<String> keys) {
       for (final key in keys) {
-        final value = numValue(read(item, key));
-        if (value != 0) return value;
+        final n = parseNumber(field(item, key));
+        if (n != 0) return n;
       }
       return 0;
     }
 
     double itemQty(dynamic item) {
-      final value = itemNumber(item, ['quantity', 'qty', 'itemQty']);
-      return value == 0 ? 1 : value;
+      final q = numberFrom(item, ['quantity', 'qty', 'itemQty']);
+      return q == 0 ? 1 : q;
     }
 
     double itemRate(dynamic item) {
-      return itemNumber(item, [
+      final savedRate = numberFrom(item, [
         'unitPrice',
         'unitRate',
         'sellingPrice',
         'price',
         'rate',
       ]);
+
+      if (savedRate != 0) return savedRate;
+
+      final q = itemQty(item);
+      final amount = numberFrom(item, [
+        'amount',
+        'subtotal',
+        'lineTotal',
+        'taxableAmount',
+        'netAmount',
+        'totalAmount',
+      ]);
+
+      if (q != 0 && amount != 0) return amount / q;
+      return 0;
     }
 
     double itemAmount(dynamic item) {
-      final existing = itemNumber(item, [
+      final savedAmount = numberFrom(item, [
         'amount',
+        'subtotal',
         'lineTotal',
-        'total',
         'taxableAmount',
         'netAmount',
         'grossAmount',
       ]);
-      if (existing != 0) return existing;
 
-      final rate = itemRate(item);
-      final q = itemQty(item);
-      return rate * q;
+      if (savedAmount != 0) return savedAmount;
+
+      return itemQty(item) * itemRate(item);
+    }
+
+    String amountText(dynamic value) {
+      final n = parseNumber(value).round();
+      if (n <= 0) return '';
+      return 'Rs. ${indian(n)}';
+    }
+
+    String qtyText(dynamic value) {
+      final n = parseNumber(value);
+      if (n == n.roundToDouble()) return n.round().toString();
+      return n.toStringAsFixed(2);
+    }
+
+    String itemCode(dynamic item) {
+      final code = field(item, 'itemCode');
+      if (code.isNotEmpty) return code;
+
+      final sku = field(item, 'sku');
+      if (sku.isNotEmpty) return sku;
+
+      final productId = field(item, 'productId');
+      if (productId.isNotEmpty) return productId;
+
+      return '-';
+    }
+
+    String itemDesc(dynamic item) {
+      final name = field(item, 'name').isNotEmpty
+          ? field(item, 'name')
+          : field(item, 'productName');
+
+      final description = field(item, 'description');
+
+      final parts = <String>[
+        name,
+        description,
+      ].where((e) => e.trim().isNotEmpty).toList();
+
+      return parts.join('\n');
     }
 
     pw.Widget cell(
@@ -573,13 +676,6 @@ class ExcelQuotationFormat {
       pw.TextAlign align = pw.TextAlign.left,
       double minHeight = 54,
     }) {
-      final normalizedText = text.trim().replaceAll(',', '');
-      final isZeroAmountCell =
-          RegExp(r'^(Rs\.?\s*)?0([.=]00)?$').hasMatch(normalizedText) ||
-          normalizedText == 'Rs.' ||
-          normalizedText == 'Rs';
-      final visibleText = isZeroAmountCell ? '' : text;
-
       return pw.Container(
         constraints: pw.BoxConstraints(minHeight: minHeight),
         padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4),
@@ -590,7 +686,7 @@ class ExcelQuotationFormat {
             ? pw.Alignment.centerRight
             : pw.Alignment.centerLeft,
         child: pw.Text(
-          safe(visibleText),
+          safe(text),
           textAlign: align,
           style: style(size: size, bold: bold),
           maxLines: 8,
@@ -599,27 +695,12 @@ class ExcelQuotationFormat {
       );
     }
 
-    String displayMoney(dynamic value) {
-      final n = numValue(value).round();
-      if (n <= 0) return '';
-      return 'Rs. ${indian(n)}';
-    }
-
     final cleanItems = items.where((item) {
-      final desc = itemDesc(item).trim();
-      final rate = read(item, 'unitPrice').trim().isNotEmpty
-          ? read(item, 'unitPrice').trim()
-          : read(item, 'unitRate').trim();
-      final amount = read(item, 'amount').trim().isNotEmpty
-          ? read(item, 'amount').trim()
-          : read(item, 'lineTotal').trim();
-      final netAmount = read(item, 'netAmount').trim().isNotEmpty
-          ? read(item, 'netAmount').trim()
-          : read(item, 'total').trim();
-      return desc.isNotEmpty ||
-          rate.isNotEmpty ||
-          amount.isNotEmpty ||
-          netAmount.isNotEmpty;
+      return itemDesc(item).trim().isNotEmpty ||
+          itemCode(item).trim().isNotEmpty ||
+          itemQty(item) != 0 ||
+          itemRate(item) != 0 ||
+          itemAmount(item) != 0;
     }).toList();
 
     final rows = <pw.TableRow>[
@@ -627,7 +708,14 @@ class ExcelQuotationFormat {
         decoration: pw.BoxDecoration(color: peach),
         children: [
           cell(
-            'Sr.',
+            'Sr. No.',
+            bold: true,
+            size: 7.0,
+            align: pw.TextAlign.center,
+            minHeight: 24,
+          ),
+          cell(
+            'Item Code',
             bold: true,
             size: 7.0,
             align: pw.TextAlign.center,
@@ -641,21 +729,14 @@ class ExcelQuotationFormat {
             minHeight: 24,
           ),
           cell(
-            'HSN',
+            'HSN Code',
             bold: true,
             size: 7.0,
             align: pw.TextAlign.center,
             minHeight: 24,
           ),
           cell(
-            'UOM',
-            bold: true,
-            size: 7.0,
-            align: pw.TextAlign.center,
-            minHeight: 24,
-          ),
-          cell(
-            'Qty.',
+            'Qty',
             bold: true,
             size: 7.0,
             align: pw.TextAlign.center,
@@ -675,65 +756,52 @@ class ExcelQuotationFormat {
             align: pw.TextAlign.center,
             minHeight: 24,
           ),
-          cell(
-            'Net Amount',
-            bold: true,
-            size: 7.0,
-            align: pw.TextAlign.center,
-            minHeight: 24,
-          ),
         ],
       ),
     ];
 
     for (var i = 0; i < cleanItems.length; i++) {
       final item = cleanItems[i];
-      final net =
-          itemNumber(item, ['netAmount', 'lineTotal', 'total', 'amount']) == 0
-          ? itemAmount(item)
-          : itemAmount(item);
+
+      final qty = itemQty(item);
+      final rate = itemRate(item);
+      final amount = itemAmount(item);
 
       rows.add(
         pw.TableRow(
           children: [
-            cell('${i + 1}', align: pw.TextAlign.center),
+            cell('${i + 1}', align: pw.TextAlign.center, minHeight: 64),
+            cell(
+              itemCode(item),
+              align: pw.TextAlign.center,
+              size: 6.3,
+              minHeight: 64,
+            ),
             cell(itemDesc(item), size: 6.4, minHeight: 64),
             cell(
-              read(item, 'hsnCode').isNotEmpty
-                  ? read(item, 'hsnCode')
-                  : read(item, 'hsn'),
+              field(item, 'hsnCode').isNotEmpty
+                  ? field(item, 'hsnCode')
+                  : field(item, 'hsn'),
               align: pw.TextAlign.center,
-              size: 6.4,
+              size: 6.3,
               minHeight: 64,
             ),
             cell(
-              read(item, 'uom').isNotEmpty ? read(item, 'uom') : 'Nos',
+              qtyText(qty),
               align: pw.TextAlign.center,
-              size: 6.4,
+              size: 6.3,
               minHeight: 64,
             ),
             cell(
-              qty(item),
-              align: pw.TextAlign.center,
-              size: 6.4,
-              minHeight: 64,
-            ),
-            cell(
-              money(itemRate(item)),
+              amountText(rate),
               align: pw.TextAlign.right,
-              size: 6.4,
+              size: 6.3,
               minHeight: 64,
             ),
             cell(
-              money(itemAmount(item)),
+              amountText(amount),
               align: pw.TextAlign.right,
-              size: 6.4,
-              minHeight: 64,
-            ),
-            cell(
-              money(net),
-              align: pw.TextAlign.right,
-              size: 6.4,
+              size: 6.3,
               minHeight: 64,
             ),
           ],
@@ -746,18 +814,15 @@ class ExcelQuotationFormat {
         border: pw.Border.all(color: PdfColors.black, width: 0.9),
       ),
       child: pw.Table(
-        border: pw.TableBorder.symmetric(
-          inside: const pw.BorderSide(color: PdfColors.black, width: 0.45),
-        ),
+        border: pw.TableBorder.all(color: PdfColors.black, width: 0.45),
         columnWidths: const {
-          0: pw.FixedColumnWidth(34),
-          1: pw.FlexColumnWidth(3.7),
-          2: pw.FixedColumnWidth(58),
-          3: pw.FixedColumnWidth(42),
-          4: pw.FixedColumnWidth(38),
-          5: pw.FixedColumnWidth(72),
-          6: pw.FixedColumnWidth(72),
-          7: pw.FixedColumnWidth(82),
+          0: pw.FixedColumnWidth(42),
+          1: pw.FixedColumnWidth(70),
+          2: pw.FlexColumnWidth(3.8),
+          3: pw.FixedColumnWidth(66),
+          4: pw.FixedColumnWidth(42),
+          5: pw.FixedColumnWidth(82),
+          6: pw.FixedColumnWidth(86),
         },
         children: rows,
       ),
