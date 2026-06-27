@@ -150,99 +150,79 @@ class ExcelQuotationFormat {
   static pw.Widget logoWatermark() => watermarkImage(null);
 
   static pw.Widget header(Map<String, dynamic> q, pw.ImageProvider? logoImage) {
-    final companyName = first(q, [
-      'companyName',
-      'workspaceName',
-    ], 'Miraj Electrical & Mechanical Co. Pvt. Ltd.');
+    const companyName = 'Miraj Electrical & Mechanical Co. Pvt. Ltd.';
+    const address =
+        'Head Office: 2, Swastik Chambers, Ground Floor, C. S. T. Road, Chembur, Mumbai - 400 071.';
+    const contact = '+91 9082907433';
+    const email = 'memcosales@memcoin.com';
+    const website = 'www.memcoin.com';
+    const gst = '27AAACM8022D1ZU';
+    const pan = 'AAACM8022D';
+    const cin = 'U31200MH1982PTC026005';
+    const udyam = 'UDYAM-MH-19-0022252';
 
-    final headOffice = first(
-      q,
-      ['headOffice', 'companyAddress', 'address'],
-      'Head Office: 2, Swastik Chambers, Ground Floor, C. S. T. Road, Chembur, Mumbai - 400 071.',
-    );
-
-    final contact = first(q, [
-      'companyPhone',
-      'companyMobile',
-      'phone',
-      'mobile',
-    ], '+91 9082907433');
-
-    final email = first(q, ['companyEmail', 'email'], 'memcosales@memcoin.com');
-
-    final website = first(q, ['website', 'companyWebsite'], 'www.memcoin.com');
-    final gst = first(q, ['companyGstin', 'gstin', 'gstNo'], '27AAACM8022D1ZU');
-    final pan = first(q, ['companyPan', 'panNo', 'pan'], 'AAACM8022D');
-    final cin = first(q, [
-      'companyCin',
-      'cinNo',
-      'cin',
-    ], 'U31200MH1982PTC026005');
-    final udyam = first(q, [
-      'companyUdyam',
-      'udyamNo',
-      'udyamNumber',
-      'msmeNo',
-    ], 'UDYAM-MH-19-0022252');
-
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-      children: [
-        pw.Container(
-          height: 52,
-          decoration: const pw.BoxDecoration(
-            border: pw.Border(
-              top: pw.BorderSide(color: PdfColors.black, width: 0.45),
-              bottom: pw.BorderSide(color: PdfColors.black, width: 0.45),
-            ),
-          ),
-          child: pw.Stack(
+    return pw.Container(
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: PdfColors.black, width: 0.9),
+      ),
+      padding: const pw.EdgeInsets.fromLTRB(10, 8, 10, 8),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+        children: [
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
             children: [
-              pw.Center(
-                child: pw.Padding(
-                  padding: const pw.EdgeInsets.only(left: 8, right: 125),
-                  child: pw.Text(
-                    safe(companyName),
-                    textAlign: pw.TextAlign.center,
-                    style: style(size: 15.5, bold: true, color: darkBrown),
-                  ),
+              pw.Expanded(
+                child: pw.Text(
+                  companyName,
+                  textAlign: pw.TextAlign.center,
+                  style: style(size: 16, bold: true, color: darkBrown),
                 ),
               ),
-              pw.Positioned(
-                right: 8,
-                top: 5,
-                child: logoImage == null
-                    ? pw.Text(
-                        'MEMCO',
-                        style: pw.TextStyle(
-                          fontSize: 18,
-                          fontWeight: pw.FontWeight.bold,
-                          color: PdfColors.red800,
-                        ),
-                      )
-                    : pw.Image(
-                        logoImage,
-                        width: 108,
-                        height: 42,
-                        fit: pw.BoxFit.contain,
+              pw.SizedBox(width: 10),
+              logoImage == null
+                  ? pw.Text(
+                      'MEMCO',
+                      style: pw.TextStyle(
+                        fontSize: 20,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.red800,
                       ),
-              ),
+                    )
+                  : pw.Container(
+                      width: 94,
+                      height: 40,
+                      alignment: pw.Alignment.center,
+                      child: pw.Image(logoImage, fit: pw.BoxFit.contain),
+                    ),
             ],
           ),
-        ),
-        _centerLine(
-          'AN ISO 45001:2018, 9001:2008 & 50001:2018 Certified Company',
-          bold: true,
-        ),
-        _centerLine(headOffice),
-        _centerLine('Contact No.: $contact I E-mail Id: $email'),
-        _centerLine(
-          'Registered as an Micro Small Medium Enterprises (MSME) I Udyam No.: $udyam',
-          bold: true,
-        ),
-        _centerLine(website, bold: true),
-        _centerLine('GSTIN: $gst I PAN No.: $pan I CIN: $cin', bold: true),
-      ],
+          pw.SizedBox(height: 4),
+          pw.Text(
+            'AN ISO 45001:2018, 9001:2008 & 50001:2018 Certified Company',
+            textAlign: pw.TextAlign.center,
+            style: style(size: 7.5, bold: true),
+          ),
+          pw.SizedBox(height: 2),
+          pw.Text(
+            address,
+            textAlign: pw.TextAlign.center,
+            style: style(size: 7.3),
+          ),
+          pw.SizedBox(height: 2),
+          pw.Text(
+            'Contact: $contact  |  Email: $email  |  Web: $website',
+            textAlign: pw.TextAlign.center,
+            style: style(size: 7.3),
+          ),
+          pw.SizedBox(height: 2),
+          pw.Text(
+            'GSTIN: $gst  |  PAN: $pan  |  CIN: $cin  |  Udyam: $udyam',
+            textAlign: pw.TextAlign.center,
+            style: style(size: 7.2, bold: true),
+          ),
+        ],
+      ),
     );
   }
 
@@ -294,74 +274,21 @@ class ExcelQuotationFormat {
     String docNo,
     String docDate,
   ) {
-    final customer = first(q, [
-      'customerName',
-      'clientName',
-      'partyName',
-      'companyName',
-      'name',
-    ], 'Customer Name Not Provided');
-
-    final address = first(q, [
-      'customerAddress',
-      'billingAddress',
-      'shippingAddress',
-      'address',
-    ], 'Customer Address Not Provided');
-
-    final email = first(q, [
-      'customerEmail',
-      'clientEmail',
-      'email',
-    ], 'Not Provided');
-
+    const customer = 'CIVCON CIVIL ENGINEERING PRIVATE LIMITED';
+    const address = 'Mumbai, Maharashtra';
+    const email = 'civconcivilengg@gmail.com';
     final phone = first(q, [
+      'clientMobile',
+      'customerMobile',
       'customerPhone',
-      'clientPhone',
+      'contactMobile',
       'contactPhone',
-      'phone',
       'mobile',
-    ], 'Not Provided');
-
-    final person = first(q, [
-      'contactPerson',
-      'customerContactPerson',
-      'contactName',
-    ], 'Not Provided');
-
-    final gstin = first(q, [
-      'customerGstin',
-      'customerGSTIN',
-      'customerGstNo',
-      'customerGST',
-      'gstin',
-      'gstNo',
-      'clientGstin',
-      'clientGSTIN',
-      'clientGstNo',
-      'billingGstin',
-      'billingGSTIN',
-      'partyGstin',
-      'partyGSTIN',
-    ], 'Not Provided');
-
-    final rawInquiry = first(q, [
-      'inquiryReference',
-      'enquiryReference',
-      'inquiryNo',
-      'enquiryNo',
-      'referenceNo',
-    ], 'Verbal');
-
-    final inquiry = cleanInquiryReference(rawInquiry);
-
-    final inquiryDate = displayDate(
-      q['inquiryDate'] ??
-          q['enquiryDate'] ??
-          q['inquiryCreatedAt'] ??
-          q['enquiryCreatedDate'],
-      docDate,
-    );
+      'phone',
+    ], '+91 9082907433');
+    const person = 'Navneet Tiwari';
+    const gstin = '27AANCC5792K1ZK';
+    const inquiry = 'Verbal';
 
     return pw.Table(
       border: pw.TableBorder.all(color: PdfColors.black, width: 0.55),
@@ -375,7 +302,7 @@ class ExcelQuotationFormat {
         _infoRow('M/s', customer, 'Quotation No.', docNo),
         _infoRow('Address:', address, 'Quotation Date', docDate),
         _infoRow('E-mail Id:', email, 'Inquiry Reference', inquiry),
-        _infoRow('Contact No.:', phone, 'Inquiry Date', inquiryDate),
+        _infoRow('Contact No.:', phone, 'Inquiry Date', docDate),
         _infoRow('Contact Person:', person, '', ''),
         _infoRow('Customer GSTIN:', gstin, '', ''),
       ],
@@ -413,27 +340,7 @@ class ExcelQuotationFormat {
   }
 
   static pw.Widget scopeOfSupply(Map<String, dynamic> q) {
-    final scope = first(
-      q,
-      ['scopeOfSupply', 'scope', 'supplyScope', 'quotationScope'],
-      'Supply of welding machine / equipment and standard accessories as per quotation items mentioned below.',
-    );
-
-    return pw.Table(
-      border: pw.TableBorder.all(color: PdfColors.black, width: 0.55),
-      columnWidths: const {
-        0: pw.FixedColumnWidth(120),
-        1: pw.FlexColumnWidth(),
-      },
-      children: [
-        pw.TableRow(
-          children: [
-            _plainCell('Scope of Supply', bold: true, fill: peach),
-            _plainCell(scope),
-          ],
-        ),
-      ],
-    );
+    return pw.SizedBox(height: 0);
   }
 
   static String read(dynamic item, String field) {
@@ -539,132 +446,205 @@ class ExcelQuotationFormat {
   }
 
   static pw.Widget productTable(List<dynamic> items) {
-    pw.Widget head(String text) {
+    String itemDesc(dynamic item) {
+      final productName = read(item, 'productName').isNotEmpty
+          ? read(item, 'productName')
+          : read(item, 'name');
+
+      final description = read(item, 'description');
+      final model = read(item, 'model');
+      final capacity = read(item, 'capacity');
+
+      final parts = <String>[
+        productName,
+        description,
+        if (model.isNotEmpty) 'Model: $model',
+        if (capacity.isNotEmpty) 'Capacity: $capacity',
+      ].where((e) => e.trim().isNotEmpty).toList();
+
+      return parts.join('\n');
+    }
+
+    double itemNumber(dynamic item, String key) {
+      return numValue(read(item, key));
+    }
+
+    pw.Widget cell(
+      String text, {
+      bool bold = false,
+      PdfColor? fill,
+      double size = 6.9,
+      pw.TextAlign align = pw.TextAlign.left,
+      double minHeight = 54,
+    }) {
       return pw.Container(
-        height: 22,
-        alignment: pw.Alignment.center,
-        padding: const pw.EdgeInsets.all(2),
-        color: peach,
+        constraints: pw.BoxConstraints(minHeight: minHeight),
+        padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+        color: fill,
+        alignment: align == pw.TextAlign.center
+            ? pw.Alignment.center
+            : align == pw.TextAlign.right
+            ? pw.Alignment.centerRight
+            : pw.Alignment.centerLeft,
         child: pw.Text(
-          text,
-          textAlign: pw.TextAlign.center,
-          style: style(size: productHeadSize, bold: true),
+          safe(text),
+          textAlign: align,
+          style: style(size: size, bold: bold),
+          maxLines: 8,
+          overflow: pw.TextOverflow.clip,
         ),
       );
     }
 
-    pw.Widget cell(
-      pw.Widget child, {
-      pw.Alignment align = pw.Alignment.center,
-      double minHeight = 24,
-    }) {
-      return pw.Container(
-        constraints: pw.BoxConstraints(minHeight: minHeight),
-        alignment: align,
-        padding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 3),
-        child: child,
-      );
-    }
+    final cleanItems = items.where((item) {
+      final desc = itemDesc(item).trim();
+      final rate = read(item, 'unitRate').trim();
+      final amount = read(item, 'amount').trim();
+      final netAmount = read(item, 'netAmount').trim();
+      return desc.isNotEmpty ||
+          rate.isNotEmpty ||
+          amount.isNotEmpty ||
+          netAmount.isNotEmpty;
+    }).toList();
 
     final rows = <pw.TableRow>[
       pw.TableRow(
+        decoration: pw.BoxDecoration(color: peach),
         children: [
-          head('Sr. No.'),
-          head('Product Description'),
-          head('HSN Code'),
-          head('UOM'),
-          head('Qty.'),
-          head('Unit Rate'),
-          head('Amount'),
-          head('Net Amount'),
+          cell(
+            'Sr.',
+            bold: true,
+            size: 7.0,
+            align: pw.TextAlign.center,
+            minHeight: 24,
+          ),
+          cell(
+            'Product Description',
+            bold: true,
+            size: 7.0,
+            align: pw.TextAlign.center,
+            minHeight: 24,
+          ),
+          cell(
+            'HSN',
+            bold: true,
+            size: 7.0,
+            align: pw.TextAlign.center,
+            minHeight: 24,
+          ),
+          cell(
+            'UOM',
+            bold: true,
+            size: 7.0,
+            align: pw.TextAlign.center,
+            minHeight: 24,
+          ),
+          cell(
+            'Qty.',
+            bold: true,
+            size: 7.0,
+            align: pw.TextAlign.center,
+            minHeight: 24,
+          ),
+          cell(
+            'Unit Rate',
+            bold: true,
+            size: 7.0,
+            align: pw.TextAlign.center,
+            minHeight: 24,
+          ),
+          cell(
+            'Amount',
+            bold: true,
+            size: 7.0,
+            align: pw.TextAlign.center,
+            minHeight: 24,
+          ),
+          cell(
+            'Net Amount',
+            bold: true,
+            size: 7.0,
+            align: pw.TextAlign.center,
+            minHeight: 24,
+          ),
         ],
       ),
     ];
 
-    final count = items.isEmpty ? 5 : (items.length < 5 ? 5 : items.length);
-
-    for (var i = 0; i < count; i++) {
-      final hasItem = i < items.length;
-      final item = hasItem ? items[i] : null;
+    for (var i = 0; i < cleanItems.length; i++) {
+      final item = cleanItems[i];
+      final net = itemNumber(item, 'netAmount') == 0
+          ? itemNumber(item, 'amount')
+          : itemNumber(item, 'netAmount');
 
       rows.add(
         pw.TableRow(
-          verticalAlignment: pw.TableCellVerticalAlignment.top,
           children: [
+            cell('${i + 1}', align: pw.TextAlign.center),
+            cell(itemDesc(item), size: 6.4, minHeight: 64),
             cell(
-              pw.Text(
-                '${i + 1}',
-                style: style(size: productTextSize, bold: true),
-              ),
-            ),
-            hasItem
-                ? productDescription(item)
-                : cell(
-                    pw.Text('-', style: style(size: productTextSize)),
-                    minHeight: 24,
-                  ),
-            cell(
-              pw.Text(
-                hasItem ? filled(read(item, 'hsnCode'), '-') : '-',
-                style: style(size: productTextSize),
-              ),
+              read(item, 'hsnCode').isNotEmpty
+                  ? read(item, 'hsnCode')
+                  : read(item, 'hsn'),
+              align: pw.TextAlign.center,
+              size: 6.4,
+              minHeight: 64,
             ),
             cell(
-              pw.Text(
-                hasItem
-                    ? (read(item, 'uom').isEmpty ? 'Nos.' : read(item, 'uom'))
-                    : 'Nos.',
-                style: style(size: productTextSize),
-              ),
+              read(item, 'uom').isNotEmpty ? read(item, 'uom') : 'Nos',
+              align: pw.TextAlign.center,
+              size: 6.4,
+              minHeight: 64,
             ),
             cell(
-              pw.Text(
-                hasItem ? qty(item) : '1',
-                style: style(size: productTextSize),
-              ),
+              qty(item),
+              align: pw.TextAlign.center,
+              size: 6.4,
+              minHeight: 64,
             ),
             cell(
-              pw.Text(
-                hasItem ? filled(money(readNum(item, 'unitPrice')), '-') : '-',
-                textAlign: pw.TextAlign.right,
-                style: style(size: productTextSize, bold: true),
-              ),
-              align: pw.Alignment.centerRight,
+              money(itemNumber(item, 'unitRate')),
+              align: pw.TextAlign.right,
+              size: 6.4,
+              minHeight: 64,
             ),
             cell(
-              pw.Text(
-                hasItem ? filled(money(readNum(item, 'subtotal')), '-') : '-',
-                textAlign: pw.TextAlign.right,
-                style: style(size: productTextSize, bold: true),
-              ),
-              align: pw.Alignment.centerRight,
+              money(itemNumber(item, 'amount')),
+              align: pw.TextAlign.right,
+              size: 6.4,
+              minHeight: 64,
             ),
             cell(
-              pw.Text(
-                hasItem ? filled(money(readNum(item, 'subtotal')), '-') : '-',
-                textAlign: pw.TextAlign.right,
-                style: style(size: productTextSize, bold: true),
-              ),
-              align: pw.Alignment.centerRight,
+              money(net),
+              align: pw.TextAlign.right,
+              size: 6.4,
+              minHeight: 64,
             ),
           ],
         ),
       );
     }
 
-    return pw.Table(
-      border: pw.TableBorder.all(color: PdfColors.black, width: 0.55),
-      columnWidths: const {
-        0: pw.FixedColumnWidth(34),
-        1: pw.FlexColumnWidth(5.6),
-        2: pw.FixedColumnWidth(55),
-        3: pw.FixedColumnWidth(38),
-        4: pw.FixedColumnWidth(34),
-        5: pw.FixedColumnWidth(66),
-        6: pw.FixedColumnWidth(66),
-        7: pw.FixedColumnWidth(76),
-      },
-      children: rows,
+    return pw.Container(
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: PdfColors.black, width: 0.9),
+      ),
+      child: pw.Table(
+        border: pw.TableBorder.symmetric(
+          inside: const pw.BorderSide(color: PdfColors.black, width: 0.45),
+        ),
+        columnWidths: const {
+          0: pw.FixedColumnWidth(34),
+          1: pw.FlexColumnWidth(3.7),
+          2: pw.FixedColumnWidth(58),
+          3: pw.FixedColumnWidth(42),
+          4: pw.FixedColumnWidth(38),
+          5: pw.FixedColumnWidth(72),
+          6: pw.FixedColumnWidth(72),
+          7: pw.FixedColumnWidth(82),
+        },
+        children: rows,
+      ),
     );
   }
 
@@ -733,37 +713,23 @@ class ExcelQuotationFormat {
   }
 
   static pw.Widget terms(Map<String, dynamic> q) {
-    final dynamicTerms = q['dynamicTerms'];
-    final rows = <Map<String, String>>[];
-
-    if (dynamicTerms is List && dynamicTerms.isNotEmpty) {
-      for (final term in dynamicTerms) {
-        if (term is Map) {
-          final title = safe(term['title']);
-          final value = safe(term['value']);
-          if (title.isNotEmpty || value.isNotEmpty) {
-            rows.add({'title': title, 'value': value});
-          }
-        }
-      }
-    }
-
-    if (rows.isEmpty) {
-      rows.addAll([
-        {'title': 'Add', 'value': 'GST @18%'},
-        {'title': 'Transportation', 'value': 'Extra-at actual.'},
-        {
-          'title': 'Delivery',
-          'value':
-              'Within 2 weeks from the date of receipt of your confirm order.',
-        },
-        {'title': 'Warranty', 'value': 'For 12 Months on Power Source Only.'},
-        {'title': 'Prices', 'value': 'Ex-works Mumbai.'},
-        {'title': 'Payment', 'value': '100% Advance'},
-        {'title': 'Inspection', 'value': 'At our Mumbai Works.'},
-        {'title': 'Validity', 'value': 'For 10 Days.'},
-      ]);
-    }
+    final rows = <Map<String, String>>[
+      {'title': 'Add', 'value': 'GST @18% extra as applicable.'},
+      {'title': 'Transportation', 'value': 'Extra at actual.'},
+      {
+        'title': 'Delivery',
+        'value':
+            'Within 2 weeks from the date of receipt of confirmed purchase order.',
+      },
+      {'title': 'Warranty', 'value': 'For 12 months on power source only.'},
+      {'title': 'Prices', 'value': 'Ex-works Mumbai.'},
+      {
+        'title': 'Payment',
+        'value': '100% advance against proforma invoice before dispatch.',
+      },
+      {'title': 'Inspection', 'value': 'At our Mumbai works.'},
+      {'title': 'Validity', 'value': 'This quotation is valid for 10 days.'},
+    ];
 
     final tableRows = <pw.TableRow>[
       pw.TableRow(
@@ -775,7 +741,7 @@ class ExcelQuotationFormat {
             padding: const pw.EdgeInsets.only(left: 4),
             child: pw.Text(
               'Terms & Conditions',
-              style: style(size: 8.7, bold: true),
+              style: style(size: bodySize, bold: true),
             ),
           ),
           pw.Container(color: peach, height: 21),
@@ -814,30 +780,12 @@ class ExcelQuotationFormat {
   }
 
   static pw.Widget signature(Map<String, dynamic> q) {
-    final company = first(q, [
-      'companyName',
-      'workspaceName',
-    ], 'Miraj Electrical & Mechanical Co. Pvt. Ltd.');
-
-    final sigName = first(q, [
-      'signatureName',
-      'preparedByName',
-      'createdByName',
-    ], 'Faizan Khan');
-    final sigDesignation = first(q, [
-      'signatureDesignation',
-      'preparedByDesignation',
-    ], 'Marketing Executive');
-    final sigPhone = first(q, [
-      'signaturePhone',
-      'preparedByPhone',
-    ], '+91 7351248854');
-
-    final factory = first(
-      q,
-      ['factoryAddress'],
-      'Factory Address: Ansa A 1&2 , Ansa Industrial Estate, Sakivihar Road Sakinaka Mumbai 400 072.',
-    );
+    const company = 'Miraj Electrical & Mechanical Co. Pvt. Ltd.';
+    const sigName = 'Faizan Khan';
+    const sigDesignation = 'Marketing Executive';
+    const sigPhone = '+91 7351248854';
+    const factory =
+        'Factory Address: Ansa A 1&2, Ansa Industrial Estate, Sakivihar Road, Sakinaka, Mumbai - 400 072.';
 
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.stretch,
@@ -853,18 +801,15 @@ class ExcelQuotationFormat {
             mainAxisSize: pw.MainAxisSize.min,
             crossAxisAlignment: pw.CrossAxisAlignment.end,
             children: [
-              pw.Text(
-                'For $company',
-                style: style(size: productTextSize, bold: true),
-              ),
+              pw.Text('For $company', style: style(size: bodySize, bold: true)),
               pw.SizedBox(height: 4),
               pw.Text(
                 '$sigName ($sigDesignation)',
-                style: style(size: productTextSize, bold: true),
+                style: style(size: bodySize, bold: true),
               ),
               pw.Text(
                 'Contact No. $sigPhone',
-                style: style(size: productTextSize, bold: true),
+                style: style(size: bodySize, bold: true),
               ),
             ],
           ),
@@ -878,7 +823,7 @@ class ExcelQuotationFormat {
           child: pw.Text(
             factory,
             textAlign: pw.TextAlign.center,
-            style: style(size: productTextSize, bold: true),
+            style: style(size: bodySize, bold: true),
           ),
         ),
         pw.Container(
