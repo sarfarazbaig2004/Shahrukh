@@ -2073,6 +2073,32 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       'clientEmail': _emailController.text.trim(),
       'clientMobile': _mobileController.text.trim(),
       'contactPerson': _contactPersonController.text.trim(),
+      'terms': _dynamicTerms
+          .map(
+            (term) => {
+              'title': term.titleCtrl.text.trim(),
+              'value': term.valueCtrl.text.trim(),
+            },
+          )
+          .where(
+            (term) =>
+                (term['title'] ?? '').toString().trim().isNotEmpty ||
+                (term['value'] ?? '').toString().trim().isNotEmpty,
+          )
+          .toList(),
+      'dynamicTerms': _dynamicTerms
+          .map(
+            (term) => {
+              'title': term.titleCtrl.text.trim(),
+              'value': term.valueCtrl.text.trim(),
+            },
+          )
+          .where(
+            (term) =>
+                (term['title'] ?? '').toString().trim().isNotEmpty ||
+                (term['value'] ?? '').toString().trim().isNotEmpty,
+          )
+          .toList(),
       'customerGstin': _gstController.text.trim(),
       'customerGSTIN': _gstController.text.trim(),
       'customerGstNo': _gstController.text.trim(),

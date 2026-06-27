@@ -465,9 +465,8 @@ class ExcelQuotationFormat {
   }
 
   static String money(dynamic value) {
-    final n = value is num ? value.toDouble() : numValue(value);
-    if (n == 0) return '';
-    return 'Rs.${indian(n)}=00';
+    final n = numValue(value).round();
+    return 'Rs. ${indian(n)}';
   }
 
   static pw.Widget productDescription(dynamic item) {
@@ -527,8 +526,43 @@ class ExcelQuotationFormat {
       return parts.join('\n');
     }
 
-    double itemNumber(dynamic item, String key) {
-      return numValue(read(item, key));
+    double itemNumber(dynamic item, List<String> keys) {
+      for (final key in keys) {
+        final value = numValue(read(item, key));
+        if (value != 0) return value;
+      }
+      return 0;
+    }
+
+    double itemQty(dynamic item) {
+      final value = itemNumber(item, ['quantity', 'qty', 'itemQty']);
+      return value == 0 ? 1 : value;
+    }
+
+    double itemRate(dynamic item) {
+      return itemNumber(item, [
+        'unitPrice',
+        'unitRate',
+        'sellingPrice',
+        'price',
+        'rate',
+      ]);
+    }
+
+    double itemAmount(dynamic item) {
+      final existing = itemNumber(item, [
+        'amount',
+        'lineTotal',
+        'total',
+        'taxableAmount',
+        'netAmount',
+        'grossAmount',
+      ]);
+      if (existing != 0) return existing;
+
+      final rate = itemRate(item);
+      final q = itemQty(item);
+      return rate * q;
     }
 
     pw.Widget cell(
@@ -539,6 +573,13 @@ class ExcelQuotationFormat {
       pw.TextAlign align = pw.TextAlign.left,
       double minHeight = 54,
     }) {
+      final normalizedText = text.trim().replaceAll(',', '');
+      final isZeroAmountCell =
+          RegExp(r'^(Rs\.?\s*)?0([.=]00)?$').hasMatch(normalizedText) ||
+          normalizedText == 'Rs.' ||
+          normalizedText == 'Rs';
+      final visibleText = isZeroAmountCell ? '' : text;
+
       return pw.Container(
         constraints: pw.BoxConstraints(minHeight: minHeight),
         padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4),
@@ -549,7 +590,7 @@ class ExcelQuotationFormat {
             ? pw.Alignment.centerRight
             : pw.Alignment.centerLeft,
         child: pw.Text(
-          safe(text),
+          safe(visibleText),
           textAlign: align,
           style: style(size: size, bold: bold),
           maxLines: 8,
@@ -558,11 +599,23 @@ class ExcelQuotationFormat {
       );
     }
 
+    String displayMoney(dynamic value) {
+      final n = numValue(value).round();
+      if (n <= 0) return '';
+      return 'Rs. ${indian(n)}';
+    }
+
     final cleanItems = items.where((item) {
       final desc = itemDesc(item).trim();
-      final rate = read(item, 'unitRate').trim();
-      final amount = read(item, 'amount').trim();
-      final netAmount = read(item, 'netAmount').trim();
+      final rate = read(item, 'unitPrice').trim().isNotEmpty
+          ? read(item, 'unitPrice').trim()
+          : read(item, 'unitRate').trim();
+      final amount = read(item, 'amount').trim().isNotEmpty
+          ? read(item, 'amount').trim()
+          : read(item, 'lineTotal').trim();
+      final netAmount = read(item, 'netAmount').trim().isNotEmpty
+          ? read(item, 'netAmount').trim()
+          : read(item, 'total').trim();
       return desc.isNotEmpty ||
           rate.isNotEmpty ||
           amount.isNotEmpty ||
@@ -635,9 +688,10 @@ class ExcelQuotationFormat {
 
     for (var i = 0; i < cleanItems.length; i++) {
       final item = cleanItems[i];
-      final net = itemNumber(item, 'netAmount') == 0
-          ? itemNumber(item, 'amount')
-          : itemNumber(item, 'netAmount');
+      final net =
+          itemNumber(item, ['netAmount', 'lineTotal', 'total', 'amount']) == 0
+          ? itemAmount(item)
+          : itemAmount(item);
 
       rows.add(
         pw.TableRow(
@@ -665,13 +719,13 @@ class ExcelQuotationFormat {
               minHeight: 64,
             ),
             cell(
-              money(itemNumber(item, 'unitRate')),
+              money(itemRate(item)),
               align: pw.TextAlign.right,
               size: 6.4,
               minHeight: 64,
             ),
             cell(
-              money(itemNumber(item, 'amount')),
+              money(itemAmount(item)),
               align: pw.TextAlign.right,
               size: 6.4,
               minHeight: 64,
@@ -775,69 +829,91 @@ class ExcelQuotationFormat {
   }
 
   static pw.Widget terms(Map<String, dynamic> q) {
-    final rows = <Map<String, String>>[
-      {'title': 'Add', 'value': 'GST @18% extra as applicable.'},
-      {'title': 'Transportation', 'value': 'Extra at actual.'},
-      {
-        'title': 'Delivery',
-        'value':
-            'Within 2 weeks from the date of receipt of confirmed purchase order.',
-      },
-      {'title': 'Warranty', 'value': 'For 12 months on power source only.'},
-      {'title': 'Prices', 'value': 'Ex-works Mumbai.'},
-      {
-        'title': 'Payment',
-        'value': '100% advance against proforma invoice before dispatch.',
-      },
-      {'title': 'Inspection', 'value': 'At our Mumbai works.'},
-      {'title': 'Validity', 'value': 'This quotation is valid for 10 days.'},
-    ];
+    List<Map<String, String>> rows = [];
 
-    final tableRows = <pw.TableRow>[
-      pw.TableRow(
+    final rawTerms =
+        q['terms'] ??
+        q['dynamicTerms'] ??
+        q['termsAndConditions'] ??
+        q['paymentTerms'];
+
+    if (rawTerms is List) {
+      rows = rawTerms
+          .map<Map<String, String>>((item) {
+            if (item is Map) {
+              final title = safe(
+                item['title'] ??
+                    item['name'] ??
+                    item['term'] ??
+                    item['label'] ??
+                    '',
+              ).trim();
+
+              final value = safe(
+                item['value'] ??
+                    item['detail'] ??
+                    item['description'] ??
+                    item['text'] ??
+                    '',
+              ).trim();
+
+              return {'title': title, 'value': value};
+            }
+
+            return {'title': '', 'value': safe(item)};
+          })
+          .where((row) {
+            return (row['title'] ?? '').trim().isNotEmpty ||
+                (row['value'] ?? '').trim().isNotEmpty;
+          })
+          .toList();
+    }
+
+    if (rows.isEmpty) {
+      rows = <Map<String, String>>[
+        {'title': 'GST', 'value': 'GST @18% extra as applicable.'},
+        {'title': 'Transportation', 'value': 'Extra at actual.'},
+        {
+          'title': 'Delivery',
+          'value': 'Within 2 weeks from receipt of confirmed purchase order.',
+        },
+        {'title': 'Warranty', 'value': '12 months on power source only.'},
+        {
+          'title': 'Payment',
+          'value': '100% advance against proforma invoice before dispatch.',
+        },
+        {'title': 'Validity', 'value': '10 days from quotation date.'},
+      ];
+    }
+
+    return pw.Container(
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: PdfColors.black, width: 0.9),
+      ),
+      child: pw.Table(
+        border: pw.TableBorder.all(color: PdfColors.black, width: 0.45),
+        columnWidths: const {
+          0: pw.FixedColumnWidth(120),
+          1: pw.FlexColumnWidth(),
+        },
         children: [
-          pw.Container(
-            color: peach,
-            height: 21,
-            alignment: pw.Alignment.centerLeft,
-            padding: const pw.EdgeInsets.only(left: 4),
-            child: pw.Text(
-              'Terms & Conditions',
-              style: style(size: bodySize, bold: true),
+          pw.TableRow(
+            decoration: pw.BoxDecoration(color: peach),
+            children: [
+              _plainCell('Terms & Conditions', bold: true, size: 8.0),
+              _plainCell('', fill: peach, size: 8.0),
+            ],
+          ),
+          ...rows.map(
+            (row) => pw.TableRow(
+              children: [
+                _plainCell(row['title'] ?? '', bold: true, size: 7.6),
+                _plainCell(row['value'] ?? '', size: 7.6),
+              ],
             ),
           ),
-          pw.Container(color: peach, height: 21),
         ],
       ),
-      ...rows.map(
-        (row) => pw.TableRow(
-          children: [
-            _plainCell(row['title'] ?? '', size: bodySize),
-            _plainCell(row['value'] ?? '', size: bodySize),
-          ],
-        ),
-      ),
-      pw.TableRow(
-        children: [
-          _plainCell('Comments:', bold: true, size: bodySize),
-          _plainCell('', size: bodySize),
-        ],
-      ),
-      pw.TableRow(
-        children: [
-          _plainCell('Remarks:', bold: true, size: bodySize),
-          _plainCell('', size: bodySize),
-        ],
-      ),
-    ];
-
-    return pw.Table(
-      border: pw.TableBorder.all(color: PdfColors.black, width: 0.55),
-      columnWidths: const {
-        0: pw.FixedColumnWidth(115),
-        1: pw.FlexColumnWidth(),
-      },
-      children: tableRows,
     );
   }
 

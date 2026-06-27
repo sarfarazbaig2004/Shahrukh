@@ -1795,10 +1795,10 @@ class QuotationPreviewScreen extends StatelessWidget {
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  const Center(
+                  Center(
                     child: Text(
-                      'QUOTATION',
-                      style: TextStyle(
+                      displayDocumentType.toUpperCase(),
+                      style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 2,
