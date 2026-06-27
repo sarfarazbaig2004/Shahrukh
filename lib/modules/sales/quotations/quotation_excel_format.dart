@@ -274,9 +274,30 @@ class ExcelQuotationFormat {
     String docNo,
     String docDate,
   ) {
-    const customer = 'CIVCON CIVIL ENGINEERING PRIVATE LIMITED';
-    const address = 'Mumbai, Maharashtra';
-    const email = 'civconcivilengg@gmail.com';
+    final customer = first(q, [
+      'clientName',
+      'customerName',
+      'partyName',
+      'companyName',
+      'name',
+    ], 'Customer Name Not Provided');
+
+    final address = first(q, [
+      'clientAddress',
+      'customerAddress',
+      'addressLine',
+      'billingAddress',
+      'shippingAddress',
+      'address',
+    ], 'Customer Address Not Provided');
+
+    final email = first(q, [
+      'clientEmail',
+      'customerEmail',
+      'contactEmail',
+      'email',
+    ], 'Not Provided');
+
     final phone = first(q, [
       'clientMobile',
       'customerMobile',
@@ -285,27 +306,68 @@ class ExcelQuotationFormat {
       'contactPhone',
       'mobile',
       'phone',
-    ], '+91 9082907433');
-    const person = 'Navneet Tiwari';
-    const gstin = '27AANCC5792K1ZK';
-    const inquiry = 'Verbal';
+    ], 'Not Provided');
 
-    return pw.Table(
-      border: pw.TableBorder.all(color: PdfColors.black, width: 0.55),
-      columnWidths: const {
-        0: pw.FixedColumnWidth(92),
-        1: pw.FlexColumnWidth(),
-        2: pw.FixedColumnWidth(112),
-        3: pw.FixedColumnWidth(170),
-      },
-      children: [
-        _infoRow('M/s', customer, 'Quotation No.', docNo),
-        _infoRow('Address:', address, 'Quotation Date', docDate),
-        _infoRow('E-mail Id:', email, 'Inquiry Reference', inquiry),
-        _infoRow('Contact No.:', phone, 'Inquiry Date', docDate),
-        _infoRow('Contact Person:', person, '', ''),
-        _infoRow('Customer GSTIN:', gstin, '', ''),
-      ],
+    final person = first(q, [
+      'contactPerson',
+      'customerContactPerson',
+      'contactName',
+      'personName',
+    ], 'Not Provided');
+
+    final gstin = first(q, [
+      'customerGstin',
+      'customerGSTIN',
+      'customerGstNo',
+      'customerGST',
+      'clientGstin',
+      'clientGSTIN',
+      'clientGstNo',
+      'billingGstin',
+      'partyGstin',
+      'gstNo',
+      'gstin',
+    ], 'Not Provided');
+
+    final inquiryReference = cleanInquiryReference(
+      first(q, [
+        'inquiryRefNo',
+        'inquiryReference',
+        'enquiryReference',
+        'inquiryNo',
+        'enquiryNo',
+        'referenceNo',
+      ], 'Verbal'),
+    );
+
+    final inquiryDate = displayDate(
+      q['inquiryDate'] ??
+          q['enquiryDate'] ??
+          q['inquiryCreatedAt'] ??
+          q['enquiryCreatedDate'],
+      docDate,
+    );
+
+    return pw.Container(
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: PdfColors.black, width: 0.9),
+      ),
+      child: pw.Table(
+        border: pw.TableBorder.all(color: PdfColors.black, width: 0.45),
+        columnWidths: const {
+          0: pw.FixedColumnWidth(90),
+          1: pw.FlexColumnWidth(2.5),
+          2: pw.FixedColumnWidth(110),
+          3: pw.FlexColumnWidth(1.35),
+        },
+        children: [
+          _infoRow('M/s', customer, 'Quotation No.', docNo),
+          _infoRow('Address', address, 'Quotation Date', docDate),
+          _infoRow('E-mail', email, 'Inquiry Ref.', inquiryReference),
+          _infoRow('Contact No.', phone, 'Inquiry Date', inquiryDate),
+          _infoRow('Contact Person', person, 'Customer GSTIN', gstin),
+        ],
+      ),
     );
   }
 
