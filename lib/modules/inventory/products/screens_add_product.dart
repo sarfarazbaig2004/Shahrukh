@@ -2163,6 +2163,16 @@ class _ScreensAddProductState extends State<ScreensAddProduct> {
       final cleanDescription = _descriptionController.text.trim();
       final cleanHsn = _hsnController.text.trim();
       final cleanItemCode = _itemCodeController.text.trim();
+      if (cleanItemCode.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Item Code is required for quotation PDF.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
       final cleanSku = _skuController.text.trim();
       final cleanBarcode = _barcodeController.text.trim();
       final cleanMake = _makeController.text.trim();
@@ -2930,8 +2940,9 @@ class _ScreensAddProductState extends State<ScreensAddProduct> {
                             Expanded(
                               child: _buildTextField(
                                 controller: _itemCodeController,
-                                label: 'Item Code',
+                                label: 'Item Code *',
                                 icon: Icons.code_outlined,
+                                validator: _requiredValidator,
                                 onChanged: (_) => setState(() {}),
                               ),
                             ),
@@ -2948,8 +2959,9 @@ class _ScreensAddProductState extends State<ScreensAddProduct> {
                         const SizedBox(height: 10),
                         _buildTextField(
                           controller: _itemCodeController,
-                          label: 'Item Code',
+                          label: 'Item Code *',
                           icon: Icons.code_outlined,
+                          validator: _requiredValidator,
                           onChanged: (_) => setState(() {}),
                         ),
                       ],
