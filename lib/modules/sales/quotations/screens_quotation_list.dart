@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'package:QUIK/modules/sales/quotations/quotation_screen_local.dart';
-import 'package:QUIK/modules/sales/quotations/letterhead_settings_screen.dart';
+import 'package:QUIK/modules/settings/letterhead_settings_screen.dart';
 import 'quotation_pdf_generator.dart';
 
 const Color primaryColor = Color(0xFF1E3A8A);

@@ -9,6 +9,7 @@ import 'package:QUIK/auth/register/register_screen_local.dart';
 import 'package:QUIK/core/theme/app_theme.dart';
 import 'package:QUIK/modules/notifications/screen_notification_center.dart';
 import 'package:QUIK/modules/settings/screen_company_profile_bank_settings.dart';
+import 'package:QUIK/modules/settings/letterhead_settings_screen.dart';
 
 enum _SettingsSection { personal, workspace, access, system, danger }
 
@@ -825,6 +826,27 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
                 icon: Icons.account_tree_outlined,
                 enabled: isAdminOrManager,
                 onTap: () => _showComingSoon('Branches'),
+              ),
+              _ActionTile(
+                title: 'Letterhead Settings',
+                subtitle:
+                    'Upload company letterhead and define reusable print positions for documents.',
+                icon: Icons.article_outlined,
+                enabled: isAdminOrManager,
+                onTap: isAdminOrManager
+                    ? () async {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => LetterheadSettingsScreen(
+                              companyId: widget.companyId,
+                              currentUserUid:
+                                  FirebaseAuth.instance.currentUser?.uid ?? '',
+                              currentUserName: widget.userEmail,
+                            ),
+                          ),
+                        );
+                      }
+                    : null,
               ),
               _ActionTile(
                 title: 'Document Numbering',
