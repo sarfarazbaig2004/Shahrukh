@@ -1120,9 +1120,10 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                 i['productCode'] ??
                 i['item_code'] ??
                 i['code'] ??
-                i['sku'] ??
                 i['materialCode'] ??
                 i['partNo'] ??
+                i['partNumber'] ??
+                i['catalogNo'] ??
                 '')
             .toString()
             .trim();
@@ -1203,9 +1204,10 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                       pData['productCode'] ??
                       pData['item_code'] ??
                       pData['code'] ??
-                      pData['sku'] ??
                       pData['materialCode'] ??
                       pData['partNo'] ??
+                      pData['partNumber'] ??
+                      pData['catalogNo'] ??
                       itemCode)
                   .toString()
                   .trim();

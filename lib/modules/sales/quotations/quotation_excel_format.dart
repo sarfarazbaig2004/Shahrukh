@@ -641,14 +641,32 @@ class ExcelQuotationFormat {
     }
 
     String itemCode(dynamic item) {
-      final code = field(item, 'itemCode');
-      if (code.isNotEmpty) return code;
+      final productId = field(item, 'productId').trim();
+      final sku = field(item, 'sku').trim();
+      final id = field(item, 'id').trim();
 
-      final sku = field(item, 'sku');
-      if (sku.isNotEmpty) return sku;
+      bool isBadCode(String value) {
+        final code = value.trim();
+        if (code.isEmpty || code.toLowerCase() == 'null') return true;
+        if (productId.isNotEmpty && code == productId) return true;
+        if (sku.isNotEmpty && code == sku) return true;
+        if (id.isNotEmpty && code == id) return true;
+        return false;
+      }
 
-      final productId = field(item, 'productId');
-      if (productId.isNotEmpty) return productId;
+      for (final key in [
+        'itemCode',
+        'productCode',
+        'item_code',
+        'code',
+        'materialCode',
+        'partNo',
+        'partNumber',
+        'catalogNo',
+      ]) {
+        final code = field(item, key).trim();
+        if (!isBadCode(code)) return code;
+      }
 
       return '-';
     }

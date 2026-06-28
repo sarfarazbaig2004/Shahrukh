@@ -108,9 +108,10 @@ class QuotationLineItem {
             map['productCode'] ??
             map['item_code'] ??
             map['code'] ??
-            map['sku'] ??
             map['materialCode'] ??
-            map['partNo'],
+            map['partNo'] ??
+            map['partNumber'] ??
+            map['catalogNo'],
       ),
       name: _safeString(map['name']),
       description: _safeString(map['description']),
