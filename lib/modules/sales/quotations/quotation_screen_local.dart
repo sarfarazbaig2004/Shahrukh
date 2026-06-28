@@ -63,6 +63,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   String _companyLogoUrl = '';
   String _companyState = '';
   String _quotationPrefix = quotationSeriesPrefix;
+  String _quotationType = 'domestic';
+  Map<String, dynamic> _quotationSettings = {};
 
   bool _isLoading = false;
   bool _isRestoring = false;
@@ -277,12 +279,14 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     await _loadUserContext();
     await _loadCompanyProfile();
     await _loadUserSettings();
+    await _loadQuotationSettings();
 
     if (widget.existingQuotation != null) {
       developer.log('Existing Quotation Restored', name: 'QuotationScreen');
       await _loadExistingQuotation(widget.existingQuotation!);
     } else {
       await _applyInquirySeedIfNeeded();
+      _applyQuotationSettingsDefaultTerms(force: true);
     }
 
     _calculateTotals();
@@ -292,6 +296,82 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         _isRestoring = false;
       });
     }
+  }
+
+  String _normalizeQuotationType(dynamic value) {
+    final text = (value ?? '').toString().trim().toLowerCase();
+    return text.contains('export') ? 'export' : 'domestic';
+  }
+
+  Future<void> _loadQuotationSettings() async {
+    final companyId = _companyId;
+    if (companyId == null || companyId.isEmpty) return;
+
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('companies')
+          .doc(companyId)
+          .collection('settings')
+          .doc('quotation_settings')
+          .get();
+
+      _quotationSettings = snap.data() ?? <String, dynamic>{};
+    } catch (e) {
+      developer.log(
+        'Unable to load quotation settings: $e',
+        name: 'QuotationScreen',
+      );
+    }
+  }
+
+  List<TermRow> _settingsTermsForType(String type) {
+    final normalizedType = _normalizeQuotationType(type);
+    final rawSettings = _quotationSettings[normalizedType];
+
+    if (rawSettings is! Map) return [];
+
+    final settings = Map<String, dynamic>.from(rawSettings);
+    final rawTerms = settings['terms'];
+
+    if (rawTerms is! List) return [];
+
+    final rows = <TermRow>[];
+
+    for (final item in rawTerms) {
+      if (item is Map) {
+        final title = (item['title'] ?? '').toString().trim();
+        final value = (item['value'] ?? '').toString().trim();
+
+        if (title.isNotEmpty || value.isNotEmpty) {
+          rows.add(TermRow(title: title, value: value));
+        }
+      } else {
+        final value = item.toString().trim();
+        if (value.isNotEmpty) {
+          rows.add(TermRow(title: 'Term', value: value));
+        }
+      }
+    }
+
+    return rows;
+  }
+
+  void _applyQuotationSettingsDefaultTerms({bool force = false}) {
+    final hasExistingTerms = _dynamicTerms.any((term) {
+      return term.titleCtrl.text.trim().isNotEmpty ||
+          term.valueCtrl.text.trim().isNotEmpty;
+    });
+
+    if (!force && hasExistingTerms) return;
+
+    final settingTerms = _settingsTermsForType(_quotationType);
+    if (settingTerms.isEmpty) return;
+
+    for (final term in _dynamicTerms) {
+      term.dispose();
+    }
+
+    _dynamicTerms = settingTerms;
   }
 
   void _applyProfessionalDefaultTerms() {
@@ -336,6 +416,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     _quotationStatus = data['status']?.toString() ?? 'Sent';
     _paymentStatus = data['paymentStatus']?.toString() ?? 'Pending';
     _currentVersion = data['version'] ?? 1;
+    _quotationType = _normalizeQuotationType(data['quotationType']);
 
     if ((_approvalStatus == 'Approved' || _quotationStatus == 'Converted') &&
         !_isAdminOrManager) {
@@ -1708,6 +1789,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       final payload = {
         'id': quoteRef.id,
         'companyId': _companyId,
+        'quotationType': _quotationType,
         'subject': _subjectController.text.trim(),
         'quoteDate': Timestamp.fromDate(_quoteDate),
         'status': _quotationStatus,
@@ -2063,6 +2145,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
     return {
       'quoteNumber': previewQuoteNo,
+      'companyId': _companyId,
+      'quotationType': _quotationType,
       'quoteDateStr':
           '${_quoteDate.day.toString().padLeft(2, '0')}/${_quoteDate.month.toString().padLeft(2, '0')}/${_quoteDate.year}',
       'revisionNo': _currentVersion.toString(),
@@ -4573,6 +4657,36 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                   ),
                                 ),
                               ),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: DropdownButtonFormField<String>(
+                                value: _quotationType,
+                                isExpanded: true,
+                                decoration: _dec('Quotation Type'),
+                                items: const [
+                                  DropdownMenuItem(
+                                    value: 'domestic',
+                                    child: Text('Domestic Quotation'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'export',
+                                    child: Text('Export Quotation'),
+                                  ),
+                                ],
+                                onChanged: _isReadOnly
+                                    ? null
+                                    : (value) {
+                                        if (value == null) return;
+                                        setState(() {
+                                          _quotationType =
+                                              _normalizeQuotationType(value);
+                                          _applyQuotationSettingsDefaultTerms(
+                                            force: true,
+                                          );
+                                        });
+                                      },
+                              ),
+                            ),
                             _buildItemTextField(
                               _subjectController,
                               'Subject Line *',

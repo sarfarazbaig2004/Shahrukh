@@ -357,6 +357,7 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
 
     try {
       final safeData = Map<String, dynamic>.from(data);
+      safeData['companyId'] ??= _companyId;
 
       final quoteDate =
           (safeData['quoteDate'] as Timestamp?)?.toDate() ?? DateTime.now();

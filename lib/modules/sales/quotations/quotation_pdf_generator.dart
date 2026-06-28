@@ -399,6 +399,178 @@ class QuotationPdfGenerator {
     return t == 'salesorder' || t == 'so';
   }
 
+  static String _normalizeQuotationType(dynamic value) {
+    final text = _safeString(value).toLowerCase();
+    return text.contains('export') ? 'export' : 'domestic';
+  }
+
+  static double _settingsDouble(
+    Map<String, dynamic> settings,
+    String key,
+    double fallback,
+  ) {
+    return _toDouble(settings[key]) == 0 ? fallback : _toDouble(settings[key]);
+  }
+
+  static bool _hasUsableTerms(Map<String, dynamic> quotation) {
+    for (final key in ['terms', 'dynamicTerms', 'termsAndConditions']) {
+      final rawTerms = quotation[key];
+
+      if (rawTerms is List) {
+        for (final item in rawTerms) {
+          if (item is Map) {
+            final title = _safeString(
+              item['title'] ?? item['name'] ?? item['label'],
+            );
+            final value = _safeString(
+              item['value'] ??
+                  item['detail'] ??
+                  item['description'] ??
+                  item['text'],
+            );
+            if (title.isNotEmpty || value.isNotEmpty) return true;
+          } else if (_safeString(item).isNotEmpty) {
+            return true;
+          }
+        }
+      } else if (_safeString(rawTerms).isNotEmpty) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  static Future<Map<String, dynamic>> _loadQuotationSettingsForPdf(
+    Map<String, dynamic> quotation,
+  ) async {
+    final companyId = _safeString(quotation['companyId']);
+    if (companyId.isEmpty) return {};
+
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('companies')
+          .doc(companyId)
+          .collection('settings')
+          .doc('quotation_settings')
+          .get();
+
+      final data = snap.data() ?? <String, dynamic>{};
+      final type = _normalizeQuotationType(quotation['quotationType']);
+      final selected = data[type];
+
+      if (selected is Map) {
+        return Map<String, dynamic>.from(selected);
+      }
+    } catch (_) {}
+
+    return {};
+  }
+
+  static Map<String, dynamic> _mergeQuotationSettingsIntoQuotation(
+    Map<String, dynamic> quotation,
+    Map<String, dynamic> settings,
+  ) {
+    final merged = Map<String, dynamic>.from(quotation);
+
+    final settingsTerms = settings['terms'];
+    if (!_hasUsableTerms(merged) &&
+        settingsTerms is List &&
+        settingsTerms.isNotEmpty) {
+      merged['terms'] = settingsTerms;
+      merged['dynamicTerms'] = settingsTerms;
+    }
+
+    return merged;
+  }
+
+  static Future<pw.ImageProvider?> _loadSettingsLetterheadImage(
+    Map<String, dynamic> settings,
+  ) async {
+    final url = _safeString(settings['letterheadUrl']);
+    final type = _safeString(settings['letterheadFileType']).toLowerCase();
+
+    if (url.isEmpty) return null;
+    if (type == 'pdf') return null;
+
+    try {
+      return await networkImage(url);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static pw.Widget _letterheadPositionedText({
+    required String text,
+    required double left,
+    required double top,
+    required double size,
+  }) {
+    if (text.trim().isEmpty) return pw.SizedBox.shrink();
+
+    return pw.Positioned(
+      left: left,
+      top: top,
+      child: pw.Text(
+        _cleanPdfText(text),
+        style: pw.TextStyle(
+          fontSize: size,
+          fontWeight: pw.FontWeight.bold,
+          color: PdfColors.black,
+        ),
+      ),
+    );
+  }
+
+  static pw.Widget _buildSettingsBackground(
+    pw.Context context, {
+    required pw.ImageProvider? letterheadImage,
+    required pw.ImageProvider? watermarkImage,
+    required Map<String, dynamic> settings,
+    required String docNumber,
+    required String docDate,
+  }) {
+    if (letterheadImage == null) {
+      return ExcelQuotationFormat.watermarkImage(watermarkImage);
+    }
+
+    final dateX = _settingsDouble(settings, 'dateX', 430);
+    final dateY = _settingsDouble(settings, 'dateY', 98);
+    final dateFontSize = _settingsDouble(settings, 'dateFontSize', 10);
+    final quoteNoX = _settingsDouble(settings, 'quoteNoX', 80);
+    final quoteNoY = _settingsDouble(settings, 'quoteNoY', 98);
+    final quoteNoFontSize = _settingsDouble(settings, 'quoteNoFontSize', 10);
+
+    return pw.FullPage(
+      ignoreMargins: true,
+      child: pw.Stack(
+        children: [
+          pw.Positioned(
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+            child: pw.Image(letterheadImage, fit: pw.BoxFit.cover),
+          ),
+          if (context.pageNumber == 1)
+            _letterheadPositionedText(
+              text: docNumber,
+              left: quoteNoX,
+              top: quoteNoY,
+              size: quoteNoFontSize,
+            ),
+          if (context.pageNumber == 1)
+            _letterheadPositionedText(
+              text: docDate,
+              left: dateX,
+              top: dateY,
+              size: dateFontSize,
+            ),
+        ],
+      ),
+    );
+  }
+
   // Premium Corporate Gold Theme
   static final PdfColor _primaryColor = PdfColor.fromInt(
     0xFF111111,
@@ -439,6 +611,14 @@ class QuotationPdfGenerator {
   ) async {
     final memcoWatermark = await _loadMemcoWatermark();
     final memcoHeaderLogo = await _loadMemcoHeaderLogo();
+    final quotationSettings = await _loadQuotationSettingsForPdf(quotation);
+    quotation = _mergeQuotationSettingsIntoQuotation(
+      quotation,
+      quotationSettings,
+    );
+    final settingsLetterheadImage = await _loadSettingsLetterheadImage(
+      quotationSettings,
+    );
     final doc = pw.Document();
 
     pw.ImageProvider? logoImage;
@@ -519,8 +699,14 @@ class QuotationPdfGenerator {
         pageTheme: pw.PageTheme(
           pageFormat: format,
           margin: const pw.EdgeInsets.fromLTRB(28, 24, 28, 28),
-          buildBackground: (context) =>
-              ExcelQuotationFormat.watermarkImage(memcoWatermark),
+          buildBackground: (context) => _buildSettingsBackground(
+            context,
+            letterheadImage: settingsLetterheadImage,
+            watermarkImage: memcoWatermark,
+            settings: quotationSettings,
+            docNumber: isSO ? soNumber : quoteNumber,
+            docDate: docDateStr,
+          ),
         ),
         header: (context) {
           if (context.pageNumber <= 1) return pw.SizedBox.shrink();
@@ -545,10 +731,15 @@ class QuotationPdfGenerator {
         },
         build: (context) {
           return [
-            _buildLegacyMemcoHeader(quotation, memcoHeaderLogo ?? logoImage),
-            pw.SizedBox(height: 4),
-            _buildLegacyQuotationTitle(),
-            pw.SizedBox(height: 4),
+            if (settingsLetterheadImage == null) ...[
+              _buildLegacyMemcoHeader(quotation, memcoHeaderLogo ?? logoImage),
+              pw.SizedBox(height: 4),
+              _buildLegacyQuotationTitle(),
+              pw.SizedBox(height: 4),
+            ] else
+              pw.SizedBox(
+                height: _settingsDouble(quotationSettings, 'contentTop', 135),
+              ),
             _buildLegacyInfoBox(
               quotation,
               isSO ? soNumber : quoteNumber,
