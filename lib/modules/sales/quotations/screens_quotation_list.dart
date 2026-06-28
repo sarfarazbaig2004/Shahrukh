@@ -822,6 +822,7 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
       final status = _safeString(data['status'], fallback: 'Draft');
       final grandTotal = _safeString(data['grandTotal']).toLowerCase();
       final isDeleted = data['isDeleted'] == true;
+      final isOldRevision = data['isLatest'] == false;
 
       final items = data['items'] is List ? data['items'] as List : const [];
       final itemText = items
@@ -853,7 +854,11 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
           _statusFilter == 'All' ||
           status.toLowerCase() == _statusFilter.toLowerCase();
 
-      return matchesRole && !isDeleted && matchesSearch && matchesStatus;
+      return matchesRole &&
+          !isDeleted &&
+          !isOldRevision &&
+          matchesSearch &&
+          matchesStatus;
     }).toList();
 
     filtered.sort((a, b) {

@@ -1717,7 +1717,11 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
     try {
       final bool isUpdate = widget.quotationId != null;
-      bool isRevision = isUpdate;
+
+      // Editing an existing quotation must update the same Firestore document.
+      // Revision should be created only from the explicit "Create Revision" action
+      // on quotation list, not automatically on every save.
+      final bool isRevision = false;
 
       final quoteRef = (isUpdate && !isRevision)
           ? FirebaseFirestore.instance
