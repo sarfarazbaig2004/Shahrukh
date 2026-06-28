@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'package:QUIK/modules/sales/quotations/quotation_screen_local.dart';
+import 'package:QUIK/modules/sales/quotations/quotation_settings_screen.dart';
 import 'quotation_pdf_generator.dart';
 
 const Color primaryColor = Color(0xFF1E3A8A);
@@ -135,7 +136,8 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
       if (user == null) {
         if (mounted) {
           setState(() {
-            _errorMessage = 'User authentication required. Please log in again.';
+            _errorMessage =
+                'User authentication required. Please log in again.';
             _isLoadingContext = false;
           });
         }
@@ -170,7 +172,7 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
         if (mounted) {
           setState(() {
             _errorMessage =
-            'No active workspace linked. Please join a company first.';
+                'No active workspace linked. Please join a company first.';
             _isLoadingContext = false;
           });
         }
@@ -178,8 +180,8 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
       }
 
       _companyId = resolvedCompanyId;
-      _currentUserName =
-          (userData['name'] ?? userData['fullName'] ?? '').toString();
+      _currentUserName = (userData['name'] ?? userData['fullName'] ?? '')
+          .toString();
 
       final companyUserDoc = await FirebaseFirestore.instance
           .collection(_kCollectionCompanies)
@@ -197,7 +199,7 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
         if (mounted) {
           setState(() {
             _errorMessage =
-            'Access Denied: You lack permissions to view quotations.';
+                'Access Denied: You lack permissions to view quotations.';
             _isLoadingContext = false;
           });
         }
@@ -216,7 +218,7 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
       if (mounted) {
         setState(() {
           _errorMessage =
-          'Failed to load user context safely. Please try again.';
+              'Failed to load user context safely. Please try again.';
           _isLoadingContext = false;
         });
       }
@@ -232,7 +234,10 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
     // 🔥 FIX: Remove .where() filters from here.
     // Mixing OR filters + orderBy immediately crashes without a custom index.
     // We now fetch safely and let `_applyLocalFilters` handle the RBAC logic perfectly.
-    _primaryQuery = _quotationCollection!.orderBy('createdAt', descending: true);
+    _primaryQuery = _quotationCollection!.orderBy(
+      'createdAt',
+      descending: true,
+    );
   }
 
   String _safeString(dynamic value, {String fallback = ''}) {
@@ -278,8 +283,10 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
 
       if (docSnap.exists) {
         final data = docSnap.data();
-        final name =
-        _safeString(data?['name'] ?? data?['fullName'], fallback: 'Unknown');
+        final name = _safeString(
+          data?['name'] ?? data?['fullName'],
+          fallback: 'Unknown',
+        );
         _userNameCache[uid] = name;
         return name;
       }
@@ -300,10 +307,33 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _openQuotationSettings() async {
+    final companyId = _companyId;
+    if (companyId == null || companyId.isEmpty) {
+      _showSnack(
+        'Company context missing. Cannot open quotation settings.',
+        isError: true,
+      );
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => QuotationSettingsScreen(
+          companyId: companyId,
+          currentUserUid: _currentUserUid ?? '',
+          currentUserName: _currentUserName,
+        ),
+      ),
+    );
+
+    if (mounted) setState(() {});
+  }
+
   Future<void> _openQuotationForEdit(
-      String docId,
-      Map<String, dynamic> data,
-      ) async {
+    String docId,
+    Map<String, dynamic> data,
+  ) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => QuotationScreenLocal(
@@ -322,7 +352,7 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
       context: context,
       barrierDismissible: false,
       builder: (_) =>
-      const Center(child: CircularProgressIndicator(color: primaryColor)),
+          const Center(child: CircularProgressIndicator(color: primaryColor)),
     );
 
     try {
@@ -331,7 +361,7 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
       final quoteDate =
           (safeData['quoteDate'] as Timestamp?)?.toDate() ?? DateTime.now();
       safeData['quoteDateStr'] =
-      '${quoteDate.day.toString().padLeft(2, '0')}/${quoteDate.month.toString().padLeft(2, '0')}/${quoteDate.year}';
+          '${quoteDate.day.toString().padLeft(2, '0')}/${quoteDate.month.toString().padLeft(2, '0')}/${quoteDate.year}';
 
       if (safeData['companyName'] == null && _companyId != null) {
         final companyDoc = await FirebaseFirestore.instance
@@ -351,7 +381,8 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
               companyData['companyEmail'] ?? companyData['email'] ?? '';
           safeData['companyLogoUrl'] ??=
               companyData['companyLogoUrl'] ?? companyData['logoUrl'] ?? '';
-          safeData['companyGst'] ??= companyData['companyGst'] ??
+          safeData['companyGst'] ??=
+              companyData['companyGst'] ??
               companyData['gstin'] ??
               companyData['gstNo'] ??
               '';
@@ -364,11 +395,14 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
         }
       }
 
-      final itemsList =
-      (safeData['items'] is List) ? (safeData['items'] as List) : [];
+      final itemsList = (safeData['items'] is List)
+          ? (safeData['items'] as List)
+          : [];
       final parsedItems = itemsList
-          .map((e) => QuotationLineItem.fromMap(
-          Map<String, dynamic>.from(e as Map)))
+          .map(
+            (e) =>
+                QuotationLineItem.fromMap(Map<String, dynamic>.from(e as Map)),
+          )
           .toList();
 
       if (mounted) {
@@ -379,8 +413,8 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => QuotationPreviewScreen(
-              quotation: safeData, items: parsedItems),
+          builder: (_) =>
+              QuotationPreviewScreen(quotation: safeData, items: parsedItems),
         ),
       );
     } catch (e) {
@@ -392,9 +426,9 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
   }
 
   Future<void> _convertToSalesOrder(
-      String docId,
-      Map<String, dynamic> data,
-      ) async {
+    String docId,
+    Map<String, dynamic> data,
+  ) async {
     if (_companyId == null) {
       _showSnack('Company context missing. Cannot convert.', isError: true);
       return;
@@ -415,8 +449,10 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
     bool isApproved = status == 'Approved' || approval == 'Approved';
 
     if (!isApproved) {
-      _showSnack('Quotation must be Approved before converting to SO.',
-          isError: true);
+      _showSnack(
+        'Quotation must be Approved before converting to SO.',
+        isError: true,
+      );
       return;
     }
 
@@ -463,17 +499,20 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
 
         if (isConvertingFlag) {
           final convertingStartedAt =
-          docData['convertingStartedAt'] as Timestamp?;
+              docData['convertingStartedAt'] as Timestamp?;
           if (convertingStartedAt != null) {
-            final elapsed =
-            DateTime.now().difference(convertingStartedAt.toDate());
+            final elapsed = DateTime.now().difference(
+              convertingStartedAt.toDate(),
+            );
             if (elapsed.inMinutes < 2) {
               throw Exception(
-                  'Another user is currently converting this quotation.');
+                'Another user is currently converting this quotation.',
+              );
             }
           } else {
             throw Exception(
-                'Another user is currently converting this quotation.');
+              'Another user is currently converting this quotation.',
+            );
           }
         }
 
@@ -498,14 +537,14 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
         'createdBy': _currentUserUid,
         'createdByName': _currentUserName,
         'salesOrderNumber':
-        'SO-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}',
+            'SO-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}',
         'activities': [
           {
             'type': 'Created',
             'note': 'Sales Order automatically generated from Quotation $docId',
             'timestamp': Timestamp.now(),
             'byUid': _currentUserUid ?? 'system',
-          }
+          },
         ],
       };
 
@@ -528,12 +567,12 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
             'user': {
               'uid': _currentUserUid,
               'name': _currentUserName,
-              'role': _currentUserRole
+              'role': _currentUserRole,
             },
             'system': {
               'platform': 'flutter',
               'module': 'quotation_to_so',
-              'version': '1.0'
+              'version': '1.0',
             },
             'note': 'Quotation successfully converted to Sales Order',
           },
@@ -543,8 +582,9 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
       _showSnack('Quotation successfully converted to Sales Order.');
     } catch (e) {
       _showSnack(
-          'Conversion failed: ${e.toString().replaceAll('Exception: ', '')}',
-          isError: true);
+        'Conversion failed: ${e.toString().replaceAll('Exception: ', '')}',
+        isError: true,
+      );
 
       try {
         final docRef = FirebaseFirestore.instance
@@ -570,8 +610,9 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
     final inquiryId = data['inquiryId'] ?? data['inquiryRefNo'];
     if (inquiryId == null || inquiryId.toString().trim().isEmpty) {
       _showSnack(
-          'Warning: Cannot revise a quotation that is not linked to an Inquiry.',
-          isError: true);
+        'Warning: Cannot revise a quotation that is not linked to an Inquiry.',
+        isError: true,
+      );
       return;
     }
 
@@ -616,12 +657,12 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
             'user': {
               'uid': _currentUserUid,
               'name': _currentUserName,
-              'role': _currentUserRole
+              'role': _currentUserRole,
             },
             'system': {
               'platform': 'flutter',
               'module': 'quotation_revision',
-              'version': '1.0'
+              'version': '1.0',
             },
             'note': 'Revision ${currentVersion + 1} created from $docId',
           },
@@ -653,12 +694,12 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
             'user': {
               'uid': _currentUserUid,
               'name': _currentUserName,
-              'role': _currentUserRole
+              'role': _currentUserRole,
             },
             'system': {
               'platform': 'flutter',
               'module': 'quotation_approval',
-              'version': '1.0'
+              'version': '1.0',
             },
             'note': 'Approval set to $status',
           },
@@ -691,12 +732,12 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
             'user': {
               'uid': _currentUserUid,
               'name': _currentUserName,
-              'role': _currentUserRole
+              'role': _currentUserRole,
             },
             'system': {
               'platform': 'flutter',
               'module': 'quotation_cancel',
-              'version': '1.0'
+              'version': '1.0',
             },
             'note': 'Quotation cancelled',
           },
@@ -746,8 +787,8 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
   }
 
   List<QueryDocumentSnapshot<Map<String, dynamic>>> _applyLocalFilters(
-      List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
-      ) {
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
     final search = _searchNotifier.value.trim().toLowerCase();
 
     var filtered = docs.where((doc) {
@@ -759,7 +800,8 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
         final createdBy = _safeString(data['createdBy']);
         final assignedToUsers = data['assignedToUsers'] as List<dynamic>? ?? [];
 
-        if (createdBy != _currentUserUid && !assignedToUsers.contains(_currentUserUid)) {
+        if (createdBy != _currentUserUid &&
+            !assignedToUsers.contains(_currentUserUid)) {
           matchesRole = false;
         }
       }
@@ -781,20 +823,24 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
       final isDeleted = data['isDeleted'] == true;
 
       final items = data['items'] is List ? data['items'] as List : const [];
-      final itemText = items.map((item) {
-        if (item is Map) {
-          return [
-            item['name'],
-            item['itemName'],
-            item['description'],
-            item['model'],
-            item['hsn'],
-          ].map(_safeString).join(' ');
-        }
-        return _safeString(item);
-      }).join(' ').toLowerCase();
+      final itemText = items
+          .map((item) {
+            if (item is Map) {
+              return [
+                item['name'],
+                item['itemName'],
+                item['description'],
+                item['model'],
+                item['hsn'],
+              ].map(_safeString).join(' ');
+            }
+            return _safeString(item);
+          })
+          .join(' ')
+          .toLowerCase();
 
-      final matchesSearch = search.isEmpty ||
+      final matchesSearch =
+          search.isEmpty ||
           quoteNumber.contains(search) ||
           customer.contains(search) ||
           inquiry.contains(search) ||
@@ -802,7 +848,8 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
           status.toLowerCase().contains(search) ||
           grandTotal.contains(search) ||
           itemText.contains(search);
-      final matchesStatus = _statusFilter == 'All' ||
+      final matchesStatus =
+          _statusFilter == 'All' ||
           status.toLowerCase() == _statusFilter.toLowerCase();
 
       return matchesRole && !isDeleted && matchesSearch && matchesStatus;
@@ -873,7 +920,9 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
                         border: OutlineInputBorder(),
                       ),
                       items: _statuses
-                          .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                          .map(
+                            (e) => DropdownMenuItem(value: e, child: Text(e)),
+                          )
                           .toList(),
                       onChanged: (value) {
                         setModalState(() {
@@ -890,7 +939,9 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
                         border: OutlineInputBorder(),
                       ),
                       items: _sortOptions
-                          .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                          .map(
+                            (e) => DropdownMenuItem(value: e, child: Text(e)),
+                          )
                           .toList(),
                       onChanged: (value) {
                         setModalState(() {
@@ -950,7 +1001,10 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
   @override
   Widget build(BuildContext context) {
     if (_isLoadingContext) {
-      return const Scaffold(backgroundColor: Colors.white, body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(child: CircularProgressIndicator()),
+      );
     }
     if (_errorMessage != null) {
       return Scaffold(
@@ -1012,412 +1066,548 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
               final filteredDocs = _applyLocalFilters(docs);
 
               int totalQuotes = filteredDocs.length;
-          int approved = 0;
-          int converted = 0;
-          int sent = 0;
+              int approved = 0;
+              int converted = 0;
+              int sent = 0;
 
-          for (final doc in filteredDocs) {
-            final status = (doc.data()['status'] ?? '').toString().toLowerCase();
-            final approvalStatus = (doc.data()['approvalStatus'] ?? '').toString().toLowerCase();
+              for (final doc in filteredDocs) {
+                final status = (doc.data()['status'] ?? '')
+                    .toString()
+                    .toLowerCase();
+                final approvalStatus = (doc.data()['approvalStatus'] ?? '')
+                    .toString()
+                    .toLowerCase();
 
-            if (status == 'sent') sent++;
-            if (status == 'approved' || approvalStatus == 'approved') approved++;
-            if (status == 'converted') converted++;
-          }
+                if (status == 'sent') sent++;
+                if (status == 'approved' || approvalStatus == 'approved')
+                  approved++;
+                if (status == 'converted') converted++;
+              }
 
               return Column(
                 children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: 38,
-                        child: TextField(
-                          controller: _searchController,
-                          focusNode: _searchFocusNode,
-                          textInputAction: TextInputAction.search,
-                          onChanged: _onSearchChanged,
-                          decoration: InputDecoration(
-                            hintText: 'Search quotation, customer...',
-                            prefixIcon: const Icon(Icons.search, size: 18),
-                            suffixIcon: searchValue.trim().isEmpty
-                                ? null
-                                : IconButton(
-                              tooltip: 'Clear',
-                              icon: const Icon(Icons.close, size: 17),
-                              onPressed: _clearSearch,
-                            ),
-                            isDense: true,
-                            filled: true,
-                            fillColor: Colors.grey.shade100,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 8,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide: BorderSide.none,
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide: BorderSide.none,
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide: BorderSide.none,
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 38,
+                            child: TextField(
+                              controller: _searchController,
+                              focusNode: _searchFocusNode,
+                              textInputAction: TextInputAction.search,
+                              onChanged: _onSearchChanged,
+                              decoration: InputDecoration(
+                                hintText: 'Search quotation, customer...',
+                                prefixIcon: const Icon(Icons.search, size: 18),
+                                suffixIcon: searchValue.trim().isEmpty
+                                    ? null
+                                    : IconButton(
+                                        tooltip: 'Clear',
+                                        icon: const Icon(Icons.close, size: 17),
+                                        onPressed: _clearSearch,
+                                      ),
+                                isDense: true,
+                                filled: true,
+                                fillColor: Colors.grey.shade100,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 8,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: BorderSide.none,
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: BorderSide.none,
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: BorderSide.none,
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    SizedBox(
-                      height: 38,
-                      width: 38,
-                      child: Material(
-                        color: Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(10),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(10),
-                          onTap: _openFilterSheet,
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              Icon(
-                                Icons.tune_rounded,
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          height: 38,
+                          width: 38,
+                          child: Material(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(10),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(10),
+                              onTap: _openQuotationSettings,
+                              child: Icon(
+                                Icons.settings_outlined,
                                 size: 18,
                                 color: Colors.grey.shade800,
                               ),
-                              if (_hasActiveFilters)
-                                Positioned(
-                                  right: 8,
-                                  top: 8,
-                                  child: Container(
-                                    width: 7,
-                                    height: 7,
-                                    decoration: BoxDecoration(
-                                      color: Colors.blue.shade700,
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                ),
-                            ],
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    _MiniStatText(label: 'Total', value: totalQuotes.toString()),
-                    const SizedBox(width: 14),
-                    _MiniStatText(label: 'Sent', value: sent.toString()),
-                    const SizedBox(width: 14),
-                    _MiniStatText(label: 'Approved', value: approved.toString()),
-                    const SizedBox(width: 14),
-                    _MiniStatText(label: 'Converted', value: converted.toString()),
-                  ],
-                ),
-              ),
-              if (_hasActiveFilters)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Filters applied',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade700,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: _resetFilters,
-                        style: TextButton.styleFrom(
-                          minimumSize: Size.zero,
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: const Text('Clear Filters', style: TextStyle(fontSize: 12)),
-                      ),
-                    ],
-                  ),
-                ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: filteredDocs.isEmpty
-                    ? _EmptyQuotationsState(
-                  hasSearch:
-                  searchValue.trim().isNotEmpty || _hasActiveFilters,
-                  onReset: () {
-                    _clearSearch();
-                    _resetFilters();
-                  },
-                )
-                    : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 90),
-                  itemCount: filteredDocs.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    final doc = filteredDocs[index];
-                    final data = doc.data();
-
-                    final rawQNo = data['quoteNumber']?.toString().trim() ?? '';
-                    final qNo = rawQNo.isEmpty ? 'Draft' : rawQNo;
-                    final version = data['version']?.toString() ?? '1';
-                    final customer = data['clientName']?.toString() ?? 'Unknown Customer';
-
-                    final amt = _money(data['grandTotal']);
-                    final status = data['status']?.toString() ?? 'Draft';
-                    final approval = data['approvalStatus']?.toString() ?? 'Pending';
-                    final paymentStat = data['paymentStatus']?.toString() ?? 'Pending';
-                    final inqRef = (data['inquiryRefNo'] ?? data['inquiryNumber'] ?? data['inquiryId'] ?? '').toString();
-
-                    bool isCancelled = status.toLowerCase() == 'cancelled';
-                    bool isApproved = status.toLowerCase() == 'approved' || approval.toLowerCase() == 'approved';
-                    bool isSent = status.toLowerCase() == 'sent';
-                    bool isConverted = status.toLowerCase() == 'converted';
-
-                    bool canEdit = !isCancelled && !isApproved && !isConverted;
-                    bool isConverting = _convertingDocs[doc.id] == true;
-
-                    final String createdByUid = _parseSafeString(data['createdBy']);
-                    final String explicitlyStoredName = _safeString(data['createdByName']);
-
-                    final Timestamp? createdAtRaw = _safeTimestamp(data['createdAt']);
-                    final Timestamp? nextFollowUpRaw = _safeTimestamp(data['nextFollowUpDate']);
-
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: Colors.grey.shade200,
-                          width: 0.8,
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(10),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                CircleAvatar(
-                                  radius: 18,
-                                  backgroundColor: Colors.blue.shade50,
-                                  child: Text(
-                                    customer.isNotEmpty
-                                        ? customer[0].toUpperCase()
-                                        : '?',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.blue.shade800,
-                                    ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          height: 38,
+                          width: 38,
+                          child: Material(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(10),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(10),
+                              onTap: _openFilterSheet,
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.tune_rounded,
+                                    size: 18,
+                                    color: Colors.grey.shade800,
                                   ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        '$qNo (v$version)',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontSize: 14.5,
-                                          fontWeight: FontWeight.w700,
+                                  if (_hasActiveFilters)
+                                    Positioned(
+                                      right: 8,
+                                      top: 8,
+                                      child: Container(
+                                        width: 7,
+                                        height: 7,
+                                        decoration: BoxDecoration(
+                                          color: Colors.blue.shade700,
+                                          shape: BoxShape.circle,
                                         ),
                                       ),
-                                      const SizedBox(height: 1),
-                                      Text(
-                                        customer,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: 12.5,
-                                          color: Colors.grey.shade600,
-                                          fontWeight: FontWeight.w500,
-                                        ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        _MiniStatText(
+                          label: 'Total',
+                          value: totalQuotes.toString(),
+                        ),
+                        const SizedBox(width: 14),
+                        _MiniStatText(label: 'Sent', value: sent.toString()),
+                        const SizedBox(width: 14),
+                        _MiniStatText(
+                          label: 'Approved',
+                          value: approved.toString(),
+                        ),
+                        const SizedBox(width: 14),
+                        _MiniStatText(
+                          label: 'Converted',
+                          value: converted.toString(),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_hasActiveFilters)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Filters applied',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade700,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _resetFilters,
+                            style: TextButton.styleFrom(
+                              minimumSize: Size.zero,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: const Text(
+                              'Clear Filters',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: filteredDocs.isEmpty
+                        ? _EmptyQuotationsState(
+                            hasSearch:
+                                searchValue.trim().isNotEmpty ||
+                                _hasActiveFilters,
+                            onReset: () {
+                              _clearSearch();
+                              _resetFilters();
+                            },
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 90),
+                            itemCount: filteredDocs.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 8),
+                            itemBuilder: (context, index) {
+                              final doc = filteredDocs[index];
+                              final data = doc.data();
+
+                              final rawQNo =
+                                  data['quoteNumber']?.toString().trim() ?? '';
+                              final qNo = rawQNo.isEmpty ? 'Draft' : rawQNo;
+                              final version =
+                                  data['version']?.toString() ?? '1';
+                              final customer =
+                                  data['clientName']?.toString() ??
+                                  'Unknown Customer';
+
+                              final amt = _money(data['grandTotal']);
+                              final status =
+                                  data['status']?.toString() ?? 'Draft';
+                              final approval =
+                                  data['approvalStatus']?.toString() ??
+                                  'Pending';
+                              final paymentStat =
+                                  data['paymentStatus']?.toString() ??
+                                  'Pending';
+                              final inqRef =
+                                  (data['inquiryRefNo'] ??
+                                          data['inquiryNumber'] ??
+                                          data['inquiryId'] ??
+                                          '')
+                                      .toString();
+
+                              bool isCancelled =
+                                  status.toLowerCase() == 'cancelled';
+                              bool isApproved =
+                                  status.toLowerCase() == 'approved' ||
+                                  approval.toLowerCase() == 'approved';
+                              bool isSent = status.toLowerCase() == 'sent';
+                              bool isConverted =
+                                  status.toLowerCase() == 'converted';
+
+                              bool canEdit =
+                                  !isCancelled && !isApproved && !isConverted;
+                              bool isConverting =
+                                  _convertingDocs[doc.id] == true;
+
+                              final String createdByUid = _parseSafeString(
+                                data['createdBy'],
+                              );
+                              final String explicitlyStoredName = _safeString(
+                                data['createdByName'],
+                              );
+
+                              final Timestamp? createdAtRaw = _safeTimestamp(
+                                data['createdAt'],
+                              );
+                              final Timestamp? nextFollowUpRaw = _safeTimestamp(
+                                data['nextFollowUpDate'],
+                              );
+
+                              return Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: Colors.grey.shade200,
+                                    width: 0.8,
+                                  ),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(10),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 18,
+                                            backgroundColor:
+                                                Colors.blue.shade50,
+                                            child: Text(
+                                              customer.isNotEmpty
+                                                  ? customer[0].toUpperCase()
+                                                  : '?',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w700,
+                                                color: Colors.blue.shade800,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  '$qNo (v$version)',
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    fontSize: 14.5,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 1),
+                                                Text(
+                                                  customer,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    fontSize: 12.5,
+                                                    color: Colors.grey.shade600,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          SizedBox(
+                                            width: 28,
+                                            height: 28,
+                                            child: PopupMenuButton<String>(
+                                              padding: EdgeInsets.zero,
+                                              tooltip: 'Actions',
+                                              icon: Icon(
+                                                Icons.more_vert,
+                                                size: 20,
+                                                color: Colors.grey.shade600,
+                                              ),
+                                              onSelected: (val) {
+                                                if (val == 'view') {
+                                                  _openQuotationPreview(data);
+                                                } else if (val == 'edit') {
+                                                  _openQuotationForEdit(
+                                                    doc.id,
+                                                    data,
+                                                  );
+                                                } else if (val == 'approve') {
+                                                  _updateApproval(
+                                                    doc.id,
+                                                    'Approved',
+                                                  );
+                                                } else if (val == 'reject') {
+                                                  _updateApproval(
+                                                    doc.id,
+                                                    'Rejected',
+                                                  );
+                                                } else if (val == 'convert') {
+                                                  _convertToSalesOrder(
+                                                    doc.id,
+                                                    data,
+                                                  );
+                                                } else if (val == 'revision') {
+                                                  _createRevision(doc.id, data);
+                                                } else if (val == 'cancel') {
+                                                  _cancelQuotation(doc.id);
+                                                }
+                                              },
+                                              itemBuilder: (context) {
+                                                List<PopupMenuEntry<String>>
+                                                items = [
+                                                  const PopupMenuItem(
+                                                    value: 'view',
+                                                    child: Text(
+                                                      'View Quotation',
+                                                    ),
+                                                  ),
+                                                ];
+
+                                                if (canEdit) {
+                                                  items.add(
+                                                    const PopupMenuItem(
+                                                      value: 'edit',
+                                                      child: Text(
+                                                        'Edit Quotation',
+                                                      ),
+                                                    ),
+                                                  );
+                                                }
+
+                                                if (!isCancelled) {
+                                                  items.add(
+                                                    const PopupMenuDivider(),
+                                                  );
+
+                                                  if (approval.toLowerCase() !=
+                                                          'approved' &&
+                                                      approval.toLowerCase() !=
+                                                          'rejected') {
+                                                    items.add(
+                                                      const PopupMenuItem(
+                                                        value: 'approve',
+                                                        child: Text('Approve'),
+                                                      ),
+                                                    );
+                                                    items.add(
+                                                      const PopupMenuItem(
+                                                        value: 'reject',
+                                                        child: Text('Reject'),
+                                                      ),
+                                                    );
+                                                  }
+
+                                                  if (!isConverted &&
+                                                      isApproved &&
+                                                      !isConverting) {
+                                                    items.add(
+                                                      const PopupMenuItem(
+                                                        value: 'convert',
+                                                        child: Text(
+                                                          'Convert to Sales Order',
+                                                        ),
+                                                      ),
+                                                    );
+                                                  }
+
+                                                  items.add(
+                                                    const PopupMenuItem(
+                                                      value: 'revision',
+                                                      child: Text(
+                                                        'Create Revision',
+                                                      ),
+                                                    ),
+                                                  );
+
+                                                  items.add(
+                                                    const PopupMenuDivider(),
+                                                  );
+                                                  items.add(
+                                                    const PopupMenuItem(
+                                                      value: 'cancel',
+                                                      child: Text(
+                                                        'Cancel',
+                                                        style: TextStyle(
+                                                          color: Colors.red,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  );
+                                                }
+
+                                                return items;
+                                              },
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Wrap(
+                                        spacing: 6,
+                                        runSpacing: 6,
+                                        children: [
+                                          _InfoChip(
+                                            label: status,
+                                            backgroundColor:
+                                                _getQuotationStatusBg(status),
+                                            textColor: _getQuotationStatusFg(
+                                              status,
+                                            ),
+                                          ),
+                                          if (approval != 'Pending')
+                                            _InfoChip(
+                                              label: approval,
+                                              backgroundColor:
+                                                  _getQuotationStatusBg(
+                                                    approval,
+                                                    isApproval: true,
+                                                  ),
+                                              textColor: _getQuotationStatusFg(
+                                                approval,
+                                                isApproval: true,
+                                              ),
+                                            ),
+                                          if (status.toLowerCase() ==
+                                              'converted')
+                                            _InfoChip(
+                                              label: paymentStat,
+                                              backgroundColor:
+                                                  _getQuotationStatusBg(
+                                                    paymentStat,
+                                                    isPayment: true,
+                                                  ),
+                                              textColor: _getQuotationStatusFg(
+                                                paymentStat,
+                                                isPayment: true,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Wrap(
+                                        spacing: 12,
+                                        runSpacing: 6,
+                                        crossAxisAlignment:
+                                            WrapCrossAlignment.center,
+                                        children: [
+                                          if (inqRef.isNotEmpty)
+                                            _InlineInfo(
+                                              icon: Icons.tag_outlined,
+                                              text: 'INQ: $inqRef',
+                                            ),
+                                          if (explicitlyStoredName.isNotEmpty)
+                                            _InlineInfo(
+                                              icon: Icons.person_outline,
+                                              text: explicitlyStoredName,
+                                            )
+                                          else
+                                            FutureBuilder<String>(
+                                              future: _getUserName(
+                                                createdByUid,
+                                              ),
+                                              builder: (context, snapshot) {
+                                                return _InlineInfo(
+                                                  icon: Icons.person_outline,
+                                                  text: snapshot.data ?? '...',
+                                                );
+                                              },
+                                            ),
+                                          _InlineInfo(
+                                            icon: Icons.currency_rupee_outlined,
+                                            text: amt,
+                                          ),
+                                          _InlineInfo(
+                                            icon: Icons.add_circle_outline,
+                                            text:
+                                                'Created: ${_formatCompactDate(createdAtRaw?.toDate())}',
+                                          ),
+                                          if (nextFollowUpRaw != null)
+                                            _InlineInfo(
+                                              icon: Icons.event_repeat_outlined,
+                                              text:
+                                                  'Next: ${_formatCompactDate(nextFollowUpRaw.toDate())}',
+                                            ),
+                                        ],
                                       ),
                                     ],
                                   ),
                                 ),
-                                SizedBox(
-                                  width: 28,
-                                  height: 28,
-                                  child: PopupMenuButton<String>(
-                                    padding: EdgeInsets.zero,
-                                    tooltip: 'Actions',
-                                    icon: Icon(Icons.more_vert, size: 20, color: Colors.grey.shade600),
-                                    onSelected: (val) {
-                                      if (val == 'view') {
-                                        _openQuotationPreview(data);
-                                      } else if (val == 'edit') {
-                                        _openQuotationForEdit(doc.id, data);
-                                      } else if (val == 'approve') {
-                                        _updateApproval(doc.id, 'Approved');
-                                      } else if (val == 'reject') {
-                                        _updateApproval(doc.id, 'Rejected');
-                                      } else if (val == 'convert') {
-                                        _convertToSalesOrder(doc.id, data);
-                                      } else if (val == 'revision') {
-                                        _createRevision(doc.id, data);
-                                      } else if (val == 'cancel') {
-                                        _cancelQuotation(doc.id);
-                                      }
-                                    },
-                                    itemBuilder: (context) {
-                                      List<PopupMenuEntry<String>> items = [
-                                        const PopupMenuItem(
-                                          value: 'view',
-                                          child: Text('View Quotation'),
-                                        ),
-                                      ];
-
-                                      if (canEdit) {
-                                        items.add(
-                                          const PopupMenuItem(
-                                            value: 'edit',
-                                            child: Text('Edit Quotation'),
-                                          ),
-                                        );
-                                      }
-
-                                      if (!isCancelled) {
-                                        items.add(const PopupMenuDivider());
-
-                                        if (approval.toLowerCase() != 'approved' && approval.toLowerCase() != 'rejected') {
-                                          items.add(
-                                            const PopupMenuItem(
-                                              value: 'approve',
-                                              child: Text('Approve'),
-                                            ),
-                                          );
-                                          items.add(
-                                            const PopupMenuItem(
-                                              value: 'reject',
-                                              child: Text('Reject'),
-                                            ),
-                                          );
-                                        }
-
-                                        if (!isConverted && isApproved && !isConverting) {
-                                          items.add(
-                                            const PopupMenuItem(
-                                              value: 'convert',
-                                              child: Text('Convert to Sales Order'),
-                                            ),
-                                          );
-                                        }
-
-                                        items.add(
-                                          const PopupMenuItem(
-                                            value: 'revision',
-                                            child: Text('Create Revision'),
-                                          ),
-                                        );
-
-                                        items.add(const PopupMenuDivider());
-                                        items.add(
-                                          const PopupMenuItem(
-                                            value: 'cancel',
-                                            child: Text('Cancel', style: TextStyle(color: Colors.red)),
-                                          ),
-                                        );
-                                      }
-
-                                      return items;
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: [
-                                _InfoChip(
-                                  label: status,
-                                  backgroundColor: _getQuotationStatusBg(status),
-                                  textColor: _getQuotationStatusFg(status),
-                                ),
-                                if (approval != 'Pending')
-                                  _InfoChip(
-                                    label: approval,
-                                    backgroundColor: _getQuotationStatusBg(approval, isApproval: true),
-                                    textColor: _getQuotationStatusFg(approval, isApproval: true),
-                                  ),
-                                if (status.toLowerCase() == 'converted')
-                                  _InfoChip(
-                                    label: paymentStat,
-                                    backgroundColor: _getQuotationStatusBg(paymentStat, isPayment: true),
-                                    textColor: _getQuotationStatusFg(paymentStat, isPayment: true),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 12,
-                              runSpacing: 6,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              children: [
-                                if (inqRef.isNotEmpty)
-                                  _InlineInfo(
-                                    icon: Icons.tag_outlined,
-                                    text: 'INQ: $inqRef',
-                                  ),
-                                if (explicitlyStoredName.isNotEmpty)
-                                  _InlineInfo(
-                                    icon: Icons.person_outline,
-                                    text: explicitlyStoredName,
-                                  )
-                                else
-                                  FutureBuilder<String>(
-                                    future: _getUserName(createdByUid),
-                                    builder: (context, snapshot) {
-                                      return _InlineInfo(
-                                        icon: Icons.person_outline,
-                                        text: snapshot.data ?? '...',
-                                      );
-                                    },
-                                  ),
-                                _InlineInfo(
-                                  icon: Icons.currency_rupee_outlined,
-                                  text: amt,
-                                ),
-                                _InlineInfo(
-                                  icon: Icons.add_circle_outline,
-                                  text: 'Created: ${_formatCompactDate(createdAtRaw?.toDate())}',
-                                ),
-                                if (nextFollowUpRaw != null)
-                                  _InlineInfo(
-                                    icon: Icons.event_repeat_outlined,
-                                    text: 'Next: ${_formatCompactDate(nextFollowUpRaw.toDate())}',
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
+                              );
+                            },
+                          ),
+                  ),
                 ],
               );
             },
@@ -1427,7 +1617,11 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
     );
   }
 
-  Color _getQuotationStatusBg(String status, {bool isApproval = false, bool isPayment = false}) {
+  Color _getQuotationStatusBg(
+    String status, {
+    bool isApproval = false,
+    bool isPayment = false,
+  }) {
     String s = status.toLowerCase();
     if (isPayment) {
       if (s == 'paid') return Colors.green.shade50;
@@ -1444,7 +1638,11 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
     }
   }
 
-  Color _getQuotationStatusFg(String status, {bool isApproval = false, bool isPayment = false}) {
+  Color _getQuotationStatusFg(
+    String status, {
+    bool isApproval = false,
+    bool isPayment = false,
+  }) {
     String s = status.toLowerCase();
     if (isPayment) {
       if (s == 'paid') return Colors.green.shade800;
