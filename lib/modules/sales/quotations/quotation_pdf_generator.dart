@@ -452,10 +452,20 @@ class QuotationPdfGenerator {
           .collection('companies')
           .doc(companyId)
           .collection('settings')
-          .doc('quotation_settings')
+          .doc('letterhead_settings')
           .get();
 
-      final data = snap.data() ?? <String, dynamic>{};
+      var data = snap.data() ?? <String, dynamic>{};
+
+      if (data.isEmpty) {
+        final oldSnap = await FirebaseFirestore.instance
+            .collection('companies')
+            .doc(companyId)
+            .collection('settings')
+            .doc('quotation_settings')
+            .get();
+        data = oldSnap.data() ?? <String, dynamic>{};
+      }
       final type = _normalizeQuotationType(quotation['quotationType']);
       final selected = data[type];
 

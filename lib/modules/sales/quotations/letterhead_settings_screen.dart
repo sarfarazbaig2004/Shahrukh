@@ -5,12 +5,12 @@ import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 
-class QuotationSettingsScreen extends StatefulWidget {
+class LetterheadSettingsScreen extends StatefulWidget {
   final String companyId;
   final String currentUserUid;
   final String currentUserName;
 
-  const QuotationSettingsScreen({
+  const LetterheadSettingsScreen({
     super.key,
     required this.companyId,
     required this.currentUserUid,
@@ -18,11 +18,11 @@ class QuotationSettingsScreen extends StatefulWidget {
   });
 
   @override
-  State<QuotationSettingsScreen> createState() =>
-      _QuotationSettingsScreenState();
+  State<LetterheadSettingsScreen> createState() =>
+      _LetterheadSettingsScreenState();
 }
 
-class _QuotationSettingsScreenState extends State<QuotationSettingsScreen>
+class _LetterheadSettingsScreenState extends State<LetterheadSettingsScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
 
@@ -38,7 +38,7 @@ class _QuotationSettingsScreenState extends State<QuotationSettingsScreen>
       .collection('companies')
       .doc(widget.companyId)
       .collection('settings')
-      .doc('quotation_settings');
+      .doc('letterhead_settings');
 
   @override
   void initState() {
@@ -57,8 +57,19 @@ class _QuotationSettingsScreenState extends State<QuotationSettingsScreen>
 
   Future<void> _load() async {
     try {
-      final snap = await _settingsRef.get();
-      final data = snap.data() ?? {};
+      var snap = await _settingsRef.get();
+      var data = snap.data() ?? {};
+
+      if (data.isEmpty) {
+        final oldSnap = await FirebaseFirestore.instance
+            .collection('companies')
+            .doc(widget.companyId)
+            .collection('settings')
+            .doc('quotation_settings')
+            .get();
+        data = oldSnap.data() ?? {};
+      }
+
       final domestic = data['domestic'];
       final export = data['export'];
 
@@ -105,7 +116,7 @@ class _QuotationSettingsScreenState extends State<QuotationSettingsScreen>
     try {
       final safeName = file.name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
       final path =
-          'companies/${widget.companyId}/quotation_settings/$type/${DateTime.now().millisecondsSinceEpoch}_$safeName';
+          'companies/${widget.companyId}/letterhead_settings/$type/${DateTime.now().millisecondsSinceEpoch}_$safeName';
 
       final ref = FirebaseStorage.instance.ref(path);
 
@@ -192,8 +203,8 @@ class _QuotationSettingsScreenState extends State<QuotationSettingsScreen>
         children: [
           Text(
             type == 'domestic'
-                ? 'Domestic Quotation Settings'
-                : 'Export Quotation Settings',
+                ? 'Domestic Letterhead Settings'
+                : 'Export Letterhead Settings',
             style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 14),
@@ -326,7 +337,7 @@ class _QuotationSettingsScreenState extends State<QuotationSettingsScreen>
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Quotation Settings'),
+        title: const Text('Letterhead Settings'),
         bottom: TabBar(
           controller: _tabController,
           tabs: const [

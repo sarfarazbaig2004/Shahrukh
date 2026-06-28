@@ -312,10 +312,20 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
           .collection('companies')
           .doc(companyId)
           .collection('settings')
-          .doc('quotation_settings')
+          .doc('letterhead_settings')
           .get();
 
       _quotationSettings = snap.data() ?? <String, dynamic>{};
+
+      if (_quotationSettings.isEmpty) {
+        final oldSnap = await FirebaseFirestore.instance
+            .collection('companies')
+            .doc(companyId)
+            .collection('settings')
+            .doc('quotation_settings')
+            .get();
+        _quotationSettings = oldSnap.data() ?? <String, dynamic>{};
+      }
     } catch (e) {
       developer.log(
         'Unable to load quotation settings: $e',

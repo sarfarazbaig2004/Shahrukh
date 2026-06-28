@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'package:QUIK/modules/sales/quotations/quotation_screen_local.dart';
-import 'package:QUIK/modules/sales/quotations/quotation_settings_screen.dart';
+import 'package:QUIK/modules/sales/quotations/letterhead_settings_screen.dart';
 import 'quotation_pdf_generator.dart';
 
 const Color primaryColor = Color(0xFF1E3A8A);
@@ -307,11 +307,11 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
     if (mounted) setState(() {});
   }
 
-  Future<void> _openQuotationSettings() async {
+  Future<void> _openLetterheadSettings() async {
     final companyId = _companyId;
     if (companyId == null || companyId.isEmpty) {
       _showSnack(
-        'Company context missing. Cannot open quotation settings.',
+        'Company context missing. Cannot open letterhead settings.',
         isError: true,
       );
       return;
@@ -319,7 +319,7 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
 
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => QuotationSettingsScreen(
+        builder: (_) => LetterheadSettingsScreen(
           companyId: companyId,
           currentUserUid: _currentUserUid ?? '',
           currentUserName: _currentUserName,
@@ -1141,7 +1141,7 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
                             borderRadius: BorderRadius.circular(10),
                             child: InkWell(
                               borderRadius: BorderRadius.circular(10),
-                              onTap: _openQuotationSettings,
+                              onTap: _openLetterheadSettings,
                               child: Icon(
                                 Icons.settings_outlined,
                                 size: 18,
