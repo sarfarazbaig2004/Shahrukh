@@ -16,6 +16,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 class QuotationLineItem {
   String id;
   String productId;
+  String itemCode;
   String name;
   String description;
   String hsnCode;
@@ -31,6 +32,7 @@ class QuotationLineItem {
   QuotationLineItem({
     required this.id,
     required this.productId,
+    this.itemCode = '',
     required this.name,
     this.description = '',
     this.hsnCode = '',
@@ -77,6 +79,7 @@ class QuotationLineItem {
     return {
       'id': id,
       'productId': productId,
+      'itemCode': itemCode,
       'name': name,
       'description': description,
       'hsnCode': hsnCode,
@@ -100,6 +103,15 @@ class QuotationLineItem {
     return QuotationLineItem(
       id: _safeString(map['id']),
       productId: _safeString(map['productId']),
+      itemCode: _safeString(
+        map['itemCode'] ??
+            map['productCode'] ??
+            map['item_code'] ??
+            map['code'] ??
+            map['sku'] ??
+            map['materialCode'] ??
+            map['partNo'],
+      ),
       name: _safeString(map['name']),
       description: _safeString(map['description']),
       hsnCode: _safeString(map['hsnCode']),

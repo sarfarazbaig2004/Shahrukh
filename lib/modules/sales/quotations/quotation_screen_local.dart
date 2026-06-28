@@ -1115,7 +1115,17 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     List compatibleProductIds = i['compatibleProductIds'] as List? ?? [];
     List compatibleProductNames = i['compatibleProductNames'] as List? ?? [];
     List compatibleSubcategories = i['compatibleSubcategories'] as List? ?? [];
-    String itemCode = (i['itemCode'] ?? '').toString();
+    String itemCode =
+        (i['itemCode'] ??
+                i['productCode'] ??
+                i['item_code'] ??
+                i['code'] ??
+                i['sku'] ??
+                i['materialCode'] ??
+                i['partNo'] ??
+                '')
+            .toString()
+            .trim();
     String sellingPrice = (i['sellingPrice'] ?? '').toString();
     double baseGst =
         double.tryParse(i['baseGst']?.toString() ?? totalGst.toString()) ??
@@ -1188,7 +1198,17 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
           compatibleSubcategories =
               pData['compatibleSubcategories'] as List? ??
               compatibleSubcategories;
-          itemCode = (pData['itemCode'] ?? itemCode).toString();
+          itemCode =
+              (pData['itemCode'] ??
+                      pData['productCode'] ??
+                      pData['item_code'] ??
+                      pData['code'] ??
+                      pData['sku'] ??
+                      pData['materialCode'] ??
+                      pData['partNo'] ??
+                      itemCode)
+                  .toString()
+                  .trim();
           sellingPrice =
               (pData['sellingPrice'] ?? pData['price'] ?? sellingPrice)
                   .toString();
@@ -1228,6 +1248,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     return QuotationLineItem(
       id: id,
       productId: productId,
+      itemCode: itemCode,
       name: name,
       description: desc,
       hsnCode: hsn,
