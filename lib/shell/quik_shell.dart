@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:QUIK/core/theme/app_theme.dart';
 import 'package:QUIK/modules/administration/users/screen_user_management.dart';
+import 'package:QUIK/modules/administration/compliance_legal/screens_compliance_legal_list.dart';
 import 'package:QUIK/modules/crm/customers/screens_customer_list.dart';
 import 'package:QUIK/modules/crm/contacts/screens_contact_list.dart';
 import 'package:QUIK/modules/crm/customer_visits/customer_visit_list_screen.dart';
@@ -114,6 +115,7 @@ enum ShellPage {
 
   adminUsers,
   adminAuditLogs,
+  adminComplianceLegal,
 
   settingsGeneral,
 }
@@ -205,6 +207,8 @@ extension ShellPageX on ShellPage {
         return 'Users';
       case ShellPage.adminAuditLogs:
         return 'Audit Logs';
+      case ShellPage.adminComplianceLegal:
+        return 'Compliance & Legal';
       case ShellPage.settingsGeneral:
         return 'Settings';
     }
@@ -296,6 +300,8 @@ extension ShellPageX on ShellPage {
         return Icons.manage_accounts_outlined;
       case ShellPage.adminAuditLogs:
         return Icons.fact_check_outlined;
+      case ShellPage.adminComplianceLegal:
+        return Icons.gavel_outlined;
       case ShellPage.settingsGeneral:
         return Icons.settings_outlined;
     }
@@ -628,6 +634,11 @@ class _ZohoShellState extends State<ZohoShell> {
         return _hasPermission('administration', 'users');
       case ShellPage.adminAuditLogs:
         return _hasPermission('administration', 'auditLogs');
+      case ShellPage.adminComplianceLegal:
+        return _hasPermission(
+          'administration',
+          'complianceLegal',
+        );
     }
   }
 
@@ -733,6 +744,7 @@ class _ZohoShellState extends State<ZohoShell> {
         children: [
           ShellPage.adminUsers,
           ShellPage.adminAuditLogs,
+          ShellPage.adminComplianceLegal,
         ],
       ),
     ];
@@ -790,6 +802,7 @@ class _ZohoShellState extends State<ZohoShell> {
       case ShellPage.serviceSalesOrders:
       case ShellPage.serviceVisits:
       case ShellPage.serviceTechnicians:
+      case ShellPage.adminComplianceLegal:
         return true;
       default:
         return false;
@@ -1627,6 +1640,16 @@ class _ZohoShellState extends State<ZohoShell> {
           ),
         );
 
+      case ShellPage.adminComplianceLegal:
+        return Padding(
+          padding: const EdgeInsets.all(
+            ShellLayout.pagePadding,
+          ),
+          child: ScreensComplianceLegalList(
+            companyId: widget.companyId,
+          ),
+        );
+
       case ShellPage.financeProforma:
         return Padding(
           padding: const EdgeInsets.all(ShellLayout.pagePadding),
@@ -1903,6 +1926,13 @@ class _ZohoShellState extends State<ZohoShell> {
         return ['Catalog', 'Stock', 'SKU', 'Pricing'];
       case ShellPage.adminUsers:
         return ['Access', 'Permissions', 'Roles', 'Team'];
+      case ShellPage.adminComplianceLegal:
+        return [
+          'Compliance',
+          'Legal',
+          'Licenses',
+          'Policies',
+        ];
       case ShellPage.settingsGeneral:
         return ['Company', 'Security', 'Users', 'Audit'];
       case ShellPage.serviceRequests:
@@ -1935,6 +1965,8 @@ class _ZohoShellState extends State<ZohoShell> {
         return 'Manage your product master, stock-facing items, and future inventory movements through a clean inventory module.';
       case ShellPage.adminUsers:
         return 'Handle user management, role-based access, and team structure for each company workspace.';
+      case ShellPage.adminComplianceLegal:
+        return 'Manage company compliance records, legal documents, registrations, licenses, contracts and statutory obligations.';
       case ShellPage.settingsGeneral:
         return 'Manage workspace preferences, company controls, users, security, notifications, integrations, and audit-related options from one professional ERP settings hub.';
       case ShellPage.serviceRequests:
@@ -1962,6 +1994,13 @@ class _ZohoShellState extends State<ZohoShell> {
         return ['Dispatch challan no.', 'Vehicle details', 'Packing list', 'Delivery status'];
       case ShellPage.financeOutstanding:
         return ['Customer ageing', 'Pending payments', 'Reminder schedule', 'Collection dashboard'];
+      case ShellPage.adminComplianceLegal:
+        return [
+          'License renewals',
+          'Legal documents',
+          'Compliance tracking',
+          'Contract management',
+        ];
       case ShellPage.settingsGeneral:
         return ['Company profile', 'Users and permissions', 'Security and access', 'Audit and integrations'];
       case ShellPage.serviceRequests:
