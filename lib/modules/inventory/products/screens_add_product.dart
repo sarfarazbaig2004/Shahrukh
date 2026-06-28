@@ -168,7 +168,14 @@ class _ScreensAddProductState extends State<ScreensAddProduct> {
       _nameController.text = (data['name'] ?? '').toString();
       _descriptionController.text = (data['description'] ?? '').toString();
       _hsnController.text = (data['hsnCode'] ?? '').toString();
-      _itemCodeController.text = (data['itemCode'] ?? '').toString();
+      _itemCodeController.text =
+          (data['itemCode'] ??
+                  data['productCode'] ??
+                  data['code'] ??
+                  data['materialCode'] ??
+                  data['partNo'] ??
+                  '')
+              .toString();
       _skuController.text = (data['sku'] ?? '').toString();
       _barcodeController.text = (data['barcode'] ?? '').toString();
 
