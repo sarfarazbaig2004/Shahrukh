@@ -70,6 +70,21 @@ List<DropdownMenuItem<String>> taskPriorityItems({bool includeAll = false}) {
       .toList();
 }
 
+class _CompanyUserOption {
+  const _CompanyUserOption({
+    required this.uid,
+    required this.name,
+    required this.email,
+  });
+
+  final String uid;
+  final String name;
+  final String email;
+
+  String get displayName =>
+      name.isNotEmpty ? name : (email.isNotEmpty ? email : 'Unknown');
+}
+
 class TaskListScreen extends StatefulWidget {
   final String? companyId;
   final String? userUid;
@@ -131,6 +146,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
         .trim();
   }
 
+  CollectionReference<Map<String, dynamic>> get _companyUsersRef =>
+      _db.collection('companies').doc(_companyId).collection('users');
+
   CollectionReference<Map<String, dynamic>> get _tasksRef =>
       _db.collection('companies').doc(_companyId).collection('tasks');
 
@@ -182,6 +200,53 @@ class _TaskListScreenState extends State<TaskListScreen> {
     return _tasksRef.snapshots();
   }
 
+  Future<List<_CompanyUserOption>> _loadCompanyUserOptions() async {
+    final fallbackUser = _CompanyUserOption(
+      uid: _currentUserId,
+      name: _currentUserName,
+      email: widget.currentUserEmail ?? widget.userEmail ?? '',
+    );
+
+    if (_companyId.isEmpty) {
+      return fallbackUser.uid.isNotEmpty || fallbackUser.name.isNotEmpty
+          ? [fallbackUser]
+          : <_CompanyUserOption>[];
+    }
+
+    final snap = await _companyUsersRef
+        .where('isActive', isEqualTo: true)
+        .get();
+    final users = snap.docs
+        .map((doc) {
+          final data = doc.data();
+          final name =
+              (data['name'] ??
+                      data['fullName'] ??
+                      data['displayName'] ??
+                      'Unknown')
+                  .toString()
+                  .trim();
+          final email = (data['email'] ?? data['userEmail'] ?? '')
+              .toString()
+              .trim();
+          return _CompanyUserOption(uid: doc.id, name: name, email: email);
+        })
+        .where((user) => user.name.isNotEmpty || user.email.isNotEmpty)
+        .toList();
+
+    users.sort(
+      (a, b) =>
+          a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
+    );
+
+    if ((fallbackUser.uid.isNotEmpty || fallbackUser.name.isNotEmpty) &&
+        !users.any((user) => user.uid == fallbackUser.uid)) {
+      users.insert(0, fallbackUser);
+    }
+
+    return users;
+  }
+
   List<_TaskRecord> _filteredTasks(
     List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
   ) {
@@ -220,11 +285,15 @@ class _TaskListScreenState extends State<TaskListScreen> {
   Future<void> _createTaskDialog() async {
     final titleCtrl = TextEditingController();
     final descCtrl = TextEditingController();
-    final assignedNameCtrl = TextEditingController(text: _currentUserName);
-    final assignedUidCtrl = TextEditingController(text: _currentUserId);
 
     String selectedStatus = 'Pending';
     String selectedPriority = 'Medium';
+    String selectedAssignedName = _currentUserName;
+    String selectedAssignedEmail =
+        widget.currentUserEmail ?? widget.userEmail ?? '';
+    String? selectedAssignedUid = _currentUserId.isNotEmpty
+        ? _currentUserId
+        : null;
     DateTime? dueDate;
     bool saving = false;
 
@@ -239,6 +308,17 @@ class _TaskListScreenState extends State<TaskListScreen> {
                 return;
               }
 
+              final resolvedAssignedUid = (selectedAssignedUid ?? '').trim();
+              final resolvedAssignedName = selectedAssignedName.trim();
+              final resolvedAssignedEmail = selectedAssignedEmail.trim();
+
+              if (resolvedAssignedUid.isEmpty) {
+                _showMessage(
+                  'Please select an assignee from the company users list',
+                );
+                return;
+              }
+
               setDialogState(() => saving = true);
 
               try {
@@ -250,11 +330,12 @@ class _TaskListScreenState extends State<TaskListScreen> {
                   'description': descCtrl.text.trim(),
                   'status': normalizeTaskStatus(selectedStatus),
                   'priority': normalizeTaskPriority(selectedPriority),
-                  'assignedToName': assignedNameCtrl.text.trim(),
-                  'assignedToUid': assignedUidCtrl.text.trim(),
-                  'assignedToUids': assignedUidCtrl.text.trim().isEmpty
+                  'assignedToName': resolvedAssignedName,
+                  'assignedToUid': resolvedAssignedUid,
+                  'assignedToEmail': resolvedAssignedEmail,
+                  'assignedToUids': resolvedAssignedUid.isEmpty
                       ? <String>[]
-                      : <String>[assignedUidCtrl.text.trim()],
+                      : <String>[resolvedAssignedUid],
                   'createdByUid': _currentUserId,
                   'createdByName': _currentUserName,
                   'dueDate': dueDate == null
@@ -294,7 +375,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
                         minLines: 3,
                         maxLines: 5,
                         decoration: const InputDecoration(
-                          labelText: 'Description',
+                          labelText: 'Notes / Comments',
                           border: OutlineInputBorder(),
                         ),
                       ),
@@ -337,28 +418,69 @@ class _TaskListScreenState extends State<TaskListScreen> {
                         ],
                       ),
                       const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: assignedNameCtrl,
-                              decoration: const InputDecoration(
-                                labelText: 'Assigned To Name',
-                                border: OutlineInputBorder(),
-                              ),
+                      FutureBuilder<List<_CompanyUserOption>>(
+                        future: _loadCompanyUserOptions(),
+                        builder: (context, snapshot) {
+                          final users = snapshot.data ?? <_CompanyUserOption>[];
+
+                          return Autocomplete<_CompanyUserOption>(
+                            initialValue: TextEditingValue(
+                              text: selectedAssignedName,
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: TextField(
-                              controller: assignedUidCtrl,
-                              decoration: const InputDecoration(
-                                labelText: 'Assigned To UID',
-                                border: OutlineInputBorder(),
-                              ),
-                            ),
-                          ),
-                        ],
+                            optionsBuilder: (value) {
+                              if (value.text.trim().isEmpty) {
+                                return users;
+                              }
+
+                              final query = value.text.trim().toLowerCase();
+                              return users.where((user) {
+                                final haystack =
+                                    '${user.displayName} ${user.email}'
+                                        .toLowerCase();
+                                return haystack.contains(query);
+                              });
+                            },
+                            displayStringForOption: (option) =>
+                                option.displayName,
+                            fieldViewBuilder:
+                                (
+                                  context,
+                                  textController,
+                                  focusNode,
+                                  onFieldSubmitted,
+                                ) {
+                                  if (textController.text.isEmpty &&
+                                      selectedAssignedName.isNotEmpty) {
+                                    textController.text = selectedAssignedName;
+                                  }
+
+                                  return TextFormField(
+                                    controller: textController,
+                                    focusNode: focusNode,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Assigned To',
+                                      border: OutlineInputBorder(),
+                                      prefixIcon: Icon(Icons.person_outline),
+                                      hintText: 'Search company users',
+                                    ),
+                                    onChanged: (value) {
+                                      setDialogState(() {
+                                        selectedAssignedName = value.trim();
+                                        selectedAssignedUid = null;
+                                        selectedAssignedEmail = '';
+                                      });
+                                    },
+                                  );
+                                },
+                            onSelected: (user) {
+                              setDialogState(() {
+                                selectedAssignedUid = user.uid;
+                                selectedAssignedName = user.name;
+                                selectedAssignedEmail = user.email;
+                              });
+                            },
+                          );
+                        },
                       ),
                       const SizedBox(height: 12),
                       InkWell(
@@ -416,8 +538,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
     titleCtrl.dispose();
     descCtrl.dispose();
-    assignedNameCtrl.dispose();
-    assignedUidCtrl.dispose();
   }
 
   Future<void> _updateTaskStatus(_TaskRecord task, String? newStatus) async {
