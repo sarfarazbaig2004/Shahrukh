@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'create_service_quotation_screen.dart';
 import '../service_requests/service_request_details_screen.dart';
 import '../service_visits/service_visit_details_screen.dart';
+import '../service_sales_orders/create_service_sales_order_screen.dart';
 import 'service_quotation_pdf_preview_screen.dart';
 
 // --- ENTERPRISE WORKSPACE IMPORTS ---
@@ -941,11 +942,28 @@ class _ServiceQuotationDetailsScreenState extends State<ServiceQuotationDetailsS
                 const SizedBox(width: 16),
               ],
 
-              // Disabled Future Button
+              // Convert to Service Sales Order Button
               FilledButton.icon(
-                onPressed: null,
-                icon: const Icon(Icons.handyman, size: 16),
-                label: const Text('Convert To Work Order'),
+                onPressed: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => CreateServiceSalesOrderScreen(
+                    companyId: widget.companyId,
+                    currentUserUid: widget.currentUserUid,
+                    currentUserName: widget.currentUserName,
+                    prefillQuotationId: extModel.quotationId,
+                    prefillQuotationNumber: extModel.quotationNumber,
+                    prefillRequestId: extModel.requestId.isNotEmpty ? extModel.requestId : null,
+                    prefillRequestNumber: extModel.requestNumber.isNotEmpty ? extModel.requestNumber : null,
+                    prefillCustomerId: extModel.customerId,
+                    prefillCustomerName: extModel.customerName,
+                    prefillSiteAddress: _safeString(_quoteData['clientAddress'] ?? _quoteData['addressLine']),
+                    prefillContactPerson: _safeString(_quoteData['contactPerson']),
+                    prefillComplaint: _safeString(_quoteData['complaintDescription'] ?? _quoteData['complaint'] ?? extModel.remarks),
+                    prefillScopeOfWork: extModel.lineItems.map((e) => e.itemName).join(', '),
+                  ))).then((_) => _loadData());
+                },
+                icon: const Icon(Icons.assignment_turned_in_outlined, size: 16),
+                label: const Text('Convert To Service Sales Order'),
+                style: FilledButton.styleFrom(backgroundColor: Colors.teal),
               ),
               const SizedBox(width: 16),
 

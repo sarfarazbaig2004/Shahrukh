@@ -1,9 +1,12 @@
+// FILE PATH: lib/modules/shell/quik_shell.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:QUIK/core/theme/app_theme.dart';
 import 'package:QUIK/modules/administration/users/screen_user_management.dart';
+import 'package:QUIK/modules/administration/compliance_legal/screens_compliance_legal_list.dart';
 import 'package:QUIK/modules/crm/customers/screens_customer_list.dart';
 import 'package:QUIK/modules/crm/contacts/screens_contact_list.dart';
 import 'package:QUIK/modules/crm/customer_visits/customer_visit_list_screen.dart';
@@ -36,6 +39,7 @@ import 'package:QUIK/modules/reports/sales_report/sales_report_screen.dart';
 // Service Sub-Modules
 import 'package:QUIK/modules/service/service_requests/service_request_list_screen.dart';
 import 'package:QUIK/modules/service/service_quotations/service_quotation_list_screen.dart';
+import 'package:QUIK/modules/service/service_sales_orders/service_sales_order_list_screen.dart';
 import 'package:QUIK/modules/service/service_visits/service_visit_list_screen.dart';
 import 'package:QUIK/modules/service/service_technicians/service_technician_list_screen.dart';
 
@@ -43,27 +47,40 @@ import 'package:QUIK/modules/service/service_technicians/service_technician_list
 import 'package:QUIK/modules/purchase/purchase_bills/purchase_bill_screens.dart';
 import 'package:QUIK/modules/purchase/vendors/screens_vendor_list.dart';
 
+/// ---- ENTERPRISE DESIGN SYSTEM CONSTANTS ----
+class ShellLayout {
+  static const double sidebarExpandedWidth = 204.0;
+  static const double sidebarCollapsedWidth = 60.0;
+  static const double headerHeight = 44.0;
+  static const double sidebarItemHeight = 34.0;
+  static const double sidebarGroupHeight = 36.0;
+  static const double pagePadding = 12.0;
+  static const double cardPadding = 10.0;
+  static const double sectionSpacing = 8.0;
+  static const double borderRadius = 6.0;
+  static const Duration animDuration = Duration(milliseconds: 200);
+  static const Duration animFast = Duration(milliseconds: 150);
+}
+
 enum ShellPage {
   dashboard,
 
   salesInquiries,
   salesQuotations,
   salesOrders,
-  salesFollowUps,
   salesTasks,
   salesMeetings,
 
   // Professional Service Workflow
   serviceRequests,
-  serviceWorkOrders,
   serviceQuotations,
+  serviceSalesOrders,
   serviceVisits,
   serviceTechnicians,
 
   crmCustomers,
   crmContacts,
   crmVisits,
-  crmCommunication,
 
   purchaseVendors,
   purchaseQuotations,
@@ -97,10 +114,8 @@ enum ShellPage {
   reportsPayment,
 
   adminUsers,
-  adminRoles,
-  adminCompanyProfile,
-  adminBranches,
   adminAuditLogs,
+  adminComplianceLegal,
 
   settingsGeneral,
 }
@@ -110,40 +125,32 @@ extension ShellPageX on ShellPage {
     switch (this) {
       case ShellPage.dashboard:
         return 'Dashboard';
-
       case ShellPage.salesInquiries:
         return 'Inquiries';
       case ShellPage.salesQuotations:
         return 'Quotations';
       case ShellPage.salesOrders:
         return 'Sales Orders';
-      case ShellPage.salesFollowUps:
-        return 'Follow-ups';
       case ShellPage.salesTasks:
         return 'Tasks';
       case ShellPage.salesMeetings:
         return 'Meetings';
-
       case ShellPage.serviceRequests:
         return 'Service Requests';
-      case ShellPage.serviceWorkOrders:
-        return 'Service Sales Orders';
       case ShellPage.serviceQuotations:
         return 'Service Quotations';
+      case ShellPage.serviceSalesOrders:
+        return 'Service Sales Orders';
       case ShellPage.serviceVisits:
         return 'Service Visits';
       case ShellPage.serviceTechnicians:
         return 'Service Technicians';
-
       case ShellPage.crmCustomers:
         return 'Customers';
       case ShellPage.crmContacts:
         return 'Contacts';
       case ShellPage.crmVisits:
         return 'Customer Visits';
-      case ShellPage.crmCommunication:
-        return 'Communication History';
-
       case ShellPage.purchaseVendors:
         return 'Vendors';
       case ShellPage.purchaseQuotations:
@@ -152,7 +159,6 @@ extension ShellPageX on ShellPage {
         return 'Purchase Orders';
       case ShellPage.purchaseBills:
         return 'Purchase Bills';
-
       case ShellPage.inventoryProducts:
         return 'Products';
       case ShellPage.inventoryStockSummary:
@@ -165,7 +171,6 @@ extension ShellPageX on ShellPage {
         return 'Warehouse';
       case ShellPage.inventoryLowStock:
         return 'Low Stock Alerts';
-
       case ShellPage.dispatchReady:
         return 'Ready for Dispatch';
       case ShellPage.dispatchChallans:
@@ -174,7 +179,6 @@ extension ShellPageX on ShellPage {
         return 'Shipment Tracking';
       case ShellPage.dispatchDelivered:
         return 'Delivered Orders';
-
       case ShellPage.financeProforma:
         return 'Proforma Invoice';
       case ShellPage.financeTaxInvoice:
@@ -189,7 +193,6 @@ extension ShellPageX on ShellPage {
         return 'Outstanding';
       case ShellPage.financeExpenses:
         return 'Expense Entries';
-
       case ShellPage.reportsSales:
         return 'Sales Report';
       case ShellPage.reportsInquiry:
@@ -200,18 +203,12 @@ extension ShellPageX on ShellPage {
         return 'Product Report';
       case ShellPage.reportsPayment:
         return 'Payment Report';
-
       case ShellPage.adminUsers:
         return 'Users';
-      case ShellPage.adminRoles:
-        return 'Roles & Permissions';
-      case ShellPage.adminCompanyProfile:
-        return 'Company Profile';
-      case ShellPage.adminBranches:
-        return 'Branches';
       case ShellPage.adminAuditLogs:
         return 'Audit Logs';
-
+      case ShellPage.adminComplianceLegal:
+        return 'Compliance & Legal';
       case ShellPage.settingsGeneral:
         return 'Settings';
     }
@@ -220,39 +217,33 @@ extension ShellPageX on ShellPage {
   IconData get icon {
     switch (this) {
       case ShellPage.dashboard:
-        return Icons.home_outlined;
+        return Icons.grid_view_rounded;
       case ShellPage.salesInquiries:
         return Icons.campaign_outlined;
       case ShellPage.salesQuotations:
         return Icons.receipt_long_outlined;
       case ShellPage.salesOrders:
         return Icons.shopping_bag_outlined;
-      case ShellPage.salesFollowUps:
-        return Icons.event_repeat_outlined;
       case ShellPage.salesTasks:
         return Icons.task_alt_outlined;
       case ShellPage.salesMeetings:
         return Icons.groups_outlined;
-
       case ShellPage.serviceRequests:
         return Icons.support_agent_outlined;
-      case ShellPage.serviceWorkOrders:
-        return Icons.handyman_outlined;
       case ShellPage.serviceQuotations:
         return Icons.request_quote_outlined;
+      case ShellPage.serviceSalesOrders:
+        return Icons.assignment_turned_in_outlined;
       case ShellPage.serviceVisits:
         return Icons.directions_car_outlined;
       case ShellPage.serviceTechnicians:
         return Icons.engineering_outlined;
-
       case ShellPage.crmCustomers:
         return Icons.people_outline;
       case ShellPage.crmContacts:
         return Icons.contact_phone_outlined;
       case ShellPage.crmVisits:
         return Icons.location_on_outlined;
-      case ShellPage.crmCommunication:
-        return Icons.chat_bubble_outline;
       case ShellPage.purchaseVendors:
         return Icons.business_outlined;
       case ShellPage.purchaseQuotations:
@@ -307,14 +298,10 @@ extension ShellPageX on ShellPage {
         return Icons.pie_chart_outline;
       case ShellPage.adminUsers:
         return Icons.manage_accounts_outlined;
-      case ShellPage.adminRoles:
-        return Icons.admin_panel_settings_outlined;
-      case ShellPage.adminCompanyProfile:
-        return Icons.apartment_outlined;
-      case ShellPage.adminBranches:
-        return Icons.account_tree_outlined;
       case ShellPage.adminAuditLogs:
         return Icons.fact_check_outlined;
+      case ShellPage.adminComplianceLegal:
+        return Icons.gavel_outlined;
       case ShellPage.settingsGeneral:
         return Icons.settings_outlined;
     }
@@ -363,18 +350,24 @@ class ZohoShell extends StatefulWidget {
 
 class _ZohoShellState extends State<ZohoShell> {
   ShellPage activePage = ShellPage.dashboard;
-
   final Set<String> expandedGroups = {};
 
   String? _resolvedIndustry;
   bool _isLoadingIndustry = true;
-
   String _currentRole = 'viewer';
   Map<String, dynamic> _currentPermissions = {};
   List<SidebarGroup> _currentSidebarGroups = [];
 
+  bool _isSidebarCollapsed = false;
+
   late Stream<DocumentSnapshot<Map<String, dynamic>>> _userSessionStream;
   late Stream<QuerySnapshot<Map<String, dynamic>>> _inquiryCountStream;
+
+  SharedPreferences? _prefs;
+  String get _prefsGroupsKey =>
+      'quik_expanded_groups_${widget.userUid}_${widget.companyId}';
+  String get _prefsCollapseKey =>
+      'quik_sidebar_collapsed_${widget.userUid}_${widget.companyId}';
 
   @override
   void initState() {
@@ -399,6 +392,49 @@ class _ZohoShellState extends State<ZohoShell> {
       _fetchIndustry();
     } else {
       _isLoadingIndustry = false;
+    }
+
+    _loadPreferences();
+  }
+
+  Future<void> _loadPreferences() async {
+    _prefs = await SharedPreferences.getInstance();
+
+    final savedGroups = _prefs?.getStringList(_prefsGroupsKey);
+    if (savedGroups != null && savedGroups.isNotEmpty) {
+      setState(() {
+        expandedGroups.addAll(savedGroups);
+      });
+    }
+
+    final isCollapsed = _prefs?.getBool(_prefsCollapseKey);
+    if (isCollapsed != null) {
+      setState(() {
+        _isSidebarCollapsed = isCollapsed;
+      });
+    }
+  }
+
+  Future<void> _toggleGroup(String groupKey) async {
+    setState(() {
+      if (expandedGroups.contains(groupKey)) {
+        expandedGroups.remove(groupKey);
+      } else {
+        expandedGroups.add(groupKey);
+      }
+    });
+
+    if (_prefs != null) {
+      await _prefs!.setStringList(_prefsGroupsKey, expandedGroups.toList());
+    }
+  }
+
+  Future<void> _toggleSidebar() async {
+    setState(() {
+      _isSidebarCollapsed = !_isSidebarCollapsed;
+    });
+    if (_prefs != null) {
+      await _prefs!.setBool(_prefsCollapseKey, _isSidebarCollapsed);
     }
   }
 
@@ -444,8 +480,6 @@ class _ZohoShellState extends State<ZohoShell> {
         r == 'manager';
   }
 
-  // 🔥 CRITICAL FIX: Smart Permission Getter
-  // Automatically detects plural and singular mismatches from database records
   bool _checkPerm(String module, String submodule, String action) {
     final moduleData = _currentPermissions[module];
     if (moduleData is Map && moduleData.containsKey(submodule)) {
@@ -468,6 +502,48 @@ class _ZohoShellState extends State<ZohoShell> {
     return false;
   }
 
+  List<String> _getAliasesFor(String module, String submodule) {
+    if (module == 'service') {
+      switch (submodule) {
+        case 'serviceRequests':
+          return const [
+            'serviceRequests',
+            'serviceRequest',
+            'serviceCalls',
+            'serviceCall',
+            'complaints',
+            'serviceComplaints',
+          ];
+        case 'serviceQuotations':
+          return const ['serviceQuotations', 'serviceQuotation', 'quotations'];
+        case 'serviceSalesOrders':
+          return const [
+            'serviceSalesOrders',
+            'serviceSalesOrder',
+            'workOrders',
+            'serviceWorkOrders',
+          ];
+        case 'serviceVisits':
+          return const ['serviceVisits', 'serviceVisit'];
+        case 'serviceTechnicians':
+          return const ['serviceTechnicians', 'serviceTechnician'];
+      }
+    } else if (module == 'sales') {
+      if (submodule == 'salesOrders')
+        return const ['salesOrders', 'salesOrder'];
+    } else if (module == 'purchase') {
+      if (submodule == 'purchaseOrders')
+        return const ['purchaseOrders', 'purchaseOrder'];
+      if (submodule == 'purchaseQuotations')
+        return const ['purchaseQuotations', 'purchaseQuotation'];
+      if (submodule == 'purchaseBills')
+        return const ['purchaseBills', 'purchaseBill'];
+    } else if (module == 'crm') {
+      if (submodule == 'customers') return const ['customers', 'customer'];
+    }
+    return [submodule];
+  }
+
   bool _hasPermission(
     String module,
     String submodule, {
@@ -475,25 +551,16 @@ class _ZohoShellState extends State<ZohoShell> {
   }) {
     if (isAdminOrManager) return true;
 
-    // 1. Exact match check
-    if (_checkPerm(module, submodule, action)) return true;
+    final aliases = _getAliasesFor(module, submodule);
 
-    // 2. Fallback: Check Plural version if singular failed
-    if (!submodule.endsWith('s') &&
-        _checkPerm(module, '${submodule}s', action)) {
-      return true;
+    for (final alias in aliases) {
+      if (_checkPerm(module, alias, action)) return true;
+      if (!alias.endsWith('s') && _checkPerm(module, '${alias}s', action))
+        return true;
+      if (alias.endsWith('s') &&
+          _checkPerm(module, alias.substring(0, alias.length - 1), action))
+        return true;
     }
-
-    // 3. Fallback: Check Singular version if plural failed
-    if (submodule.endsWith('s') &&
-        _checkPerm(
-          module,
-          submodule.substring(0, submodule.length - 1),
-          action,
-        )) {
-      return true;
-    }
-
     return false;
   }
 
@@ -509,44 +576,32 @@ class _ZohoShellState extends State<ZohoShell> {
         return true;
       case ShellPage.settingsGeneral:
         return true;
-
-      // Sales
       case ShellPage.salesInquiries:
         return _hasPermission('sales', 'inquiries');
       case ShellPage.salesQuotations:
         return _hasPermission('sales', 'quotations');
       case ShellPage.salesOrders:
-        return _hasPermission('sales', 'salesOrder');
-      case ShellPage.salesFollowUps:
-        return _hasPermission('sales', 'followUps');
+        return _hasPermission('sales', 'salesOrders');
       case ShellPage.salesTasks:
         return _hasPermission('sales', 'tasks');
       case ShellPage.salesMeetings:
         return _hasPermission('sales', 'meetings');
-
-      // Service (Industrial Workflow)
       case ShellPage.serviceRequests:
         return _hasPermission('service', 'serviceRequests');
-      case ShellPage.serviceWorkOrders:
-        return _hasPermission('service', 'workOrders');
       case ShellPage.serviceQuotations:
-        return _hasPermission('service', 'quotations');
+        return _hasPermission('service', 'serviceQuotations');
+      case ShellPage.serviceSalesOrders:
+        return _hasPermission('service', 'serviceSalesOrders');
       case ShellPage.serviceVisits:
         return _hasPermission('service', 'serviceVisits');
       case ShellPage.serviceTechnicians:
         return _hasPermission('service', 'serviceTechnicians');
-
-      // CRM
       case ShellPage.crmCustomers:
         return _hasPermission('crm', 'customers');
       case ShellPage.crmContacts:
         return _hasPermission('crm', 'contacts');
       case ShellPage.crmVisits:
         return _hasPermission('crm', 'customerVisits');
-      case ShellPage.crmCommunication:
-        return _hasPermission('crm', 'communicationHistory');
-
-      // Purchase
       case ShellPage.purchaseVendors:
         return _hasPermission('purchase', 'vendors');
       case ShellPage.purchaseQuotations:
@@ -555,8 +610,6 @@ class _ZohoShellState extends State<ZohoShell> {
         return _hasPermission('purchase', 'purchaseOrders');
       case ShellPage.purchaseBills:
         return _hasPermission('purchase', 'purchaseBills');
-
-      // Inventory
       case ShellPage.inventoryProducts:
         return _hasPermission('inventory', 'products');
       case ShellPage.inventoryStockSummary:
@@ -569,8 +622,6 @@ class _ZohoShellState extends State<ZohoShell> {
         return _hasPermission('inventory', 'warehouse');
       case ShellPage.inventoryLowStock:
         return _hasPermission('inventory', 'lowStockAlerts');
-
-      // Dispatch
       case ShellPage.dispatchReady:
         return _hasPermission('dispatch', 'readyForDispatch');
       case ShellPage.dispatchChallans:
@@ -579,8 +630,6 @@ class _ZohoShellState extends State<ZohoShell> {
         return _hasPermission('dispatch', 'shipmentTracking');
       case ShellPage.dispatchDelivered:
         return _hasPermission('dispatch', 'deliveredOrders');
-
-      // Finance
       case ShellPage.financeProforma:
         return _hasPermission('finance', 'proformaInvoice');
       case ShellPage.financeTaxInvoice:
@@ -593,8 +642,6 @@ class _ZohoShellState extends State<ZohoShell> {
         return _hasPermission('finance', 'outstanding');
       case ShellPage.financeExpenses:
         return _hasPermission('finance', 'expenseEntries');
-
-      // Reports
       case ShellPage.reportsSales:
         return _hasPermission('reports', 'salesReport');
       case ShellPage.reportsInquiry:
@@ -605,18 +652,12 @@ class _ZohoShellState extends State<ZohoShell> {
         return _hasPermission('reports', 'productReport');
       case ShellPage.reportsPayment:
         return _hasPermission('reports', 'paymentReport');
-
-      // Administration
       case ShellPage.adminUsers:
         return _hasPermission('administration', 'users');
-      case ShellPage.adminRoles:
-        return _hasPermission('administration', 'rolesPermissions');
-      case ShellPage.adminCompanyProfile:
-        return _hasPermission('administration', 'companyProfile');
-      case ShellPage.adminBranches:
-        return _hasPermission('administration', 'branches');
       case ShellPage.adminAuditLogs:
         return _hasPermission('administration', 'auditLogs');
+      case ShellPage.adminComplianceLegal:
+        return _hasPermission('administration', 'complianceLegal');
     }
   }
 
@@ -630,21 +671,8 @@ class _ZohoShellState extends State<ZohoShell> {
           ShellPage.salesInquiries,
           ShellPage.salesQuotations,
           ShellPage.salesOrders,
-          ShellPage.salesFollowUps,
           ShellPage.salesTasks,
           ShellPage.salesMeetings,
-        ],
-      ),
-      SidebarGroup(
-        key: 'service',
-        title: 'Service',
-        icon: Icons.build_outlined,
-        children: [
-          ShellPage.serviceRequests,
-          ShellPage.serviceWorkOrders,
-          ShellPage.serviceQuotations,
-          ShellPage.serviceVisits,
-          ShellPage.serviceTechnicians,
         ],
       ),
       SidebarGroup(
@@ -655,18 +683,18 @@ class _ZohoShellState extends State<ZohoShell> {
           ShellPage.crmCustomers,
           ShellPage.crmContacts,
           ShellPage.crmVisits,
-          ShellPage.crmCommunication,
         ],
       ),
       SidebarGroup(
-        key: 'purchase',
-        title: 'Purchase',
-        icon: Icons.shopping_cart_outlined,
+        key: 'service',
+        title: 'Service',
+        icon: Icons.build_outlined,
         children: [
-          ShellPage.purchaseVendors,
-          ShellPage.purchaseQuotations,
-          ShellPage.purchaseOrders,
-          ShellPage.purchaseBills,
+          ShellPage.serviceRequests,
+          ShellPage.serviceQuotations,
+          ShellPage.serviceSalesOrders,
+          ShellPage.serviceVisits,
+          ShellPage.serviceTechnicians,
         ],
       ),
       SidebarGroup(
@@ -680,6 +708,17 @@ class _ZohoShellState extends State<ZohoShell> {
           ShellPage.inventoryStockOut,
           ShellPage.inventoryWarehouse,
           ShellPage.inventoryLowStock,
+        ],
+      ),
+      SidebarGroup(
+        key: 'purchase',
+        title: 'Purchase',
+        icon: Icons.shopping_cart_outlined,
+        children: [
+          ShellPage.purchaseVendors,
+          ShellPage.purchaseQuotations,
+          ShellPage.purchaseOrders,
+          ShellPage.purchaseBills,
         ],
       ),
       SidebarGroup(
@@ -723,10 +762,8 @@ class _ZohoShellState extends State<ZohoShell> {
         icon: Icons.admin_panel_settings_outlined,
         children: [
           ShellPage.adminUsers,
-          ShellPage.adminRoles,
-          ShellPage.adminCompanyProfile,
-          ShellPage.adminBranches,
           ShellPage.adminAuditLogs,
+          ShellPage.adminComplianceLegal,
         ],
       ),
     ];
@@ -740,7 +777,6 @@ class _ZohoShellState extends State<ZohoShell> {
       final allowedChildren = group.children
           .where((page) => _canViewPage(page))
           .toList();
-
       if (allowedChildren.isNotEmpty) {
         filtered.add(
           SidebarGroup(
@@ -752,7 +788,6 @@ class _ZohoShellState extends State<ZohoShell> {
         );
       }
     }
-
     return filtered;
   }
 
@@ -769,7 +804,6 @@ class _ZohoShellState extends State<ZohoShell> {
       _noAccess();
       return;
     }
-
     setState(() => activePage = page);
   }
 
@@ -795,11 +829,12 @@ class _ZohoShellState extends State<ZohoShell> {
       case ShellPage.reportsSales:
       case ShellPage.serviceRequests:
       case ShellPage.serviceQuotations:
+      case ShellPage.serviceSalesOrders:
       case ShellPage.serviceVisits:
       case ShellPage.serviceTechnicians:
+      case ShellPage.adminComplianceLegal:
         return true;
       default:
-        // Modules removed or not yet fully connected to trigger placeholder correctly
         return false;
     }
   }
@@ -812,26 +847,20 @@ class _ZohoShellState extends State<ZohoShell> {
     return group.children.contains(activePage);
   }
 
-  String _activeSectionTitle() {
-    if (activePage == ShellPage.dashboard) return 'Dashboard';
-    if (activePage == ShellPage.settingsGeneral) return 'Settings';
-    if (activePage == ShellPage.financeTaxInvoiceCreate) {
-      return 'Finance • Create Tax Invoice';
-    }
-    if (activePage == ShellPage.financeExportInvoiceCreate) {
-      return 'Finance • Create Export Invoice';
-    }
+  String _getBreadcrumbText() {
+    if (activePage == ShellPage.dashboard) return 'Workspace / Dashboard';
+    if (activePage == ShellPage.settingsGeneral) return 'Workspace / Settings';
+    if (activePage == ShellPage.financeTaxInvoiceCreate)
+      return 'Finance / Create Tax Invoice';
+    if (activePage == ShellPage.financeExportInvoiceCreate)
+      return 'Finance / Create Export Invoice';
 
-    if (_currentSidebarGroups.any(
-      (group) => group.children.contains(activePage),
-    )) {
-      final group = _currentSidebarGroups.firstWhere(
-        (g) => g.children.contains(activePage),
-      );
-      return '${group.title} • ${activePage.label}';
+    for (var group in _currentSidebarGroups) {
+      if (group.children.contains(activePage)) {
+        return '${group.title} / ${activePage.label}';
+      }
     }
-
-    return activePage.label;
+    return 'Workspace / ${activePage.label}';
   }
 
   String _resolvedEmployeeName() {
@@ -845,35 +874,427 @@ class _ZohoShellState extends State<ZohoShell> {
   }
 
   String _dashboardWelcomeText() {
-    if (isAdminOrManager) {
-      return 'Welcome ${widget.companyName}';
-    }
+    if (isAdminOrManager) return 'Welcome ${widget.companyName}';
     return 'Welcome ${_resolvedEmployeeName()}';
   }
 
+  // --- ENTERPRISE SHELL UI COMPONENTS ---
+
   Widget _buildTopHeader() {
+    final breadcrumbs = _getBreadcrumbText().split(' / ');
+
     return Container(
-      constraints: const BoxConstraints(minHeight: 48),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      height: ShellLayout.headerHeight,
+      padding: const EdgeInsets.symmetric(horizontal: ShellLayout.pagePadding),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: zBorder)),
       ),
       child: Row(
         children: [
-          Expanded(
-            child: Text(
-              _activeSectionTitle(),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+          IconButton(
+            icon: const Icon(Icons.menu_rounded, color: zMuted, size: 18),
+            onPressed: _toggleSidebar,
+            tooltip: _isSidebarCollapsed ? 'Expand Menu' : 'Collapse Menu',
+            splashRadius: 18,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+          const SizedBox(width: 12),
+          if (breadcrumbs.length > 1) ...[
+            Text(
+              breadcrumbs[0],
               style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w900,
-                color: zText,
+                fontSize: 13,
+                color: zMuted,
+                fontWeight: FontWeight.w600,
               ),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 6),
+              child: Icon(Icons.chevron_right, size: 14, color: Colors.black26),
+            ),
+            Text(
+              breadcrumbs[1],
+              style: const TextStyle(
+                fontSize: 13,
+                color: zText,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ] else ...[
+            Text(
+              _getBreadcrumbText(),
+              style: const TextStyle(
+                fontSize: 13,
+                color: zText,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+          const Spacer(),
+          // Premium Workspace Selector
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(ShellLayout.borderRadius),
+              border: Border.all(color: zBorder),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.business_center_rounded,
+                  size: 13,
+                  color: zBlue,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  widget.companyName,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: zText,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.unfold_more_rounded, size: 14, color: zMuted),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _inquiryBadge({required bool selected}) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _inquiryCountStream,
+      builder: (context, snap) {
+        final count = snap.data?.docs.length ?? 0;
+        if (count == 0) return const SizedBox.shrink();
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: selected
+                ? Colors.white
+                : Colors.white.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            '$count',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+              color: selected ? zBlue : Colors.white,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _subNavItem(ShellPage page, {bool isDashboard = false}) {
+    final bool selected =
+        activePage == page ||
+        (page == ShellPage.financeTaxInvoice &&
+            (activePage == ShellPage.financeExportInvoiceCreate ||
+                activePage == ShellPage.financeTaxInvoiceCreate));
+
+    return Tooltip(
+      message: _isSidebarCollapsed ? page.label : '',
+      waitDuration: const Duration(milliseconds: 300),
+      child: Padding(
+        padding: isDashboard
+            ? const EdgeInsets.symmetric(horizontal: 8, vertical: 4)
+            : const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+        child: Material(
+          color: selected
+              ? Colors.white.withValues(alpha: 0.08)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(ShellLayout.borderRadius),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(ShellLayout.borderRadius),
+            onTap: () => _selectPage(page),
+            hoverColor: Colors.white.withValues(alpha: 0.04),
+            child: SizedBox(
+              height: ShellLayout.sidebarItemHeight,
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: ShellLayout.sidebarCollapsedWidth - 16,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        AnimatedOpacity(
+                          duration: ShellLayout.animFast,
+                          opacity: selected ? 1.0 : 0.0,
+                          child: Container(
+                            width: 3,
+                            height: 14,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(1.5),
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
+                        Icon(
+                          page.icon,
+                          size: 16,
+                          color: selected
+                              ? Colors.white
+                              : Colors.white.withValues(alpha: 0.55),
+                        ),
+                        const Spacer(),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: AnimatedOpacity(
+                      opacity: _isSidebarCollapsed ? 0.0 : 1.0,
+                      duration: ShellLayout.animFast,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              page.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.clip,
+                              style: TextStyle(
+                                color: selected
+                                    ? Colors.white
+                                    : Colors.white.withValues(alpha: 0.65),
+                                fontWeight: selected
+                                    ? FontWeight.w800
+                                    : FontWeight.w600,
+                                fontSize: 12,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                          ),
+                          if (page == ShellPage.salesInquiries && canInquiries)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: _inquiryBadge(selected: selected),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _groupWidget(SidebarGroup group) {
+    final bool expanded = expandedGroups.contains(group.key);
+    final bool hasActiveChild = _groupContainsActive(group);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Tooltip(
+          message: _isSidebarCollapsed ? group.title : '',
+          waitDuration: const Duration(milliseconds: 300),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(ShellLayout.borderRadius),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(ShellLayout.borderRadius),
+                onTap: () {
+                  if (_isSidebarCollapsed) {
+                    _toggleSidebar();
+                    if (!expanded) _toggleGroup(group.key);
+                  } else {
+                    _toggleGroup(group.key);
+                  }
+                },
+                hoverColor: Colors.white.withValues(alpha: 0.04),
+                child: SizedBox(
+                  height: ShellLayout.sidebarGroupHeight,
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: ShellLayout.sidebarCollapsedWidth - 16,
+                        child: Icon(
+                          group.icon,
+                          size: 16,
+                          color: hasActiveChild
+                              ? Colors.white
+                              : Colors.white.withValues(alpha: 0.55),
+                        ),
+                      ),
+                      Expanded(
+                        child: AnimatedOpacity(
+                          opacity: _isSidebarCollapsed ? 0.0 : 1.0,
+                          duration: ShellLayout.animFast,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  group.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.clip,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: hasActiveChild
+                                        ? Colors.white
+                                        : Colors.white.withValues(alpha: 0.65),
+                                    fontWeight: hasActiveChild
+                                        ? FontWeight.w800
+                                        : FontWeight.w600,
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                              ),
+                              AnimatedRotation(
+                                turns: expanded ? 0.25 : 0.0,
+                                duration: ShellLayout.animDuration,
+                                curve: Curves.easeInOut,
+                                child: Icon(
+                                  Icons.chevron_right,
+                                  color: Colors.white.withValues(alpha: 0.4),
+                                  size: 14,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        AnimatedSize(
+          duration: ShellLayout.animDuration,
+          curve: Curves.easeInOut,
+          alignment: Alignment.topCenter,
+          child: expanded
+              ? Padding(
+                  padding: const EdgeInsets.only(top: 2, bottom: 4),
+                  child: Column(
+                    children: group.children
+                        .map((page) => _subNavItem(page))
+                        .toList(),
+                  ),
+                )
+              : const SizedBox(width: double.infinity, height: 0),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildUserSection() {
+    final name = _resolvedEmployeeName();
+    final initials = name.isNotEmpty ? name[0].toUpperCase() : 'U';
+
+    return Container(
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: const BoxDecoration(
+        color: Color(0xFF161F2E),
+        border: Border(top: BorderSide(color: Color(0xFF2A3649))),
+      ),
+      child: Tooltip(
+        message: _isSidebarCollapsed ? 'Logout / Expand' : '',
+        child: InkWell(
+          borderRadius: BorderRadius.circular(ShellLayout.borderRadius),
+          onTap: _isSidebarCollapsed ? _toggleSidebar : null,
+          child: Row(
+            children: [
+              SizedBox(
+                width: ShellLayout.sidebarCollapsedWidth - 16,
+                child: Center(
+                  child: Container(
+                    width: 26,
+                    height: 26,
+                    decoration: const BoxDecoration(
+                      color: zBlue,
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      initials,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: AnimatedOpacity(
+                  opacity: _isSidebarCollapsed ? 0.0 : 1.0,
+                  duration: ShellLayout.animFast,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 4),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                name,
+                                maxLines: 1,
+                                overflow: TextOverflow.clip,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _currentRole.toUpperCase(),
+                                maxLines: 1,
+                                overflow: TextOverflow.clip,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.5),
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          Icons.logout_rounded,
+                          color: Colors.white.withValues(alpha: 0.5),
+                          size: 16,
+                        ),
+                        onPressed: _logout,
+                        padding: const EdgeInsets.all(4),
+                        constraints: const BoxConstraints(),
+                        splashRadius: 16,
+                      ),
+                      const SizedBox(width: 4),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -890,7 +1311,7 @@ class _ZohoShellState extends State<ZohoShell> {
             decoration: BoxDecoration(
               color: Colors.white,
               border: Border.all(color: zBorder),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(ShellLayout.borderRadius),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -979,109 +1400,155 @@ class _ZohoShellState extends State<ZohoShell> {
           }
         });
 
+        final businessGroups = _currentSidebarGroups
+            .where((g) => ['sales', 'crm', 'service'].contains(g.key))
+            .toList();
+        final opsGroups = _currentSidebarGroups
+            .where((g) => ['inventory', 'purchase', 'dispatch'].contains(g.key))
+            .toList();
+        final financeGroups = _currentSidebarGroups
+            .where((g) => ['finance', 'reports'].contains(g.key))
+            .toList();
+        final systemGroups = _currentSidebarGroups
+            .where((g) => ['admin'].contains(g.key))
+            .toList();
+
         return Scaffold(
           backgroundColor: zCanvasBg,
           body: Row(
             children: [
-              Container(
-                width: 240,
+              AnimatedContainer(
+                duration: ShellLayout.animDuration,
+                curve: Curves.easeInOut,
+                width: _isSidebarCollapsed
+                    ? ShellLayout.sidebarCollapsedWidth
+                    : ShellLayout.sidebarExpandedWidth,
                 color: zIconRail,
                 child: SafeArea(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+                  child: ClipRect(
+                    child: OverflowBox(
+                      minWidth: ShellLayout.sidebarExpandedWidth,
+                      maxWidth: ShellLayout.sidebarExpandedWidth,
+                      alignment: Alignment.topLeft,
+                      child: SizedBox(
+                        width: ShellLayout.sidebarExpandedWidth,
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            const Text(
-                              'QUIK ERP',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 15,
-                                letterSpacing: 0.2,
+                            // Top Branding Section
+                            Container(
+                              height: ShellLayout.headerHeight,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
                               ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              widget.companyName,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                height: 1.4,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Divider(color: Color(0xFF243041), height: 1),
-                      Expanded(
-                        child: ListView(
-                          padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-                          children: [
-                            _dashboardNavItem(),
-                            const SizedBox(height: 6),
-                            ..._currentSidebarGroups.map(_groupWidget),
-                            const SizedBox(height: 6),
-                            const Divider(color: Color(0xFF243041)),
-                            _settingsNavItem(),
-                          ],
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 6, 8, 10),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(10),
-                          onTap: _logout,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.06),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.10),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  Icons.logout,
-                                  color: Colors.white70,
-                                  size: 18,
-                                ),
-                                const SizedBox(width: 8),
-                                const Expanded(
-                                  child: Text(
-                                    'Logout',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 12,
+                              child: Row(
+                                children: [
+                                  SizedBox(
+                                    width:
+                                        ShellLayout.sidebarCollapsedWidth - 20,
+                                    child: Center(
+                                      child: Image.asset(
+                                        'assets/images/logo.png',
+                                        height: 20,
+                                        fit: BoxFit.contain,
+                                        errorBuilder:
+                                            (context, error, stackTrace) =>
+                                                const Icon(
+                                                  Icons.business,
+                                                  color: Colors.white,
+                                                  size: 18,
+                                                ),
+                                      ),
                                     ),
                                   ),
-                                ),
-                                Text(
-                                  _currentRole.toUpperCase(),
-                                  style: const TextStyle(
-                                    color: Colors.white54,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
+                                  Expanded(
+                                    child: AnimatedOpacity(
+                                      opacity: _isSidebarCollapsed ? 0.0 : 1.0,
+                                      duration: ShellLayout.animFast,
+                                      child: const Padding(
+                                        padding: EdgeInsets.only(left: 8),
+                                        child: Text(
+                                          'QUIK ERP',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.clip,
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w900,
+                                            fontSize: 14,
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
+                            const Divider(color: Color(0xFF2A3649), height: 1),
+
+                            // Scrollable Workspace
+                            Expanded(
+                              child: ListView(
+                                padding: const EdgeInsets.only(
+                                  top: 8,
+                                  bottom: 20,
+                                ),
+                                children: [
+                                  _subNavItem(
+                                    ShellPage.dashboard,
+                                    isDashboard: true,
+                                  ),
+                                  const Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 8,
+                                    ),
+                                    child: Divider(
+                                      color: Color(0xFF2A3649),
+                                      height: 1,
+                                    ),
+                                  ),
+
+                                  if (businessGroups.isNotEmpty) ...[
+                                    ...businessGroups.map(_groupWidget),
+                                    const SizedBox(height: 4),
+                                  ],
+
+                                  if (opsGroups.isNotEmpty) ...[
+                                    ...opsGroups.map(_groupWidget),
+                                    const SizedBox(height: 4),
+                                  ],
+
+                                  if (financeGroups.isNotEmpty) ...[
+                                    ...financeGroups.map(_groupWidget),
+                                    const SizedBox(height: 4),
+                                  ],
+
+                                  if (systemGroups.isNotEmpty) ...[
+                                    ...systemGroups.map(_groupWidget),
+                                    const SizedBox(height: 4),
+                                  ],
+
+                                  const Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 8,
+                                    ),
+                                    child: Divider(
+                                      color: Color(0xFF2A3649),
+                                      height: 1,
+                                    ),
+                                  ),
+                                  _subNavItem(ShellPage.settingsGeneral),
+                                ],
+                              ),
+                            ),
+
+                            _buildUserSection(),
+                          ],
                         ),
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -1100,313 +1567,10 @@ class _ZohoShellState extends State<ZohoShell> {
     );
   }
 
-  Widget _dashboardNavItem() {
-    final selected = activePage == ShellPage.dashboard;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: () => _selectPage(ShellPage.dashboard),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            color: selected
-                ? Colors.white.withValues(alpha: 0.10)
-                : Colors.transparent,
-            border: Border.all(
-              color: selected
-                  ? Colors.white.withValues(alpha: 0.16)
-                  : Colors.transparent,
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.dashboard_outlined,
-                size: 18,
-                color: selected ? Colors.white : Colors.white70,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Dashboard',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: selected ? Colors.white : Colors.white70,
-                    fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _settingsNavItem() {
-    final selected = activePage == ShellPage.settingsGeneral;
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 2),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: () => _selectPage(ShellPage.settingsGeneral),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            color: selected
-                ? Colors.white.withValues(alpha: 0.10)
-                : Colors.transparent,
-            border: Border.all(
-              color: selected
-                  ? Colors.white.withValues(alpha: 0.16)
-                  : Colors.transparent,
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.settings_outlined,
-                size: 18,
-                color: selected ? Colors.white : Colors.white70,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Settings',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: selected ? Colors.white : Colors.white70,
-                    fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _groupWidget(SidebarGroup group) {
-    final bool expanded = expandedGroups.contains(group.key);
-    final bool hasActiveChild = _groupContainsActive(group);
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          color: hasActiveChild
-              ? Colors.white.withValues(alpha: 0.05)
-              : Colors.transparent,
-          border: Border.all(
-            color: hasActiveChild
-                ? Colors.white.withValues(alpha: 0.08)
-                : Colors.transparent,
-          ),
-        ),
-        child: Column(
-          children: [
-            InkWell(
-              borderRadius: BorderRadius.circular(10),
-              onTap: () {
-                setState(() {
-                  if (expanded) {
-                    expandedGroups.remove(group.key);
-                  } else {
-                    expandedGroups.clear();
-                    expandedGroups.add(group.key);
-                  }
-                });
-              },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      group.icon,
-                      size: 18,
-                      color: hasActiveChild ? Colors.white : Colors.white70,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        group.title,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: hasActiveChild ? Colors.white : Colors.white70,
-                          fontWeight: hasActiveChild
-                              ? FontWeight.w900
-                              : FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    Icon(
-                      expanded
-                          ? Icons.keyboard_arrow_down
-                          : Icons.keyboard_arrow_right,
-                      color: Colors.white60,
-                      size: 16,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            AnimatedCrossFade(
-              duration: const Duration(milliseconds: 180),
-              crossFadeState: expanded
-                  ? CrossFadeState.showFirst
-                  : CrossFadeState.showSecond,
-              firstChild: Padding(
-                padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
-                child: Column(
-                  children: group.children
-                      .map((page) => _subNavItem(page))
-                      .toList(),
-                ),
-              ),
-              secondChild: const SizedBox.shrink(),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _subNavItem(ShellPage page) {
-    final bool selected =
-        activePage == page ||
-        (page == ShellPage.financeTaxInvoice &&
-            (activePage == ShellPage.financeExportInvoiceCreate ||
-                activePage == ShellPage.financeTaxInvoiceCreate));
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 1),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: () => _selectPage(page),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            color: selected
-                ? Colors.white
-                : Colors.white.withValues(alpha: 0.03),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: selected
-                  ? Colors.white
-                  : Colors.white.withValues(alpha: 0.05),
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                page.icon,
-                size: 16,
-                color: selected ? zBlue : Colors.white70,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  page.label,
-                  style: TextStyle(
-                    color: selected ? zText : Colors.white70,
-                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                    fontSize: 11.5,
-                  ),
-                ),
-              ),
-              if (page == ShellPage.salesInquiries && canInquiries)
-                _inquiryBadge(selected: selected),
-              if (page == ShellPage.salesTasks)
-                _taskSidebarBadge(selected: selected),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _inquiryBadge({required bool selected}) {
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: _inquiryCountStream,
-      builder: (context, snap) {
-        final count = snap.data?.docs.length ?? 0;
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(
-            color: selected ? zBlueSoft : Colors.white.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: selected
-                  ? zBlue.withValues(alpha: 0.14)
-                  : Colors.transparent,
-            ),
-          ),
-          child: Text(
-            '$count',
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w900,
-              color: selected ? zBlue : Colors.white,
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _taskSidebarBadge({required bool selected}) {
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('companies')
-          .doc(widget.companyId)
-          .collection('tasks')
-          .snapshots(),
-      builder: (context, snap) {
-        final docs =
-            snap.data?.docs ?? <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-
-        var count = 0;
-        for (final doc in docs) {
-          final data = doc.data();
-          if (data['isDeleted'] == true) continue;
-          count++;
-        }
-
-        if (count <= 0) return const SizedBox.shrink();
-
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          decoration: BoxDecoration(
-            color: selected ? const Color(0xFFFFEDD5) : const Color(0xFF475569),
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Text(
-            count.toString(),
-            style: TextStyle(
-              color: selected ? const Color(0xFFEA580C) : Colors.white,
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   Widget _buildActiveBody() {
     if (!_canViewPage(activePage)) {
       return Padding(
-        padding: const EdgeInsets.all(10),
+        padding: const EdgeInsets.all(ShellLayout.pagePadding),
         child: DashboardScreen(
           companyId: widget.companyId,
           userName: _resolvedEmployeeName(),
@@ -1429,7 +1593,7 @@ class _ZohoShellState extends State<ZohoShell> {
 
       case ShellPage.salesInquiries:
         return const Padding(
-          padding: EdgeInsets.all(10),
+          padding: EdgeInsets.all(ShellLayout.pagePadding),
           child: ScreensInquiryList(),
         );
 
@@ -1437,7 +1601,7 @@ class _ZohoShellState extends State<ZohoShell> {
 
       case ShellPage.serviceRequests:
         return Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(ShellLayout.pagePadding),
           child: ServiceRequestListScreen(
             companyId: widget.companyId,
             currentUserUid: widget.userUid,
@@ -1447,8 +1611,18 @@ class _ZohoShellState extends State<ZohoShell> {
 
       case ShellPage.serviceQuotations:
         return Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(ShellLayout.pagePadding),
           child: ServiceQuotationListScreen(
+            companyId: widget.companyId,
+            currentUserUid: widget.userUid,
+            currentUserName: _resolvedEmployeeName(),
+          ),
+        );
+
+      case ShellPage.serviceSalesOrders:
+        return Padding(
+          padding: const EdgeInsets.all(ShellLayout.pagePadding),
+          child: ServiceSalesOrderListScreen(
             companyId: widget.companyId,
             currentUserUid: widget.userUid,
             currentUserName: _resolvedEmployeeName(),
@@ -1457,7 +1631,7 @@ class _ZohoShellState extends State<ZohoShell> {
 
       case ShellPage.serviceVisits:
         return Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(ShellLayout.pagePadding),
           child: ServiceVisitListScreen(
             companyId: widget.companyId,
             currentUserUid: widget.userUid,
@@ -1467,7 +1641,7 @@ class _ZohoShellState extends State<ZohoShell> {
 
       case ShellPage.serviceTechnicians:
         return Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(ShellLayout.pagePadding),
           child: ServiceTechnicianListScreen(
             companyId: widget.companyId,
             currentUserUid: widget.userUid,
@@ -1475,23 +1649,17 @@ class _ZohoShellState extends State<ZohoShell> {
           ),
         );
 
-      case ShellPage.serviceWorkOrders:
-        return Padding(
-          padding: const EdgeInsets.all(10),
-          child: _moduleLandingPage(activePage),
-        );
-
       // --- CRM Mapping ---
 
       case ShellPage.crmCustomers:
         return const Padding(
-          padding: EdgeInsets.all(10),
+          padding: EdgeInsets.all(ShellLayout.pagePadding),
           child: ScreensCustomerList(),
         );
 
       case ShellPage.crmContacts:
         return Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(ShellLayout.pagePadding),
           child: ScreensContactList(
             companyRef: FirebaseFirestore.instance
                 .collection('companies')
@@ -1502,7 +1670,7 @@ class _ZohoShellState extends State<ZohoShell> {
 
       case ShellPage.crmVisits:
         return Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(ShellLayout.pagePadding),
           child: CustomerVisitListScreen(
             companyId: widget.companyId,
             currentUserId: widget.userUid,
@@ -1512,13 +1680,13 @@ class _ZohoShellState extends State<ZohoShell> {
 
       case ShellPage.inventoryProducts:
         return const Padding(
-          padding: EdgeInsets.all(10),
+          padding: EdgeInsets.all(ShellLayout.pagePadding),
           child: ScreensProductList(),
         );
 
       case ShellPage.inventoryStockIn:
         return Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(ShellLayout.pagePadding),
           child: ScreensStockInList(
             companyId: widget.companyId,
             userUid: widget.userUid,
@@ -1527,7 +1695,7 @@ class _ZohoShellState extends State<ZohoShell> {
 
       case ShellPage.dispatchReady:
         return Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(ShellLayout.pagePadding),
           child: ReadyForDispatchScreen(
             companyId: widget.companyId,
             userUid: widget.userUid,
@@ -1536,7 +1704,7 @@ class _ZohoShellState extends State<ZohoShell> {
 
       case ShellPage.dispatchChallans:
         return Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(ShellLayout.pagePadding),
           child: DispatchChallansScreen(
             companyId: widget.companyId,
             userUid: widget.userUid,
@@ -1545,13 +1713,16 @@ class _ZohoShellState extends State<ZohoShell> {
 
       case ShellPage.dispatchShipmentTracking:
         return Padding(
-          padding: const EdgeInsets.all(16),
-          child: ShipmentTrackingScreen(companyId: widget.companyId),
+          padding: const EdgeInsets.all(ShellLayout.pagePadding),
+          child: ShipmentTrackingScreen(
+            companyId: widget.companyId,
+            userUid: widget.userUid,
+          ),
         );
 
       case ShellPage.dispatchDelivered:
         return Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(ShellLayout.pagePadding),
           child: DeliveredOrdersScreen(
             companyId: widget.companyId,
             userUid: widget.userUid,
@@ -1560,7 +1731,7 @@ class _ZohoShellState extends State<ZohoShell> {
 
       case ShellPage.salesQuotations:
         return Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(ShellLayout.pagePadding),
           child: ScreensQuotationList(
             userId: (widget.userUid.hashCode).abs() % 1000000,
           ),
@@ -1568,13 +1739,13 @@ class _ZohoShellState extends State<ZohoShell> {
 
       case ShellPage.salesOrders:
         return Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(ShellLayout.pagePadding),
           child: SalesOrderListScreen(companyId: widget.companyId),
         );
 
       case ShellPage.salesTasks:
         return Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(ShellLayout.pagePadding),
           child: TaskScreen(
             companyId: widget.companyId,
             currentUserId: widget.userUid,
@@ -1585,22 +1756,28 @@ class _ZohoShellState extends State<ZohoShell> {
 
       case ShellPage.adminUsers:
         return Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(ShellLayout.pagePadding),
           child: ScreenUserManagement(
             companyId: widget.companyId,
             currentUid: widget.userUid,
           ),
         );
 
+      case ShellPage.adminComplianceLegal:
+        return Padding(
+          padding: const EdgeInsets.all(ShellLayout.pagePadding),
+          child: ScreensComplianceLegalList(companyId: widget.companyId),
+        );
+
       case ShellPage.financeProforma:
         return Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(ShellLayout.pagePadding),
           child: ProformaListScreen(companyId: widget.companyId),
         );
 
       case ShellPage.financeTaxInvoice:
         return Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(ShellLayout.pagePadding),
           child: InvoiceListScreen(
             companyId: widget.companyId,
             userUid: widget.userUid,
@@ -1633,7 +1810,7 @@ class _ZohoShellState extends State<ZohoShell> {
 
       case ShellPage.financePaymentsReceived:
         return Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(ShellLayout.pagePadding),
           child: PaymentsListScreen(
             companyId: widget.companyId,
             userUid: widget.userUid,
@@ -1642,7 +1819,7 @@ class _ZohoShellState extends State<ZohoShell> {
 
       case ShellPage.financeOutstanding:
         return Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(ShellLayout.pagePadding),
           child: OutstandingScreen(
             companyId: widget.companyId,
             userUid: widget.userUid,
@@ -1651,13 +1828,13 @@ class _ZohoShellState extends State<ZohoShell> {
 
       case ShellPage.reportsSales:
         return Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(ShellLayout.pagePadding),
           child: SalesReportScreen(companyId: widget.companyId),
         );
 
       case ShellPage.settingsGeneral:
         return Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(ShellLayout.pagePadding),
           child: ScreenSettingsHome(
             companyId: widget.companyId,
             companyName: widget.companyName,
@@ -1666,15 +1843,13 @@ class _ZohoShellState extends State<ZohoShell> {
             permissions: _currentPermissions,
             industry: _resolvedIndustry,
             onOpenUsers: () => _selectPage(ShellPage.adminUsers),
-            onOpenCompanyProfile: () =>
-                _selectPage(ShellPage.adminCompanyProfile),
             onOpenAuditLogs: () => _selectPage(ShellPage.adminAuditLogs),
           ),
         );
 
       case ShellPage.purchaseVendors:
         return Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(ShellLayout.pagePadding),
           child: PurchaseVendorListScreen(
             companyId: widget.companyId,
             userUid: widget.userUid,
@@ -1686,7 +1861,7 @@ class _ZohoShellState extends State<ZohoShell> {
 
       case ShellPage.purchaseBills:
         return Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(ShellLayout.pagePadding),
           child: PurchaseBillListScreen(
             companyId: widget.companyId,
             userUid: widget.userUid,
@@ -1695,7 +1870,7 @@ class _ZohoShellState extends State<ZohoShell> {
 
       default:
         return Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(ShellLayout.pagePadding),
           child: _moduleLandingPage(activePage),
         );
     }
@@ -1719,21 +1894,21 @@ class _ZohoShellState extends State<ZohoShell> {
         Text(
           page.label,
           style: const TextStyle(
-            fontSize: 18,
+            fontSize: 16,
             fontWeight: FontWeight.w900,
             color: zText,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         Text(
           '$sectionName module inside ${widget.companyName}',
           style: const TextStyle(
             color: zMuted,
-            fontSize: 11.5,
+            fontSize: 11,
             fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         Row(
           children: [
             Expanded(
@@ -1755,7 +1930,7 @@ class _ZohoShellState extends State<ZohoShell> {
                     : Colors.redAccent,
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: ShellLayout.sectionSpacing),
             Expanded(
               child: _overviewCard(
                 title: 'Action',
@@ -1767,7 +1942,7 @@ class _ZohoShellState extends State<ZohoShell> {
                 iconColor: zOrange,
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: ShellLayout.sectionSpacing),
             Expanded(
               child: _overviewCard(
                 title: 'Department',
@@ -1779,18 +1954,20 @@ class _ZohoShellState extends State<ZohoShell> {
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: ShellLayout.sectionSpacing),
         Expanded(
           child: Row(
             children: [
               Expanded(
                 flex: 3,
                 child: Container(
-                  padding: const EdgeInsets.all(14),
+                  padding: const EdgeInsets.all(ShellLayout.cardPadding),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     border: Border.all(color: zBorder),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(
+                      ShellLayout.borderRadius,
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1798,7 +1975,7 @@ class _ZohoShellState extends State<ZohoShell> {
                       const Text(
                         'Module Overview',
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: 13,
                           fontWeight: FontWeight.w900,
                           color: zText,
                         ),
@@ -1808,15 +1985,15 @@ class _ZohoShellState extends State<ZohoShell> {
                         _moduleDescription(page),
                         style: const TextStyle(
                           color: zMuted,
-                          height: 1.55,
-                          fontSize: 11.5,
+                          height: 1.4,
+                          fontSize: 11,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
                       const SizedBox(height: 12),
                       Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
+                        spacing: 6,
+                        runSpacing: 6,
                         children: _moduleTags(
                           page,
                         ).map((e) => _moduleTag(e)).toList(),
@@ -1826,7 +2003,7 @@ class _ZohoShellState extends State<ZohoShell> {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: ShellLayout.sectionSpacing),
               Expanded(
                 flex: 2,
                 child: Column(
@@ -1838,7 +2015,7 @@ class _ZohoShellState extends State<ZohoShell> {
                         icon: Icons.auto_awesome_outlined,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: ShellLayout.sectionSpacing),
                     Expanded(
                       child: _quickPanel(
                         title: 'Implementation Note',
@@ -1874,11 +2051,13 @@ class _ZohoShellState extends State<ZohoShell> {
         return ['Catalog', 'Stock', 'SKU', 'Pricing'];
       case ShellPage.adminUsers:
         return ['Access', 'Permissions', 'Roles', 'Team'];
+      case ShellPage.adminComplianceLegal:
+        return ['Compliance', 'Legal', 'Licenses', 'Policies'];
       case ShellPage.settingsGeneral:
         return ['Company', 'Security', 'Users', 'Audit'];
       case ShellPage.serviceRequests:
-      case ShellPage.serviceWorkOrders:
       case ShellPage.serviceQuotations:
+      case ShellPage.serviceSalesOrders:
       case ShellPage.serviceVisits:
       case ShellPage.serviceTechnicians:
         return [
@@ -1906,21 +2085,20 @@ class _ZohoShellState extends State<ZohoShell> {
         return 'Manage your product master, stock-facing items, and future inventory movements through a clean inventory module.';
       case ShellPage.adminUsers:
         return 'Handle user management, role-based access, and team structure for each company workspace.';
+      case ShellPage.adminComplianceLegal:
+        return 'Manage company compliance records, legal documents, registrations, licenses, contracts and statutory obligations.';
       case ShellPage.settingsGeneral:
         return 'Manage workspace preferences, company controls, users, security, notifications, integrations, and audit-related options from one professional ERP settings hub.';
-
-      // Professional Service Module Descriptions
       case ShellPage.serviceRequests:
         return 'Log incoming customer complaints, verify warranty status, and generate initial service requests for the engineering team.';
-      case ShellPage.serviceWorkOrders:
-        return 'Manage active work orders, assign service engineers, and track repair status for industrial equipment.';
       case ShellPage.serviceQuotations:
         return 'Manage cost estimations for out-of-warranty services, spare parts, labor, and engineer field visits.';
+      case ShellPage.serviceSalesOrders:
+        return 'Manage active work orders, assign service engineers, and track repair status for industrial equipment.';
       case ShellPage.serviceVisits:
         return 'Schedule and monitor field visits for service engineers, including site check-ins, travel logs, and utilized spares.';
       case ShellPage.serviceTechnicians:
         return 'Monitor service team workload, manage engineer skill mapping, track real-time availability, and optimize field assignments.';
-
       default:
         return 'This module is part of the professional ERP architecture. You can keep your current app working while gradually connecting this module to its own database, screens, and workflows.';
     }
@@ -1957,12 +2135,12 @@ class _ZohoShellState extends State<ZohoShell> {
           'Reminder schedule',
           'Collection dashboard',
         ];
-      case ShellPage.adminCompanyProfile:
+      case ShellPage.adminComplianceLegal:
         return [
-          'GST / VAT details',
-          'Address and branches',
-          'Branding',
-          'Default numbering formats',
+          'License renewals',
+          'Legal documents',
+          'Compliance tracking',
+          'Contract management',
         ];
       case ShellPage.settingsGeneral:
         return [
@@ -1971,8 +2149,6 @@ class _ZohoShellState extends State<ZohoShell> {
           'Security and access',
           'Audit and integrations',
         ];
-
-      // Professional Service Module Recommendations
       case ShellPage.serviceRequests:
         return [
           'Complaint logging',
@@ -1980,19 +2156,19 @@ class _ZohoShellState extends State<ZohoShell> {
           'Customer mapping',
           'Priority assignment',
         ];
-      case ShellPage.serviceWorkOrders:
-        return [
-          'Engineer assignment',
-          'Spares requirement',
-          'Work order status',
-          'Time tracking',
-        ];
       case ShellPage.serviceQuotations:
         return [
           'Spares estimation',
           'Labor pricing',
           'Visit fees',
           'Customer approval flow',
+        ];
+      case ShellPage.serviceSalesOrders:
+        return [
+          'Engineer assignment',
+          'Spares requirement',
+          'Work order status',
+          'Time tracking',
         ];
       case ShellPage.serviceVisits:
         return [
@@ -2008,7 +2184,6 @@ class _ZohoShellState extends State<ZohoShell> {
           'Workload dashboard',
           'Territory assignment',
         ];
-
       default:
         return [
           'Summary card',
@@ -2021,7 +2196,7 @@ class _ZohoShellState extends State<ZohoShell> {
 
   Widget _moduleTag(String text) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(999),
@@ -2031,7 +2206,7 @@ class _ZohoShellState extends State<ZohoShell> {
         text,
         style: const TextStyle(
           color: zText,
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -2046,12 +2221,12 @@ class _ZohoShellState extends State<ZohoShell> {
     required Color iconColor,
   }) {
     return Container(
-      height: 76,
-      padding: const EdgeInsets.all(10),
+      height: 60,
+      padding: const EdgeInsets.all(ShellLayout.cardPadding),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: zBorder),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(ShellLayout.borderRadius),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2059,20 +2234,20 @@ class _ZohoShellState extends State<ZohoShell> {
           Row(
             children: [
               Container(
-                width: 28,
-                height: 28,
+                width: 20,
+                height: 20,
                 decoration: BoxDecoration(
                   color: tint,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(4),
                 ),
-                child: Icon(icon, size: 16, color: iconColor),
+                child: Icon(icon, size: 12, color: iconColor),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   title,
                   style: const TextStyle(
-                    fontSize: 11,
+                    fontSize: 10,
                     color: zMuted,
                     fontWeight: FontWeight.w700,
                   ),
@@ -2084,7 +2259,7 @@ class _ZohoShellState extends State<ZohoShell> {
           Text(
             value,
             style: const TextStyle(
-              fontSize: 15,
+              fontSize: 14,
               fontWeight: FontWeight.w900,
               color: zText,
             ),
@@ -2101,25 +2276,25 @@ class _ZohoShellState extends State<ZohoShell> {
   }) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(ShellLayout.cardPadding),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: zBorder),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(ShellLayout.borderRadius),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(icon, color: zBlue, size: 16),
-              const SizedBox(width: 8),
+              Icon(icon, color: zBlue, size: 14),
+              const SizedBox(width: 6),
               Text(
                 title,
                 style: const TextStyle(
                   color: zText,
                   fontWeight: FontWeight.w900,
-                  fontSize: 13,
+                  fontSize: 12,
                 ),
               ),
             ],
@@ -2131,13 +2306,13 @@ class _ZohoShellState extends State<ZohoShell> {
               children: lines
                   .map(
                     (e) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.only(bottom: 6),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Padding(
                             padding: EdgeInsets.only(top: 4),
-                            child: Icon(Icons.circle, size: 5, color: zBlue),
+                            child: Icon(Icons.circle, size: 4, color: zBlue),
                           ),
                           const SizedBox(width: 8),
                           Expanded(
@@ -2145,8 +2320,8 @@ class _ZohoShellState extends State<ZohoShell> {
                               e,
                               style: const TextStyle(
                                 color: zMuted,
-                                fontSize: 11.5,
-                                height: 1.45,
+                                fontSize: 11,
+                                height: 1.3,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -2185,7 +2360,7 @@ class _ZohoShellState extends State<ZohoShell> {
               color: zText,
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           Row(
             children: const [
               Expanded(
@@ -2195,7 +2370,7 @@ class _ZohoShellState extends State<ZohoShell> {
                   icon: Icons.trending_up_outlined,
                 ),
               ),
-              SizedBox(width: 8),
+              SizedBox(width: ShellLayout.sectionSpacing),
               Expanded(
                 child: _KpiBox(
                   title: 'CRM Modules',
@@ -2203,7 +2378,7 @@ class _ZohoShellState extends State<ZohoShell> {
                   icon: Icons.people_outline,
                 ),
               ),
-              SizedBox(width: 8),
+              SizedBox(width: ShellLayout.sectionSpacing),
               Expanded(
                 child: _KpiBox(
                   title: 'Inventory Modules',
@@ -2211,7 +2386,7 @@ class _ZohoShellState extends State<ZohoShell> {
                   icon: Icons.inventory_2_outlined,
                 ),
               ),
-              SizedBox(width: 8),
+              SizedBox(width: ShellLayout.sectionSpacing),
               Expanded(
                 child: _KpiBox(
                   title: 'Reports',
@@ -2221,7 +2396,7 @@ class _ZohoShellState extends State<ZohoShell> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: ShellLayout.sectionSpacing),
           Expanded(
             child: Row(
               children: const [
@@ -2232,7 +2407,7 @@ class _ZohoShellState extends State<ZohoShell> {
                     emptyIcon: Icons.dashboard_customize_outlined,
                   ),
                 ),
-                SizedBox(width: 8),
+                SizedBox(width: ShellLayout.sectionSpacing),
                 Expanded(
                   child: _Panel(
                     title: 'Next Build Suggestion',
@@ -2309,7 +2484,7 @@ class _ZohoShellState extends State<ZohoShell> {
                     icon: Icons.folder_open_outlined,
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: ShellLayout.sectionSpacing),
                 Expanded(
                   child: _KpiBox(
                     title: 'Untouched',
@@ -2317,7 +2492,7 @@ class _ZohoShellState extends State<ZohoShell> {
                     icon: Icons.mark_email_unread_outlined,
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: ShellLayout.sectionSpacing),
                 Expanded(
                   child: _KpiBox(
                     title: 'Follow-ups Today',
@@ -2325,7 +2500,7 @@ class _ZohoShellState extends State<ZohoShell> {
                     icon: Icons.event_repeat_outlined,
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: ShellLayout.sectionSpacing),
                 Expanded(
                   child: _KpiBox(
                     title: 'My Inquiries',
@@ -2335,7 +2510,7 @@ class _ZohoShellState extends State<ZohoShell> {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: ShellLayout.sectionSpacing),
             Expanded(
               child: Row(
                 children: const [
@@ -2346,7 +2521,7 @@ class _ZohoShellState extends State<ZohoShell> {
                       emptyIcon: Icons.task_alt,
                     ),
                   ),
-                  SizedBox(width: 8),
+                  SizedBox(width: ShellLayout.sectionSpacing),
                   Expanded(
                     child: _Panel(
                       title: 'My Meetings',
@@ -2374,25 +2549,25 @@ class _KpiBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 70,
-      padding: const EdgeInsets.all(10),
+      height: 72,
+      padding: const EdgeInsets.all(ShellLayout.cardPadding),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: zBorder),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(ShellLayout.borderRadius),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(icon, size: 16, color: zMuted),
-              const SizedBox(width: 8),
+              Icon(icon, size: 14, color: zMuted),
+              const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   title,
                   style: const TextStyle(
-                    fontSize: 11,
+                    fontSize: 10,
                     color: zMuted,
                     fontWeight: FontWeight.w700,
                   ),
@@ -2404,7 +2579,7 @@ class _KpiBox extends StatelessWidget {
           Text(
             value,
             style: const TextStyle(
-              fontSize: 18,
+              fontSize: 26,
               fontWeight: FontWeight.w900,
               color: zText,
             ),
@@ -2432,12 +2607,12 @@ class _Panel extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: zBorder),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(ShellLayout.borderRadius),
       ),
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: const BoxDecoration(
               border: Border(bottom: BorderSide(color: zBorder)),
             ),
@@ -2446,7 +2621,7 @@ class _Panel extends StatelessWidget {
                 Text(
                   title,
                   style: const TextStyle(
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: FontWeight.w900,
                     color: zText,
                   ),
@@ -2457,17 +2632,17 @@ class _Panel extends StatelessWidget {
           Expanded(
             child: Center(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(emptyIcon, color: zMuted, size: 24),
-                    const SizedBox(height: 6),
+                    Icon(emptyIcon, color: zMuted, size: 20),
+                    const SizedBox(height: 8),
                     Text(
                       emptyText,
                       textAlign: TextAlign.center,
                       style: const TextStyle(
-                        fontSize: 11,
+                        fontSize: 10,
                         color: zMuted,
                         fontWeight: FontWeight.w600,
                       ),

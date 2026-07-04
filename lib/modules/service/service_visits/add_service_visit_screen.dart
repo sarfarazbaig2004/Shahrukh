@@ -41,6 +41,21 @@ class AddServiceVisitScreen extends StatefulWidget {
   final Map<String, dynamic>? existingData;
   final String? prefillRequestId;
 
+  // --- INTEGRATION: SERVICE SALES ORDER PREFILLS ---
+  final String? serviceSalesOrderId;
+  final String? serviceSalesOrderNumber;
+  final String? serviceRequestId;
+  final String? serviceRequestNumber;
+  final String? serviceQuotationId;
+  final String? serviceQuotationNumber;
+  final String? customerId;
+  final String? customerName;
+  final String? siteAddress;
+  final String? contactPerson;
+  final String? complaint;
+  final String? scopeOfWork;
+  final List<String>? assignedTechnicians;
+
   const AddServiceVisitScreen({
     super.key,
     required this.companyId,
@@ -49,6 +64,19 @@ class AddServiceVisitScreen extends StatefulWidget {
     this.existingDocId,
     this.existingData,
     this.prefillRequestId,
+    this.serviceSalesOrderId,
+    this.serviceSalesOrderNumber,
+    this.serviceRequestId,
+    this.serviceRequestNumber,
+    this.serviceQuotationId,
+    this.serviceQuotationNumber,
+    this.customerId,
+    this.customerName,
+    this.siteAddress,
+    this.contactPerson,
+    this.complaint,
+    this.scopeOfWork,
+    this.assignedTechnicians,
   });
 
   @override
@@ -64,6 +92,9 @@ class _AddServiceVisitScreenState extends State<AddServiceVisitScreen> {
   String? _selectedRequestNumber;
   String? _selectedCustomerId;
   String? _selectedCustomerName;
+  String? _siteAddress;
+  String? _contactPerson;
+  String? _scopeOfWork;
 
   int _machineCount = 0;
   List<String> _machineNames = [];
@@ -74,9 +105,11 @@ class _AddServiceVisitScreenState extends State<AddServiceVisitScreen> {
   DateTime? _requestCreatedDate;
 
   // --- TECHNICIAN ASSIGNMENT & WORKLOAD ---
-  String? _assignedTechnicianUid;
+  String? _assignedTechnicianUid; // Legacy single selection
   String? _assignedTechnicianName;
   String? _assignedTechnicianMobile;
+  List<String> _assignedTechnicianUids = []; // Modern array support
+  Map<String, Map<String, dynamic>> _technicianDataCache = {};
   Map<String, int> _technicianWorkload = {};
   StreamSubscription? _workloadSubscription;
 
@@ -132,6 +165,10 @@ class _AddServiceVisitScreenState extends State<AddServiceVisitScreen> {
       _selectedCustomerId = _safeString(d['customerId']).isEmpty ? null : _safeString(d['customerId']);
       _selectedCustomerName = _safeString(d['customerName']).isEmpty ? null : _safeString(d['customerName']);
 
+      _siteAddress = _safeString(d['siteAddress']);
+      _contactPerson = _safeString(d['contactPerson']);
+      _scopeOfWork = _safeString(d['scopeOfWork']);
+
       _machineCount = _safeInt(d['machineCount']);
       if (d['machineNames'] is List) {
         _machineNames = List<String>.from(d['machineNames']);
@@ -140,10 +177,16 @@ class _AddServiceVisitScreenState extends State<AddServiceVisitScreen> {
       _warrantyStatus = _safeString(d['warrantyStatus']).isNotEmpty ? _safeString(d['warrantyStatus']) : 'Unknown';
       _priority = _safeString(d['priority']).isNotEmpty ? _safeString(d['priority']) : 'Medium';
 
-      // Support legacy fields & new fields
+      // Support legacy fields & new arrays
       _assignedTechnicianUid = _safeString(d['assignedTechnicianUid']).isNotEmpty ? _safeString(d['assignedTechnicianUid']) : (_safeString(d['engineerUid']).isEmpty ? null : _safeString(d['engineerUid']));
       _assignedTechnicianName = _safeString(d['assignedTechnicianName']).isNotEmpty ? _safeString(d['assignedTechnicianName']) : (_safeString(d['engineerName']).isEmpty ? null : _safeString(d['engineerName']));
       _assignedTechnicianMobile = _safeString(d['assignedTechnicianMobile']).isEmpty ? null : _safeString(d['assignedTechnicianMobile']);
+
+      if (d['assignedTechnicians'] is List) {
+        _assignedTechnicianUids = List<String>.from(d['assignedTechnicians']);
+      } else if (_assignedTechnicianUid != null) {
+        _assignedTechnicianUids = [_assignedTechnicianUid!];
+      }
 
       _visitType = _safeString(d['visitType']).isNotEmpty ? _safeString(d['visitType']) : 'Breakdown';
       _visitStatus = _safeString(d['visitStatus']).isNotEmpty ? _safeString(d['visitStatus']) : 'Scheduled';
@@ -181,9 +224,24 @@ class _AddServiceVisitScreenState extends State<AddServiceVisitScreen> {
         _fetchAndPopulateRequestDetails(_selectedRequestId!);
       }
     } else {
-      if (widget.prefillRequestId != null) {
-        _selectedRequestId = widget.prefillRequestId;
-        _fetchAndPopulateRequestDetails(widget.prefillRequestId!);
+      // NEW MODE: Prefill from SSO or Request
+      _selectedRequestId = widget.serviceRequestId ?? widget.prefillRequestId;
+      _selectedRequestNumber = widget.serviceRequestNumber;
+      _selectedCustomerId = widget.customerId;
+      _selectedCustomerName = widget.customerName;
+
+      _siteAddress = widget.siteAddress;
+      _contactPerson = widget.contactPerson;
+      _scopeOfWork = widget.scopeOfWork;
+      _complaintDescription = widget.complaint ?? '';
+
+      if (widget.assignedTechnicians != null && widget.assignedTechnicians!.isNotEmpty) {
+        _assignedTechnicianUids = List<String>.from(widget.assignedTechnicians!);
+        _assignedTechnicianUid = _assignedTechnicianUids.first;
+      }
+
+      if (_selectedRequestId != null && _selectedRequestId!.isNotEmpty) {
+        _fetchAndPopulateRequestDetails(_selectedRequestId!);
       }
     }
   }
@@ -197,12 +255,22 @@ class _AddServiceVisitScreenState extends State<AddServiceVisitScreen> {
       final Map<String, int> counts = {};
       for (var doc in snap.docs) {
         final data = doc.data();
-        final uid = _safeString(data['assignedTechnicianUid']);
-        final engUid = _safeString(data['engineerUid']);
-        final targetUid = uid.isNotEmpty ? uid : engUid;
 
-        if (targetUid.isNotEmpty) {
-          counts[targetUid] = (counts[targetUid] ?? 0) + 1;
+        // Count for modern arrays and legacy single values
+        final uids = data['assignedTechnicians'] is List
+            ? List<String>.from(data['assignedTechnicians'])
+            : [];
+
+        final legacyUid = _safeString(data['assignedTechnicianUid']);
+        final engUid = _safeString(data['engineerUid']);
+        final singleUid = legacyUid.isNotEmpty ? legacyUid : engUid;
+
+        if (uids.isEmpty && singleUid.isNotEmpty) {
+          uids.add(singleUid);
+        }
+
+        for (String u in uids) {
+          if (u.isNotEmpty) counts[u] = (counts[u] ?? 0) + 1;
         }
       }
       if (mounted) {
@@ -301,10 +369,11 @@ class _AddServiceVisitScreenState extends State<AddServiceVisitScreen> {
         }
 
         setState(() {
-          _selectedRequestNumber = _safeString(d['requestNumber']);
-          _selectedCustomerId = _safeString(d['customerId']);
-          _selectedCustomerName = _safeString(d['customerName']);
-          _complaintDescription = _safeString(d['complaintDescription']);
+          if (_selectedRequestNumber == null || _selectedRequestNumber!.isEmpty) _selectedRequestNumber = _safeString(d['requestNumber']);
+          if (_selectedCustomerId == null || _selectedCustomerId!.isEmpty) _selectedCustomerId = _safeString(d['customerId']);
+          if (_selectedCustomerName == null || _selectedCustomerName!.isEmpty) _selectedCustomerName = _safeString(d['customerName']);
+          if (_complaintDescription.isEmpty) _complaintDescription = _safeString(d['complaintDescription']);
+
           _requestPriority = _safeString(d['priority']).isNotEmpty ? _safeString(d['priority']) : 'Medium';
           _requestServiceType = _safeString(d['complaintCategory']).isNotEmpty ? _safeString(d['complaintCategory']) : '-';
           _requestCreatedDate = _extractDate(d['createdAt']);
@@ -399,12 +468,12 @@ class _AddServiceVisitScreenState extends State<AddServiceVisitScreen> {
   Future<void> _saveVisit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    if (_selectedRequestId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a Service Request.'), backgroundColor: Colors.red));
+    if (_selectedRequestId == null && widget.serviceSalesOrderId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please link this visit to a valid Request or Sales Order.'), backgroundColor: Colors.red));
       return;
     }
-    if (_assignedTechnicianUid == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please assign a Service Technician.'), backgroundColor: Colors.red));
+    if (_assignedTechnicianUids.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please assign at least one Service Technician.'), backgroundColor: Colors.red));
       return;
     }
 
@@ -430,10 +499,48 @@ class _AddServiceVisitScreenState extends State<AddServiceVisitScreen> {
           visitNo = 'VIS/$fy/${nextSeq.toString().padLeft(4, '0')}';
         }
 
+        // Secure mapping for Multiple Technicians while supporting legacy single-fields
+        List<String> assignedNames = [];
+        String? primaryUid;
+        String? primaryName;
+        String? primaryMobile;
+
+        if (_assignedTechnicianUids.isNotEmpty) {
+          primaryUid = _assignedTechnicianUids.first;
+        }
+
+        for (String uid in _assignedTechnicianUids) {
+          final data = _technicianDataCache[uid];
+          if (data != null) {
+            final name = _getUserDisplayName(data);
+            assignedNames.add(name);
+            if (primaryName == null) {
+              primaryName = name;
+              primaryMobile = _getUserMobile(data);
+            }
+          } else if (uid == _assignedTechnicianUid) {
+            primaryName = _assignedTechnicianName;
+            primaryMobile = _assignedTechnicianMobile;
+            assignedNames.add(primaryName ?? 'Unknown');
+          } else {
+            assignedNames.add('Unknown User');
+          }
+        }
+
         final visitData = {
           'id': docId,
           'companyId': widget.companyId,
           'visitNo': visitNo,
+
+          // SSO Integrations
+          'serviceSalesOrderId': widget.serviceSalesOrderId ?? _safeString(widget.existingData?['serviceSalesOrderId']),
+          'serviceSalesOrderNumber': widget.serviceSalesOrderNumber ?? _safeString(widget.existingData?['serviceSalesOrderNumber']),
+          'serviceQuotationId': widget.serviceQuotationId ?? _safeString(widget.existingData?['serviceQuotationId']),
+          'serviceQuotationNumber': widget.serviceQuotationNumber ?? _safeString(widget.existingData?['serviceQuotationNumber']),
+          'siteAddress': _siteAddress ?? '',
+          'contactPerson': _contactPerson ?? '',
+          'scopeOfWork': _scopeOfWork ?? '',
+
           'requestId': _selectedRequestId,
           'requestNumber': _selectedRequestNumber ?? '',
           'customerId': _selectedCustomerId ?? '',
@@ -456,13 +563,16 @@ class _AddServiceVisitScreenState extends State<AddServiceVisitScreen> {
 
           'expectedDuration': _expectedDuration,
 
-          'assignedTechnicianUid': _assignedTechnicianUid,
-          'assignedTechnicianName': _assignedTechnicianName ?? 'Unassigned',
-          'assignedTechnicianMobile': _assignedTechnicianMobile ?? '',
+          // Safe Technician Array Assignments
+          'assignedTechnicians': _assignedTechnicianUids,
+          'assignedTechnicianNames': assignedNames,
+          'assignedTechnicianUid': primaryUid,
+          'assignedTechnicianName': assignedNames.isNotEmpty ? assignedNames.join(', ') : 'Unassigned',
+          'assignedTechnicianMobile': primaryMobile ?? '',
 
           // Legacy mappings to prevent breaks
-          'engineerUid': _assignedTechnicianUid,
-          'engineerName': _assignedTechnicianName ?? 'Unassigned',
+          'engineerUid': primaryUid,
+          'engineerName': assignedNames.isNotEmpty ? assignedNames.join(', ') : 'Unassigned',
 
           'remarks': _remarksCtrl.text.trim(),
           'internalNotes': _internalNotesCtrl.text.trim(),
@@ -483,24 +593,26 @@ class _AddServiceVisitScreenState extends State<AddServiceVisitScreen> {
           transaction.update(_visitsRef.doc(docId), visitData);
         }
 
-        // 🛡️ CRITICAL ERP REQUIREMENT: UPDATE PARENT SERVICE REQUEST
-        final srRef = _requestsRef.doc(_selectedRequestId);
-        final srUpdates = <String, dynamic>{
-          'status': 'Visit Created',
-          'lastVisitNo': visitNo,
-          'lastVisitDate': Timestamp.fromDate(_visitDate),
-          'lastVisitEngineer': _assignedTechnicianName ?? 'Unassigned',
-          'lastActivity': 'Visit $visitNo Scheduled',
-          'lastActivityAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        };
+        // 🛡️ CRITICAL ERP REQUIREMENT: UPDATE PARENT SERVICE REQUEST (If linked)
+        if (_selectedRequestId != null && _selectedRequestId!.isNotEmpty) {
+          final srRef = _requestsRef.doc(_selectedRequestId);
+          final srUpdates = <String, dynamic>{
+            'status': 'Visit Created',
+            'lastVisitNo': visitNo,
+            'lastVisitDate': Timestamp.fromDate(_visitDate),
+            'lastVisitEngineer': assignedNames.isNotEmpty ? assignedNames.join(', ') : 'Unassigned',
+            'lastActivity': 'Visit $visitNo Scheduled',
+            'lastActivityAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          };
 
-        if (isNew) {
-          srUpdates['visitCount'] = FieldValue.increment(1);
-          srUpdates['visitCreatedAt'] = FieldValue.serverTimestamp();
+          if (isNew) {
+            srUpdates['visitCount'] = FieldValue.increment(1);
+            srUpdates['visitCreatedAt'] = FieldValue.serverTimestamp();
+          }
+
+          transaction.set(srRef, srUpdates, SetOptions(merge: true));
         }
-
-        transaction.set(srRef, srUpdates, SetOptions(merge: true));
       });
 
       if (mounted) {
@@ -544,7 +656,7 @@ class _AddServiceVisitScreenState extends State<AddServiceVisitScreen> {
                         const SizedBox(height: 16),
                         _buildRequestSelectionSection(),
                         const SizedBox(height: 16),
-                        if (_selectedRequestId != null) ...[
+                        if (_selectedRequestId != null || widget.serviceSalesOrderNumber != null) ...[
                           _buildRequestInformationCard(),
                           const SizedBox(height: 16),
                         ],
@@ -575,7 +687,7 @@ class _AddServiceVisitScreenState extends State<AddServiceVisitScreen> {
         children: [
           _buildKpiCard('Visit Type', _visitType, Icons.category, Colors.indigo),
           _buildKpiCard('Priority', _priority, Icons.flag, Colors.red),
-          _buildKpiCard('Assigned To', _assignedTechnicianName ?? 'Pending', Icons.engineering, Colors.blue),
+          _buildKpiCard('Assigned Techs', _assignedTechnicianUids.isEmpty ? 'Pending' : '${_assignedTechnicianUids.length} Assigned', Icons.engineering, Colors.blue),
           _buildKpiCard('Machines', _machineCount.toString(), Icons.settings, Colors.orange),
           _buildKpiCard('Warranty', _warrantyStatus, Icons.verified_user, Colors.green),
           _buildKpiCard('Duration', _expectedDuration, Icons.timer, Colors.purple),
@@ -610,8 +722,8 @@ class _AddServiceVisitScreenState extends State<AddServiceVisitScreen> {
 
   Widget _buildRequestSelectionSection() {
     return _SectionBlock(
-      title: 'Request Selection',
-      subtitle: 'Link this visit to an open service request',
+      title: 'Parent Link',
+      subtitle: 'Link this visit to an open service request or sales order',
       child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: _requestsRef.where('isDeleted', isEqualTo: false).snapshots(),
         builder: (context, snap) {
@@ -637,7 +749,7 @@ class _AddServiceVisitScreenState extends State<AddServiceVisitScreen> {
 
           return DropdownButtonFormField<String>(
             value: _selectedRequestId,
-            decoration: _inputDecoration(label: 'Select Service Request *', icon: Icons.assignment_outlined),
+            decoration: _inputDecoration(label: 'Select Service Request', icon: Icons.assignment_outlined),
             items: items,
             isExpanded: true,
             onChanged: widget.existingDocId != null ? null : (val) {
@@ -648,7 +760,7 @@ class _AddServiceVisitScreenState extends State<AddServiceVisitScreen> {
                 _fetchAndPopulateRequestDetails(val);
               }
             },
-            validator: (v) => v == null ? 'Required' : null,
+            validator: (v) => (v == null && widget.serviceSalesOrderId == null) ? 'Request or Sales Order Required' : null,
           );
         },
       ),
@@ -656,6 +768,9 @@ class _AddServiceVisitScreenState extends State<AddServiceVisitScreen> {
   }
 
   Widget _buildRequestInformationCard() {
+    String ssoNum = widget.serviceSalesOrderNumber ?? _safeString(widget.existingData?['serviceSalesOrderNumber']);
+    String quoteNum = widget.serviceQuotationNumber ?? _safeString(widget.existingData?['serviceQuotationNumber']);
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -671,7 +786,7 @@ class _AddServiceVisitScreenState extends State<AddServiceVisitScreen> {
             children: [
               Icon(Icons.info_outline, size: 20, color: Colors.blueGrey.shade700),
               const SizedBox(width: 8),
-              Text('Request Information', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.blueGrey.shade900, fontSize: 15)),
+              Text('Core Information', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.blueGrey.shade900, fontSize: 15)),
             ],
           ),
           const SizedBox(height: 16),
@@ -681,6 +796,25 @@ class _AddServiceVisitScreenState extends State<AddServiceVisitScreen> {
             _infoItem('Customer ID', _selectedCustomerId ?? '-'),
           ]),
           const SizedBox(height: 12),
+
+          if (ssoNum.isNotEmpty || quoteNum.isNotEmpty) ...[
+            _buildResponsiveRow([
+              _infoItem('Sales Order No', ssoNum.isNotEmpty ? ssoNum : '-'),
+              _infoItem('Quotation No', quoteNum.isNotEmpty ? quoteNum : '-'),
+              const SizedBox.shrink(),
+            ]),
+            const SizedBox(height: 12),
+          ],
+
+          if (_siteAddress?.isNotEmpty == true || _contactPerson?.isNotEmpty == true || _scopeOfWork?.isNotEmpty == true) ...[
+            _buildResponsiveRow([
+              _infoItem('Site Address', _siteAddress?.isNotEmpty == true ? _siteAddress! : '-'),
+              _infoItem('Contact Person', _contactPerson?.isNotEmpty == true ? _contactPerson! : '-'),
+              _infoItem('Scope Of Work', _scopeOfWork?.isNotEmpty == true ? _scopeOfWork! : '-'),
+            ]),
+            const SizedBox(height: 12),
+          ],
+
           _buildResponsiveRow([
             _infoItem('Service Type', _requestServiceType),
             _infoItem('Priority', _requestPriority),
@@ -748,108 +882,126 @@ class _AddServiceVisitScreenState extends State<AddServiceVisitScreen> {
   Widget _buildTechnicianSection() {
     return _SectionBlock(
       title: 'Technician Assignment',
-      subtitle: 'Assign an active service engineer or technician and view their workload',
+      subtitle: 'Assign active service engineers or technicians to this visit',
       child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: _usersRef.where('isActive', isEqualTo: true).snapshots(),
         builder: (context, snap) {
-          List<DropdownMenuItem<String>> items = [];
+          if (!snap.hasData) return const CircularProgressIndicator();
+
+          List<Widget> chips = [];
           Set<String> addedUids = {};
 
-          if (snap.hasData) {
-            for (var doc in snap.data!.docs) {
-              final data = doc.data();
-              if (_isServiceTechnician(data)) {
-                final uid = doc.id;
-                if (!addedUids.contains(uid)) {
-                  addedUids.add(uid);
-                  items.add(_buildTechnicianMenuItem(uid, data));
-                }
+          for (var doc in snap.data!.docs) {
+            final data = doc.data();
+            if (_isServiceTechnician(data)) {
+              final uid = doc.id;
+              _technicianDataCache[uid] = data;
+              if (!addedUids.contains(uid)) {
+                addedUids.add(uid);
+                chips.add(_buildTechnicianChip(uid, data));
               }
             }
           }
 
+          // Render legacy/inactive assigned technicians to prevent UI breaking
           final isEditMode = widget.existingDocId != null;
-          if (isEditMode && _assignedTechnicianUid != null && !addedUids.contains(_assignedTechnicianUid)) {
-            items.add(DropdownMenuItem(
-                value: _assignedTechnicianUid,
-                child: Text('${_assignedTechnicianName ?? 'Unknown User'} (Legacy/Inactive)')
-            ));
-            addedUids.add(_assignedTechnicianUid!);
+          if (isEditMode) {
+            for (String legacyUid in _assignedTechnicianUids) {
+              if (!addedUids.contains(legacyUid)) {
+                addedUids.add(legacyUid);
+                chips.add(_buildLegacyTechnicianChip(legacyUid));
+              }
+            }
           }
 
-          if (items.isEmpty) {
+          if (chips.isEmpty) {
             return TextFormField(
               enabled: false,
-              decoration: _inputDecoration(label: 'Assigned Technician *', icon: Icons.engineering_outlined).copyWith(
+              decoration: _inputDecoration(label: 'Assigned Technicians *', icon: Icons.engineering_outlined).copyWith(
                 hintText: 'No Service Technicians Available',
                 fillColor: Colors.grey.shade100,
               ),
             );
           }
 
-          final safeUid = addedUids.contains(_assignedTechnicianUid) ? _assignedTechnicianUid : null;
-
-          return DropdownButtonFormField<String>(
-            value: safeUid,
-            itemHeight: 72,
-            decoration: _inputDecoration(label: 'Assigned Technician *', icon: Icons.engineering_outlined),
-            items: items,
-            isExpanded: true,
-            onChanged: (val) {
-              if (val != null) {
-                setState(() {
-                  _assignedTechnicianUid = val;
-                  if (snap.hasData) {
-                    try {
-                      final selectedDoc = snap.data!.docs.firstWhere((d) => d.id == val);
-                      final data = selectedDoc.data();
-                      _assignedTechnicianName = _getUserDisplayName(data);
-                      _assignedTechnicianMobile = _getUserMobile(data);
-                    } catch (_) {}
-                  }
-                });
-              }
-            },
-            validator: (v) => v == null ? 'Required' : null,
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(spacing: 12, runSpacing: 12, children: chips),
+              if (_assignedTechnicianUids.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
+                  child: Text('Please select at least one technician', style: TextStyle(color: Colors.red.shade700, fontSize: 12)),
+                )
+            ],
           );
         },
       ),
     );
   }
 
-  DropdownMenuItem<String> _buildTechnicianMenuItem(String uid, Map<String, dynamic> data) {
+  Widget _buildTechnicianChip(String uid, Map<String, dynamic> data) {
     final name = _getUserDisplayName(data);
     final desig = _getUserDesignation(data);
     final mobile = _getUserMobile(data);
     final workload = _technicianWorkload[uid] ?? 0;
+    final isSelected = _assignedTechnicianUids.contains(uid);
 
     Color badgeColor = workload <= 3 ? Colors.green : (workload <= 6 ? Colors.orange : Colors.red);
 
-    return DropdownMenuItem<String>(
-      value: uid,
-      child: Column(
+    return FilterChip(
+      selected: isSelected,
+      selectedColor: Colors.indigo.shade50,
+      checkmarkColor: Colors.indigo,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: isSelected ? Colors.indigo : Colors.grey.shade300),
+      ),
+      labelPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      label: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-          const SizedBox(height: 4),
+          Text(name, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isSelected ? Colors.indigo.shade900 : Colors.black87)),
+          const SizedBox(height: 2),
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(desig, style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+              Text(desig.isNotEmpty ? desig : 'Technician', style: TextStyle(fontSize: 11, color: Colors.grey.shade700)),
               if (mobile.isNotEmpty) ...[
-                Text(' | ', style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
-                Text(mobile, style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                Text(' | ', style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
+                Text(mobile, style: TextStyle(fontSize: 11, color: Colors.grey.shade700)),
               ],
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(color: badgeColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4), border: Border.all(color: badgeColor)),
-                child: Text('Open Visits: $workload', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: badgeColor)),
-              )
             ],
+          ),
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(color: badgeColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4), border: Border.all(color: badgeColor)),
+            child: Text('Open Visits: $workload', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: badgeColor)),
           )
         ],
       ),
+      onSelected: (val) {
+        setState(() {
+          if (val) _assignedTechnicianUids.add(uid);
+          else _assignedTechnicianUids.remove(uid);
+        });
+      },
+    );
+  }
+
+  Widget _buildLegacyTechnicianChip(String uid) {
+    final isSelected = _assignedTechnicianUids.contains(uid);
+    return FilterChip(
+        selected: isSelected,
+        label: const Text('Legacy/Inactive User', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+        onSelected: (val) {
+          setState(() {
+            if (val) _assignedTechnicianUids.add(uid);
+            else _assignedTechnicianUids.remove(uid);
+          });
+        }
     );
   }
 
@@ -961,7 +1113,7 @@ class _AddServiceVisitScreenState extends State<AddServiceVisitScreen> {
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth < 700) {
-          return Column(children: children.map((c) => Padding(padding: const EdgeInsets.only(bottom: 16), child: c)).toList());
+          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: children.map((c) => Padding(padding: const EdgeInsets.only(bottom: 16), child: c)).toList());
         }
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,

@@ -1,17 +1,28 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'package:QUIK/modules/crm/contacts/screens_add_contact.dart';
 
-String _safeString(dynamic value) => (value ?? '').toString().trim();
+// ==========================================
+// ENTERPRISE HELPERS & SAFETY PARSERS
+// ==========================================
 
-bool _safeBool(dynamic value) {
-  if (value == null) return false;
-  if (value is bool) return value;
-  if (value is num) return value == 1;
-  final text = value.toString().trim().toLowerCase();
-  return text == 'true' || text == '1' || text == 'yes' || text == 'active';
+bool _safeBool(dynamic val) {
+  if (val == null) return false;
+  if (val is bool) return val;
+  if (val is int) return val == 1;
+  final s = val.toString().trim().toLowerCase();
+  return s == 'true' || s == '1' || s == 'yes';
 }
+
+String _safeString(dynamic val) {
+  return (val ?? '').toString().trim();
+}
+
+// ==========================================
+// ENTERPRISE CONTACTS WORKSPACE
+// ==========================================
 
 class ScreensContactList extends StatefulWidget {
   final DocumentReference<Map<String, dynamic>> companyRef;
@@ -28,448 +39,1088 @@ class ScreensContactList extends StatefulWidget {
 }
 
 class _ScreensContactListState extends State<ScreensContactList> {
-  final TextEditingController _searchController = TextEditingController();
-  String _query = '';
+  final TextEditingController _search = TextEditingController();
+
+  // Filters
+  bool _onlyPrimary = false;
+  bool _onlyWithEmail = false;
+  bool _onlyWithPhone = false;
   String _statusFilter = 'All';
-  String _categoryFilter = 'All';
-  bool _onlyEmail = false;
-  bool _onlyPhone = false;
+  String _typeFilter = 'All';
+
+  // Table State
+  int _sortColumnIndex = 0;
+  bool _sortAscending = true;
+  bool _tableView = false;
 
   @override
   void dispose() {
-    _searchController.dispose();
+    _search.dispose();
     super.dispose();
   }
 
-  Stream<QuerySnapshot<Map<String, dynamic>>> get _customersStream {
-    return widget.companyRef.collection('customers').snapshots();
+  Future<Map<String, dynamic>?> _loadCurrentUserProfile(String uid) async {
+    final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    return doc.data();
+  }
+
+  bool _isAdminOrManager(String role) {
+    return role == 'admin' || role == 'manager' || role == 'owner';
+  }
+
+  void _sortRows(List<_ContactRow> rows) {
+    rows.sort((a, b) {
+      int cmp;
+      switch (_sortColumnIndex) {
+        case 0:
+          cmp = a.name.toLowerCase().compareTo(b.name.toLowerCase());
+          break;
+        case 1:
+          cmp = a.designation.toLowerCase().compareTo(b.designation.toLowerCase());
+          break;
+        case 2:
+          cmp = a.department.toLowerCase().compareTo(b.department.toLowerCase());
+          break;
+        case 3:
+          cmp = a.location.toLowerCase().compareTo(b.location.toLowerCase());
+          break;
+        case 4:
+          cmp = a.contactStatus.toLowerCase().compareTo(b.contactStatus.toLowerCase());
+          break;
+        case 5:
+          cmp = (a.isPrimary ? 1 : 0).compareTo(b.isPrimary ? 1 : 0);
+          break;
+        default:
+          cmp = 0;
+      }
+      return _sortAscending ? cmp : -cmp;
+    });
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'active':
+        return const Color(0xFF10B981); // Emerald
+      case 'inactive':
+        return const Color(0xFF64748B); // Slate
+      case 'left company':
+        return const Color(0xFFEF4444); // Red
+      case 'do not contact':
+        return const Color(0xFFF59E0B); // Amber
+      default:
+        return const Color(0xFF3B82F6); // Blue
+    }
+  }
+
+  void _triggerQuickAction(String action, _ContactRow contact) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Opening $action module for ${contact.name}...'),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFF0F172A),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: _customersStream,
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    final currentUser = FirebaseAuth.instance.currentUser;
 
-          if (snap.hasError) {
-            return _ErrorBox(message: 'Contacts loading failed: ${snap.error}');
-          }
+    if (currentUser == null) {
+      return const Scaffold(body: Center(child: Text('Please login again.')));
+    }
 
-          final allRows = (snap.data?.docs ?? [])
-              .map(_ContactRow.fromCustomerDoc)
-              .where((row) => row.companyName.isNotEmpty || row.contactName.isNotEmpty || row.phone.isNotEmpty || row.email.isNotEmpty)
-              .toList()
-            ..sort((a, b) => a.sortName.compareTo(b.sortName));
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: _loadCurrentUserProfile(currentUser.uid),
+      builder: (context, userSnap) {
+        if (userSnap.connectionState == ConnectionState.waiting) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
 
-          final rows = _applyFilters(allRows);
-          final activeCount = allRows.where((e) => e.status.toLowerCase() == 'active').length;
-          final phoneCount = allRows.where((e) => e.phone.isNotEmpty).length;
-          final emailCount = allRows.where((e) => e.email.isNotEmpty).length;
-
-          return Column(
-            children: [
-              _topBar(total: allRows.length, visible: rows.length, active: activeCount, phone: phoneCount, email: emailCount),
-              Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _filterPanel(allRows),
-                    Expanded(
-                      child: rows.isEmpty
-                          ? _emptyState(allRows.isEmpty)
-                          : ListView.separated(
-                              padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
-                              itemCount: rows.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 12),
-                              itemBuilder: (context, index) => _contactCard(rows[index]),
-                            ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+        if (userSnap.hasError) {
+          return Scaffold(
+            appBar: AppBar(title: Text('Contacts - ${widget.companyName}')),
+            body: Center(child: Text('Error loading user profile: ${userSnap.error}')),
           );
-        },
-      ),
-    );
-  }
+        }
 
-  List<_ContactRow> _applyFilters(List<_ContactRow> rows) {
-    final q = _query.trim().toLowerCase();
-    return rows.where((row) {
-      if (q.isNotEmpty && !row.searchText.contains(q)) return false;
-      if (_statusFilter != 'All' && row.status.toLowerCase() != _statusFilter.toLowerCase()) return false;
-      if (_categoryFilter != 'All' && row.category.toLowerCase() != _categoryFilter.toLowerCase()) return false;
-      if (_onlyEmail && row.email.isEmpty) return false;
-      if (_onlyPhone && row.phone.isEmpty) return false;
-      return true;
-    }).toList();
-  }
+        final userData = userSnap.data ?? {};
+        final role = _safeString(userData['role']);
 
-  Widget _topBar({required int total, required int visible, required int active, required int phone, required int email}) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-      color: Colors.white,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Text('Contacts', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
-              const Spacer(),
-              ElevatedButton.icon(
-                onPressed: () => _showAddContactHint(),
-                icon: const Icon(Icons.person_add_alt_1, size: 18),
-                label: const Text('Add Contact'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              _StatCard(title: 'Visible', value: '$visible', icon: Icons.visibility_outlined),
-              const SizedBox(width: 12),
-              _StatCard(title: 'Total Customers', value: '$total', icon: Icons.people_alt_outlined),
-              const SizedBox(width: 12),
-              _StatCard(title: 'Active', value: '$active', icon: Icons.check_circle_outline),
-              const SizedBox(width: 12),
-              _StatCard(title: 'Phone Numbers', value: '$phone', icon: Icons.phone_outlined),
-              const SizedBox(width: 12),
-              _StatCard(title: 'Email IDs', value: '$email', icon: Icons.email_outlined),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+        return LayoutBuilder(
+          builder: (context, c) {
+            final isWide = c.maxWidth >= 980;
+            final allowTableView = c.maxWidth >= 1100;
 
-  Widget _filterPanel(List<_ContactRow> rows) {
-    final suggestions = _query.isEmpty ? <_ContactRow>[] : rows.where((e) => e.searchText.contains(_query.toLowerCase())).take(8).toList();
-    return Container(
-      width: 310,
-      margin: const EdgeInsets.fromLTRB(16, 14, 0, 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE2E8F0))),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(children: [Icon(Icons.tune_rounded, size: 18, color: Color(0xFF0F172A)), SizedBox(width: 8), Text('Search & Filters', style: TextStyle(fontWeight: FontWeight.w800))]),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _searchController,
-              onChanged: (value) => setState(() => _query = value),
-              decoration: InputDecoration(
-                hintText: 'Search name, company, phone...',
-                prefixIcon: const Icon(Icons.search, size: 20),
-                suffixIcon: _query.isEmpty ? null : IconButton(icon: const Icon(Icons.close, size: 18), onPressed: _clearSearch),
-                filled: true,
-                fillColor: const Color(0xFFF8FAFC),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
-              ),
-            ),
-            if (suggestions.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Container(
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE2E8F0))),
-                child: Column(
-                  children: suggestions.map((row) => ListTile(
-                        dense: true,
-                        leading: CircleAvatar(radius: 14, backgroundColor: const Color(0xFFDBEAFE), child: Text(row.initial, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF2563EB)))),
-                        title: Text(row.displayTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                        subtitle: Text(row.phone.isEmpty ? row.companyName : row.phone, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
-                        onTap: () => setState(() {
-                          _query = row.displayTitle;
-                          _searchController.text = row.displayTitle;
-                          _searchController.selection = TextSelection.fromPosition(TextPosition(offset: _searchController.text.length));
-                        }),
-                      )).toList(),
-                ),
-              ),
-            ],
-            const SizedBox(height: 18),
-            const Divider(height: 1),
-            const SizedBox(height: 14),
-            const _PanelLabel('Customer Status'),
-            _DropdownBox(value: _statusFilter, values: const ['All', 'Active', 'Inactive'], onChanged: (v) => setState(() => _statusFilter = v ?? 'All')),
-            const SizedBox(height: 14),
-            const _PanelLabel('Customer Category'),
-            _DropdownBox(value: _categoryFilter, values: const ['All', 'Existing Customer', 'Potential Customer', 'Lead', 'Prospect'], onChanged: (v) => setState(() => _categoryFilter = v ?? 'All')),
-            const SizedBox(height: 18),
-            const _PanelLabel('Quick Filters'),
-            _CheckRow(label: 'Has Email Address', value: _onlyEmail, onChanged: (v) => setState(() => _onlyEmail = v ?? false)),
-            _CheckRow(label: 'Has Phone Number', value: _onlyPhone, onChanged: (v) => setState(() => _onlyPhone = v ?? false)),
-            const SizedBox(height: 18),
-            SizedBox(width: double.infinity, child: OutlinedButton(onPressed: _resetFilters, child: const Text('Reset All Filters'))),
-          ],
-        ),
-      ),
-    );
-  }
+            if (!allowTableView && _tableView) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) setState(() => _tableView = false);
+              });
+            }
 
-  Widget _contactCard(_ContactRow row) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              CircleAvatar(radius: 22, backgroundColor: const Color(0xFFDBEAFE), child: Text(row.initial, style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF2563EB)))),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        if (row.customerCode.isNotEmpty) _Tag(text: row.customerCode, bg: const Color(0xFFDBEAFE), fg: const Color(0xFF2563EB)),
-                        if (row.customerCode.isNotEmpty) const SizedBox(width: 8),
-                        Expanded(child: Text(row.displayTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                      ],
+            return Scaffold(
+              backgroundColor: const Color(0xFFF8FAFC),
+              appBar: AppBar(
+                title: const Text('Contacts Workspace', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
+                backgroundColor: Colors.white,
+                foregroundColor: const Color(0xFF0F172A),
+                elevation: 0,
+                actions: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 16),
+                    child: c.maxWidth < 700
+                        ? IconButton(
+                      tooltip: 'Add Contact',
+                      onPressed: _goAddContact,
+                      icon: const Icon(Icons.person_add_outlined),
+                    )
+                        : ElevatedButton.icon(
+                      onPressed: _goAddContact,
+                      icon: const Icon(Icons.person_add_outlined, size: 18),
+                      label: const Text('Add Contact'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2563EB),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        elevation: 0,
+                      ),
                     ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _Tag(text: row.category.isEmpty ? 'Customer' : row.category, bg: const Color(0xFFDCFCE7), fg: const Color(0xFF166534)),
-                        _Tag(text: row.status, bg: const Color(0xFFEFF6FF), fg: const Color(0xFF1D4ED8)),
-                        if (row.priority.isNotEmpty) _Tag(text: row.priority, bg: const Color(0xFFF3E8FF), fg: const Color(0xFF7E22CE)),
-                        if (row.city.isNotEmpty) _Tag(text: row.city, bg: const Color(0xFFF8FAFC), fg: const Color(0xFF334155)),
-                      ],
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              PopupMenuButton<String>(
-                onSelected: (value) {
-                  if (value == 'add_contact') _openAddContact(row);
+              body: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                future: widget.companyRef.get(),
+                builder: (context, customerSnap) {
+                  if (customerSnap.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  if (customerSnap.hasError) {
+                    return Center(child: Text('Error loading company: ${customerSnap.error}'));
+                  }
+
+                  if (!customerSnap.hasData || !customerSnap.data!.exists) {
+                    return const Center(child: Text('Company not found.'));
+                  }
+
+                  final customerData = customerSnap.data!.data() ?? {};
+                  final createdBy = _safeString(customerData['createdBy']);
+                  final assignedToUid = _safeString(customerData['assignedToUid']);
+
+                  final hasAccess = _isAdminOrManager(role) ||
+                      createdBy == currentUser.uid ||
+                      assignedToUid == currentUser.uid;
+
+                  if (!hasAccess) {
+                    return Center(
+                      child: Container(
+                        padding: const EdgeInsets.all(24),
+                        constraints: const BoxConstraints(maxWidth: 420),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(Icons.lock_outline, size: 48, color: Color(0xFF94A3B8)),
+                            SizedBox(height: 16),
+                            Text('Access Denied', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+                            SizedBox(height: 8),
+                            Text('You do not have permission to view contacts of this customer.', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF64748B))),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
+                  final contactsRef = widget.companyRef.collection('contacts');
+
+                  return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    stream: contactsRef.snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      if (snapshot.hasError) {
+                        return Center(child: Text('Error loading contacts: ${snapshot.error}'));
+                      }
+
+                      final docs = (snapshot.data?.docs ?? []).toList();
+
+                      final rows = docs.map((d) {
+                        final m = d.data();
+
+                        String status = _safeString(m['contactStatus']);
+                        if (status.isEmpty) {
+                          bool isActive = m.containsKey('isActive') ? _safeBool(m['isActive']) : true;
+                          status = isActive ? 'Active' : 'Inactive';
+                        }
+
+                        return _ContactRow(
+                          doc: d,
+                          name: _safeString(m['name']),
+                          email: _safeString(m['email']),
+                          phone: _safeString(m['phone']),
+                          alternatePhone: _safeString(m['alternatePhone']),
+                          officePhone: _safeString(m['officePhone']),
+                          designation: _safeString(m['designation']),
+                          department: _safeString(m['department']),
+                          contactType: _safeString(m['contactType']).isNotEmpty ? _safeString(m['contactType']) : 'Commercial',
+                          contactStatus: status,
+                          location: _safeString(m['linkedAddressLabel']),
+                          preferredComm: _safeString(m['preferredCommunicationMode']),
+                          isPrimary: _safeBool(m['isPrimary']),
+                        );
+                      }).toList();
+
+                      final q = _search.text.trim().toLowerCase();
+                      var filtered = rows.where((r) {
+                        if (q.isNotEmpty) {
+                          if (!r.name.toLowerCase().contains(q) &&
+                              !r.email.toLowerCase().contains(q) &&
+                              !r.phone.toLowerCase().contains(q) &&
+                              !r.designation.toLowerCase().contains(q) &&
+                              !r.department.toLowerCase().contains(q) &&
+                              !r.location.toLowerCase().contains(q)) {
+                            return false;
+                          }
+                        }
+
+                        if (_onlyPrimary && !r.isPrimary) return false;
+                        if (_onlyWithEmail && r.email.isEmpty) return false;
+                        if (_onlyWithPhone && r.phone.isEmpty && r.alternatePhone.isEmpty && r.officePhone.isEmpty) return false;
+                        if (_statusFilter != 'All' && r.contactStatus.toLowerCase() != _statusFilter.toLowerCase()) return false;
+                        if (_typeFilter != 'All' && r.contactType.toLowerCase() != _typeFilter.toLowerCase()) return false;
+
+                        return true;
+                      }).toList();
+
+                      _sortRows(filtered);
+
+                      final primaryCount = rows.where((e) => e.isPrimary).length;
+                      final activeCount = rows.where((e) => e.contactStatus.toLowerCase() == 'active').length;
+                      final totalCount = rows.length;
+
+                      if (isWide) {
+                        return Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 1600),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                SizedBox(
+                                  width: 300,
+                                  child: _filterPanel(
+                                    total: totalCount,
+                                    primaryCount: primaryCount,
+                                    activeCount: activeCount,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.fromLTRB(16, 16, 24, 24),
+                                    child: Column(
+                                      children: [
+                                        _companySummaryHeader(
+                                          total: filtered.length,
+                                          primaryCount: primaryCount,
+                                          activeCount: activeCount,
+                                          onToggleView: allowTableView ? () => setState(() => _tableView = !_tableView) : null,
+                                          showToggle: allowTableView,
+                                        ),
+                                        const SizedBox(height: 16),
+                                        Expanded(
+                                          child: filtered.isEmpty
+                                              ? _emptyState()
+                                              : (_tableView && allowTableView)
+                                              ? _contactsTable(filtered)
+                                              : _contactsList(filtered),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }
+
+                      return Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          children: [
+                            _companySummaryHeader(
+                              total: filtered.length,
+                              primaryCount: primaryCount,
+                              activeCount: activeCount,
+                              onToggleView: null,
+                              showToggle: false,
+                              compact: true,
+                            ),
+                            const SizedBox(height: 16),
+                            _mobileFilterBar(),
+                            const SizedBox(height: 16),
+                            Expanded(
+                              child: filtered.isEmpty
+                                  ? _emptyState()
+                                  : _contactsList(filtered),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
                 },
-                itemBuilder: (_) => const [PopupMenuItem(value: 'add_contact', child: Text('Add / Edit Contact'))],
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _companySummaryHeader({
+    required int total,
+    required int primaryCount,
+    required int activeCount,
+    required VoidCallback? onToggleView,
+    required bool showToggle,
+    bool compact = false,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
           Wrap(
-            spacing: 18,
-            runSpacing: 8,
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              _InlineInfo(icon: Icons.business_outlined, text: row.companyName.isEmpty ? '-' : row.companyName),
-              _InlineInfo(icon: Icons.phone_outlined, text: row.phone.isEmpty ? '-' : row.phone),
-              _InlineInfo(icon: Icons.email_outlined, text: row.email.isEmpty ? '-' : row.email),
-              if (row.contactName.isNotEmpty) _InlineInfo(icon: Icons.person_outline, text: row.contactName),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFDBEAFE))),
+                    child: const Icon(Icons.business, color: Color(0xFF2563EB), size: 24),
+                  ),
+                  const SizedBox(width: 16),
+                  Flexible(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.companyName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: Color(0xFF0F172A)),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Manage enterprise contacts',
+                          style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (showToggle && !compact && onToggleView != null) ...[
+                const SizedBox(width: 16),
+                OutlinedButton.icon(
+                  onPressed: onToggleView,
+                  icon: Icon(_tableView ? Icons.grid_view_rounded : Icons.table_chart_outlined, size: 18),
+                  label: Text(_tableView ? 'Card View' : 'Table View'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF334155),
+                    side: const BorderSide(color: Color(0xFFE2E8F0)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ],
             ],
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(child: OutlinedButton.icon(onPressed: () => _openAddContact(row), icon: const Icon(Icons.person_add_alt_1, size: 17), label: const Text('Add Contact'))),
-              const SizedBox(width: 8),
-              Expanded(child: OutlinedButton.icon(onPressed: () {}, icon: const Icon(Icons.history, size: 17), label: const Text('Timeline'))),
-            ],
+          const SizedBox(height: 20),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final cards = [
+                _SummaryPill(label: 'Total Visible', value: '$total', icon: Icons.people_alt_outlined),
+                _SummaryPill(label: 'Primary', value: '$primaryCount', icon: Icons.star_outline),
+                _SummaryPill(label: 'Active Users', value: '$activeCount', icon: Icons.check_circle_outline, color: const Color(0xFF10B981)),
+              ];
+
+              if (constraints.maxWidth < 500) {
+                return Wrap(spacing: 12, runSpacing: 12, children: cards);
+              }
+
+              return Row(
+                children: [
+                  Expanded(child: cards[0]),
+                  const SizedBox(width: 12),
+                  Expanded(child: cards[1]),
+                  const SizedBox(width: 12),
+                  Expanded(child: cards[2]),
+                ],
+              );
+            },
           ),
         ],
       ),
     );
   }
 
-  Widget _emptyState(bool noCustomers) {
+  Widget _mobileFilterBar() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 6)],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _search,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              hintText: 'Search names, phones...',
+              hintStyle: const TextStyle(fontSize: 14),
+              prefixIcon: const Icon(Icons.search, size: 20),
+              suffixIcon: _search.text.trim().isEmpty ? null : IconButton(tooltip: 'Clear', icon: const Icon(Icons.close, size: 18), onPressed: () { _search.clear(); setState(() {}); }),
+              isDense: true, filled: true, fillColor: const Color(0xFFF8FAFC),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                FilterChip(
+                  label: const Text('Primary', style: TextStyle(fontSize: 12)),
+                  selected: _onlyPrimary,
+                  onSelected: (v) => setState(() => _onlyPrimary = v),
+                  backgroundColor: const Color(0xFFF1F5F9),
+                  selectedColor: const Color(0xFFDBEAFE),
+                  checkmarkColor: const Color(0xFF2563EB),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(16)),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _statusFilter,
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF0F172A)),
+                      items: ['All', 'Active', 'Inactive', 'Left Company'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                      onChanged: (v) => setState(() => _statusFilter = v!),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: () => setState(() { _onlyPrimary = false; _onlyWithEmail = false; _onlyWithPhone = false; _statusFilter = 'All'; _typeFilter = 'All'; _search.clear(); }),
+                  child: const Text('Reset', style: TextStyle(fontSize: 12)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _emptyState() {
+    final hasFilters = _search.text.trim().isNotEmpty || _onlyPrimary || _onlyWithEmail || _onlyWithPhone || _statusFilter != 'All' || _typeFilter != 'All';
+
     return Center(
       child: Container(
-        width: 520,
-        padding: const EdgeInsets.all(34),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE2E8F0))),
+        padding: const EdgeInsets.all(32),
+        constraints: const BoxConstraints(maxWidth: 500),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.contact_phone_outlined, size: 56, color: Color(0xFF94A3B8)),
-            const SizedBox(height: 16),
-            Text(noCustomers ? 'No Customers Found' : 'No Matching Contacts', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(color: const Color(0xFFF1F5F9), shape: BoxShape.circle, border: Border.all(color: const Color(0xFFE2E8F0))),
+              child: Icon(hasFilters ? Icons.search_off : Icons.contact_page_outlined, size: 40, color: const Color(0xFF94A3B8)),
+            ),
+            const SizedBox(height: 24),
+            Text(hasFilters ? 'No matching contacts found' : 'No Contacts Found', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
             const SizedBox(height: 8),
-            Text(noCustomers ? 'Your customer database has no customer records yet.' : 'Change search or filters to view saved customer contacts.', textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF64748B))),
+            Text(
+              hasFilters ? 'Try adjusting your search criteria or filters.' : 'Add decision makers, site contacts, and key personnel to map out this account.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Color(0xFF64748B), fontSize: 14, height: 1.5),
+            ),
+            const SizedBox(height: 24),
+            if (hasFilters)
+              OutlinedButton.icon(
+                onPressed: () => setState(() { _onlyPrimary = false; _onlyWithEmail = false; _onlyWithPhone = false; _statusFilter = 'All'; _typeFilter = 'All'; _search.clear(); }),
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('Reset Filters'),
+              )
+            else
+              ElevatedButton.icon(
+                onPressed: _goAddContact,
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Add Contact'),
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB), foregroundColor: Colors.white),
+              ),
           ],
         ),
       ),
     );
   }
 
-  void _clearSearch() {
-    setState(() {
-      _query = '';
-      _searchController.clear();
-    });
-  }
+  Widget _filterPanel({required int total, required int primaryCount, required int activeCount}) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 16, 24),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 2))],
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: const [
+                  Icon(Icons.tune_rounded, size: 20, color: Color(0xFF0F172A)),
+                  SizedBox(width: 10),
+                  Text('Filters & Search', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF0F172A))),
+                ],
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                controller: _search,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  hintText: 'Search contacts...',
+                  hintStyle: const TextStyle(fontSize: 13),
+                  prefixIcon: const Icon(Icons.search, size: 18),
+                  suffixIcon: _search.text.trim().isEmpty ? null : IconButton(tooltip: 'Clear', icon: const Icon(Icons.close, size: 16), onPressed: () { _search.clear(); setState(() {}); }),
+                  isDense: true, filled: true, fillColor: const Color(0xFFF8FAFC),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                ),
+              ),
+              const Padding(padding: EdgeInsets.symmetric(vertical: 20), child: Divider(height: 1, color: Color(0xFFE2E8F0))),
 
-  void _resetFilters() {
-    setState(() {
-      _query = '';
-      _searchController.clear();
-      _statusFilter = 'All';
-      _categoryFilter = 'All';
-      _onlyEmail = false;
-      _onlyPhone = false;
-    });
-  }
+              const Text('Contact Status', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFF64748B), letterSpacing: 0.5)),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFE2E8F0))),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _statusFilter,
+                    isExpanded: true,
+                    style: const TextStyle(fontSize: 13, color: Color(0xFF0F172A), fontWeight: FontWeight.w500),
+                    items: ['All', 'Active', 'Inactive', 'Left Company', 'Do Not Contact'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                    onChanged: (v) => setState(() => _statusFilter = v!),
+                  ),
+                ),
+              ),
 
-  void _showAddContactHint() {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Select a customer card and click Add Contact to save a person under that customer.')));
-  }
+              const SizedBox(height: 20),
+              const Text('Contact Category', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFF64748B), letterSpacing: 0.5)),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFE2E8F0))),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _typeFilter,
+                    isExpanded: true,
+                    style: const TextStyle(fontSize: 13, color: Color(0xFF0F172A), fontWeight: FontWeight.w500),
+                    items: ['All', 'Commercial', 'Technical', 'Management', 'Service', 'Dispatch', 'Emergency', 'General'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                    onChanged: (v) => setState(() => _typeFilter = v!),
+                  ),
+                ),
+              ),
 
-  void _openAddContact(_ContactRow row) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => ScreensAddContact(companyRef: row.customerRef)));
-  }
-}
+              const SizedBox(height: 20),
+              const Text('Quick Filters', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFF64748B), letterSpacing: 0.5)),
+              const SizedBox(height: 8),
+              CheckboxListTile(
+                value: _onlyPrimary, onChanged: (v) => setState(() => _onlyPrimary = v ?? false),
+                dense: true, contentPadding: EdgeInsets.zero, activeColor: const Color(0xFF2563EB),
+                title: const Text('Primary Contacts', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+              ),
+              CheckboxListTile(
+                value: _onlyWithEmail, onChanged: (v) => setState(() => _onlyWithEmail = v ?? false),
+                dense: true, contentPadding: EdgeInsets.zero, activeColor: const Color(0xFF2563EB),
+                title: const Text('Has Email Address', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+              ),
+              CheckboxListTile(
+                value: _onlyWithPhone, onChanged: (v) => setState(() => _onlyWithPhone = v ?? false),
+                dense: true, contentPadding: EdgeInsets.zero, activeColor: const Color(0xFF2563EB),
+                title: const Text('Has Phone Number', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+              ),
 
-class _ContactRow {
-  final DocumentReference<Map<String, dynamic>> customerRef;
-  final String customerCode;
-  final String companyName;
-  final String contactName;
-  final String phone;
-  final String email;
-  final String city;
-  final String status;
-  final String category;
-  final String priority;
-  final String assignedTo;
-
-  const _ContactRow({
-    required this.customerRef,
-    required this.customerCode,
-    required this.companyName,
-    required this.contactName,
-    required this.phone,
-    required this.email,
-    required this.city,
-    required this.status,
-    required this.category,
-    required this.priority,
-    required this.assignedTo,
-  });
-
-  factory _ContactRow.fromCustomerDoc(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
-    final d = doc.data();
-    final companyName = _firstNonEmpty([d['companyName'], d['customerName'], d['name']]);
-    final contactName = _firstNonEmpty([d['contactName'], d['contactPerson'], d['personName'], d['primaryContactName'], d['customerContactName']]);
-    final phone = _firstNonEmpty([d['companyPhone'], d['phone'], d['mobile'], d['contactPhone'], d['primaryPhone'], d['telephone'], d['whatsapp']]);
-    final email = _firstNonEmpty([d['businessEmail'], d['email'], d['companyEmail'], d['contactEmail'], d['primaryEmail']]);
-    final statusRaw = _firstNonEmpty([d['status'], d['customerStatus']]);
-    final category = _firstNonEmpty([d['customerType'], d['category'], d['leadType'], d['type']]);
-    return _ContactRow(
-      customerRef: doc.reference,
-      customerCode: _firstNonEmpty([d['customerCode'], d['code']]),
-      companyName: companyName,
-      contactName: contactName,
-      phone: phone,
-      email: email,
-      city: _firstNonEmpty([d['city'], d['location'], d['addressCity'], d['state']]),
-      status: statusRaw.isEmpty ? (_safeBool(d['isActive']) ? 'Active' : 'Active') : statusRaw,
-      category: category.isEmpty ? 'Customer' : category,
-      priority: _firstNonEmpty([d['priority'], d['customerPriority']]),
-      assignedTo: _firstNonEmpty([d['assignedToName'], d['assignedTo'], d['salesPerson'], d['ownerName']]),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () => setState(() { _onlyPrimary = false; _onlyWithEmail = false; _onlyWithPhone = false; _statusFilter = 'All'; _typeFilter = 'All'; _search.clear(); }),
+                  style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                  child: const Text('Reset All Filters'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
-  String get displayTitle => companyName.isNotEmpty ? companyName : contactName;
-  String get sortName => displayTitle.toLowerCase();
-  String get initial => displayTitle.isEmpty ? '?' : displayTitle.characters.first.toUpperCase();
-  String get searchText => '$customerCode $companyName $contactName $phone $email $city $status $category $priority'.toLowerCase();
-}
-
-String _firstNonEmpty(List<dynamic> values) {
-  for (final value in values) {
-    final text = _safeString(value);
-    if (text.isNotEmpty) return text;
+  Widget _contactsList(List<_ContactRow> rows) {
+    return ListView.builder(
+      itemCount: rows.length,
+      padding: const EdgeInsets.only(bottom: 24),
+      itemBuilder: (context, i) {
+        final r = rows[i];
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _ContactCard(
+            row: r,
+            statusColor: _getStatusColor(r.contactStatus),
+            onAction: (action) => _triggerQuickAction(action, r),
+            onEdit: () => _editContact(r),
+            onDelete: () => _deleteContact(r),
+          ),
+        );
+      },
+    );
   }
-  return '';
+
+  Widget _contactsTable(List<_ContactRow> rows) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8)],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Scrollbar(
+          thumbVisibility: true,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SingleChildScrollView(
+              child: DataTable(
+                sortColumnIndex: _sortColumnIndex,
+                sortAscending: _sortAscending,
+                headingRowColor: MaterialStateProperty.all(const Color(0xFFF8FAFC)),
+                headingTextStyle: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF475569), fontSize: 13),
+                columnSpacing: 24,
+                dataRowMinHeight: 64,
+                dataRowMaxHeight: 72,
+                columns: [
+                  DataColumn(label: const Text('Contact Details'), onSort: (i, asc) => setState(() { _sortColumnIndex = i; _sortAscending = asc; })),
+                  DataColumn(label: const Text('Role & Dept'), onSort: (i, asc) => setState(() { _sortColumnIndex = i; _sortAscending = asc; })),
+                  DataColumn(label: const Text('Site / Location'), onSort: (i, asc) => setState(() { _sortColumnIndex = i; _sortAscending = asc; })),
+                  DataColumn(label: const Text('Status'), onSort: (i, asc) => setState(() { _sortColumnIndex = i; _sortAscending = asc; })),
+                  const DataColumn(label: Text('Actions')),
+                ],
+                rows: rows.map((r) {
+                  return DataRow(
+                    cells: [
+                      DataCell(
+                        SizedBox(
+                          width: 260,
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 18,
+                                backgroundColor: const Color(0xFFEFF6FF),
+                                child: Text(r.name.isNotEmpty ? r.name[0].toUpperCase() : '?', style: const TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.w800, fontSize: 14)),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Flexible(child: Text(r.name.isEmpty ? '(No Name)' : r.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: Color(0xFF0F172A)), overflow: TextOverflow.ellipsis)),
+                                        if (r.isPrimary)
+                                          Padding(padding: const EdgeInsets.only(left: 8), child: Icon(Icons.star, size: 14, color: Colors.amber.shade600)),
+                                      ],
+                                    ),
+                                    if (r.phone.isNotEmpty || r.email.isNotEmpty)
+                                      Text([r.phone, r.email].where((e) => e.isNotEmpty).join(' • '), style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        onTap: () => _editContact(r),
+                      ),
+                      DataCell(
+                        SizedBox(
+                          width: 200,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(r.designation.isEmpty ? '-' : r.designation, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF334155)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                              if (r.department.isNotEmpty)
+                                Text(r.department, style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                            ],
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        SizedBox(
+                          width: 160,
+                          child: Text(r.location.isEmpty ? 'Corporate / HQ' : r.location, style: const TextStyle(fontSize: 13, color: Color(0xFF334155)), maxLines: 2, overflow: TextOverflow.ellipsis),
+                        ),
+                      ),
+                      DataCell(
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(color: _getStatusColor(r.contactStatus).withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                            child: Text(r.contactStatus, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _getStatusColor(r.contactStatus))),
+                          )
+                      ),
+                      DataCell(
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(tooltip: 'Log Activity', icon: const Icon(Icons.add_task, color: Color(0xFF64748B), size: 20), onPressed: () => _triggerQuickAction('Add Activity', r)),
+                            IconButton(tooltip: 'Edit Contact', icon: const Icon(Icons.edit_outlined, color: Color(0xFF64748B), size: 20), onPressed: () => _editContact(r)),
+                            IconButton(tooltip: 'Delete', icon: const Icon(Icons.delete_outline, color: Color(0xFFEF4444), size: 20), onPressed: () => _deleteContact(r)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _goAddContact() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => ScreensAddContact(companyRef: widget.companyRef)));
+  }
+
+  void _editContact(_ContactRow r) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => ScreensAddContact(companyRef: widget.companyRef, contactDoc: r.doc)));
+  }
+
+  Future<void> _deleteContact(_ContactRow r) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete contact?'),
+        content: Text('Are you sure you want to delete "${r.name}" from this customer record?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await r.doc.reference.delete();
+        final companySnap = await widget.companyRef.get();
+        final companyData = companySnap.data() ?? {};
+        final oldCount = (companyData['contactsCount'] ?? 0) as num;
+
+        await widget.companyRef.update({
+          'contactsCount': oldCount > 0 ? oldCount - 1 : 0,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Contact deleted successfully'), backgroundColor: Colors.green));
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete contact: $e'), backgroundColor: Colors.red));
+      }
+    }
+  }
 }
 
-class _StatCard extends StatelessWidget {
-  final String title;
+// --- WIDGETS ---
+
+class _SummaryPill extends StatelessWidget {
+  final String label;
   final String value;
   final IconData icon;
-  const _StatCard({required this.title, required this.value, required this.icon});
+  final Color? color;
+
+  const _SummaryPill({required this.label, required this.value, required this.icon, this.color});
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
-        child: Row(children: [CircleAvatar(radius: 18, backgroundColor: const Color(0xFFE2E8F0), child: Icon(icon, size: 18, color: const Color(0xFF334155))), const SizedBox(width: 12), Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)), Text(title, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)))])]),
+    final effectiveColor = color ?? const Color(0xFF0F172A);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: effectiveColor.withOpacity(0.1), shape: BoxShape.circle),
+            child: Icon(icon, size: 18, color: effectiveColor),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: effectiveColor)),
+                Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _PanelLabel extends StatelessWidget {
-  final String text;
-  const _PanelLabel(this.text);
-  @override
-  Widget build(BuildContext context) => Padding(padding: const EdgeInsets.only(bottom: 8), child: Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF64748B))));
-}
+class _ContactCard extends StatelessWidget {
+  final _ContactRow row;
+  final Color statusColor;
+  final Function(String) onAction;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
-class _DropdownBox extends StatelessWidget {
-  final String value;
-  final List<String> values;
-  final ValueChanged<String?> onChanged;
-  const _DropdownBox({required this.value, required this.values, required this.onChanged});
+  const _ContactCard({
+    required this.row,
+    required this.statusColor,
+    required this.onAction,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
   @override
   Widget build(BuildContext context) {
-    return DropdownButtonFormField<String>(
-      value: value,
-      items: values.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-      onChanged: onChanged,
-      decoration: InputDecoration(filled: true, fillColor: const Color(0xFFF8FAFC), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12)),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: row.isPrimary ? const Color(0xFF93C5FD) : const Color(0xFFE2E8F0)),
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 6, offset: const Offset(0, 2))],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  radius: 22,
+                  backgroundColor: const Color(0xFFEFF6FF),
+                  child: Text(row.name.isNotEmpty ? row.name[0].toUpperCase() : '?', style: const TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.w800, fontSize: 16)),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text(row.name.isEmpty ? '(No Name)' : row.name, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Color(0xFF0F172A))),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                            child: Text(row.contactStatus, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: statusColor, letterSpacing: 0.5)),
+                          ),
+                          PopupMenuButton<String>(
+                            tooltip: 'Options',
+                            icon: const Icon(Icons.more_horiz, size: 20, color: Color(0xFF64748B)),
+                            padding: EdgeInsets.zero,
+                            onSelected: (value) {
+                              if (value == 'edit') onEdit();
+                              else if (value == 'delete') onDelete();
+                            },
+                            itemBuilder: (context) => const [
+                              PopupMenuItem(value: 'edit', child: Text('Edit Contact', style: TextStyle(fontSize: 13))),
+                              PopupMenuItem(value: 'delete', child: Text('Delete Contact', style: TextStyle(color: Colors.red, fontSize: 13))),
+                            ],
+                          ),
+                        ],
+                      ),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          if (row.isPrimary)
+                            Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: Colors.amber.shade100, borderRadius: BorderRadius.circular(4)), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.star, size: 10, color: Colors.amber.shade700), const SizedBox(width: 4), Text('Primary', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.amber.shade800))])),
+                          if (row.designation.isNotEmpty) Text(row.designation, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
+                          if (row.department.isNotEmpty) Text('• ${row.department}', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          if (row.phone.isNotEmpty || row.alternatePhone.isNotEmpty || row.officePhone.isNotEmpty)
+                            _InfoChip(icon: Icons.phone_outlined, text: [row.phone, row.alternatePhone, row.officePhone].firstWhere((e) => e.isNotEmpty)),
+                          if (row.email.isNotEmpty)
+                            _InfoChip(icon: Icons.email_outlined, text: row.email),
+                          if (row.location.isNotEmpty)
+                            _InfoChip(icon: Icons.location_on_outlined, text: row.location, color: const Color(0xFF8B5CF6)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            width: double.infinity,
+            decoration: const BoxDecoration(color: Color(0xFFF8FAFC), borderRadius: BorderRadius.vertical(bottom: Radius.circular(14)), border: Border(top: BorderSide(color: Color(0xFFE2E8F0)))),
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              children: [
+                _ActionBtn(icon: Icons.add_task, label: 'Log Activity', onTap: () => onAction('Log Activity')),
+                _ActionBtn(icon: Icons.chat_outlined, label: 'WhatsApp', onTap: () => onAction('WhatsApp')),
+                _ActionBtn(icon: Icons.mail_outline, label: 'Email', onTap: () => onAction('Email')),
+              ],
+            ),
+          )
+        ],
+      ),
     );
   }
 }
 
-class _CheckRow extends StatelessWidget {
-  final String label;
-  final bool value;
-  final ValueChanged<bool?> onChanged;
-  const _CheckRow({required this.label, required this.value, required this.onChanged});
-  @override
-  Widget build(BuildContext context) => CheckboxListTile(value: value, onChanged: onChanged, title: Text(label, style: const TextStyle(fontSize: 13)), controlAffinity: ListTileControlAffinity.trailing, contentPadding: EdgeInsets.zero, dense: true);
-}
-
-class _Tag extends StatelessWidget {
-  final String text;
-  final Color bg;
-  final Color fg;
-  const _Tag({required this.text, required this.bg, required this.fg});
-  @override
-  Widget build(BuildContext context) => Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5), decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)), child: Text(text, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: fg)));
-}
-
-class _InlineInfo extends StatelessWidget {
+class _InfoChip extends StatelessWidget {
   final IconData icon;
   final String text;
-  const _InlineInfo({required this.icon, required this.text});
+  final Color? color;
+
+  const _InfoChip({required this.icon, required this.text, this.color});
+
   @override
-  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 15, color: const Color(0xFF64748B)), const SizedBox(width: 5), Text(text, style: const TextStyle(fontSize: 13, color: Color(0xFF475569)))]);
+  Widget build(BuildContext context) {
+    final effectiveColor = color ?? const Color(0xFF475569);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(6), border: Border.all(color: const Color(0xFFE2E8F0))),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: effectiveColor),
+          const SizedBox(width: 6),
+          Flexible(child: Text(text, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 11, color: effectiveColor))),
+        ],
+      ),
+    );
+  }
 }
 
-class _ErrorBox extends StatelessWidget {
-  final String message;
-  const _ErrorBox({required this.message});
+class _ActionBtn extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _ActionBtn({required this.icon, required this.label, required this.onTap});
+
   @override
-  Widget build(BuildContext context) => Center(child: Container(width: 620, padding: const EdgeInsets.all(18), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFFCA5A5))), child: Text(message, style: const TextStyle(color: Color(0xFF991B1B)))));
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: const Color(0xFF64748B)),
+            const SizedBox(width: 4),
+            Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF475569))),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// --- DOMAIN MODELS ---
+
+class _ContactRow {
+  final DocumentSnapshot<Map<String, dynamic>> doc;
+  final String name;
+  final String email;
+  final String phone;
+  final String alternatePhone;
+  final String officePhone;
+  final String designation;
+  final String department;
+  final String contactType;
+  final String contactStatus;
+  final String location;
+  final String preferredComm;
+  final bool isPrimary;
+
+  _ContactRow({
+    required this.doc,
+    required this.name,
+    required this.email,
+    required this.phone,
+    required this.alternatePhone,
+    required this.officePhone,
+    required this.designation,
+    required this.department,
+    required this.contactType,
+    required this.contactStatus,
+    required this.location,
+    required this.preferredComm,
+    required this.isPrimary,
+  });
 }

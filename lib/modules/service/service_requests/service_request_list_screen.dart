@@ -15,6 +15,20 @@ import '../service_quotations/create_service_quotation_screen.dart';
 import '../service_quotations/service_quotation_details_screen.dart';
 
 // ==========================================
+// CACHED ENTERPRISE STYLES (ZOHO / CRM STYLE)
+// ==========================================
+const _kCompanyNameStyle = TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF1E293B));
+const _kSecondaryTextStyle = TextStyle(fontSize: 12, color: Color(0xFF475569), fontWeight: FontWeight.w500);
+const _kActivityTextStyle = TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.w500);
+const _kTableTextStyle = TextStyle(fontSize: 13, color: Color(0xFF1E293B));
+const _kTableMutedStyle = TextStyle(fontSize: 12, color: Color(0xFF64748B));
+const _kTableHeaderStyle = TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF334155));
+
+final _kRowBorder = Border(bottom: BorderSide(color: Colors.grey.shade200));
+final _kRowDecoration = BoxDecoration(color: Colors.white, border: _kRowBorder);
+final _kSelectedRowDecoration = BoxDecoration(color: Colors.blue.shade50.withOpacity(0.3), border: _kRowBorder);
+
+// ==========================================
 // ENTERPRISE HELPERS & SAFETY PARSERS
 // ==========================================
 
@@ -98,7 +112,7 @@ bool _checkOverdue(DateTime? createdAt, String priority, String status) {
 }
 
 // ==========================================
-// MAIN SCREEN - SERVICE CONTROL TOWER
+// MAIN SCREEN - SERVICE MODULE
 // ==========================================
 
 class ServiceRequestListScreen extends StatefulWidget {
@@ -480,30 +494,13 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.white,
-        title: const Text('Service Control Tower', style: TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold, fontSize: 18)),
-        actions: [
-          if (_selectedIds.isNotEmpty) ...[
-            Text('${_selectedIds.length} selected', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold)),
-            const SizedBox(width: 8),
-            IconButton(icon: const Icon(Icons.table_view, color: Colors.green), onPressed: _bulkExportExcel, tooltip: 'Export Excel'),
-            IconButton(icon: const Icon(Icons.assignment_ind, color: Colors.blue), onPressed: _bulkAssign, tooltip: 'Bulk Assign'),
-            IconButton(icon: const Icon(Icons.edit_note, color: Colors.orange), onPressed: _bulkUpdateStatus, tooltip: 'Bulk Status Update'),
-            IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: _bulkDelete, tooltip: 'Bulk Delete'),
-            IconButton(icon: const Icon(Icons.close, color: Colors.grey), onPressed: _clearSelection, tooltip: 'Clear Selection'),
-            const SizedBox(width: 16),
-          ]
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
+      appBar: AppBar(elevation: 0, toolbarHeight: 6, automaticallyImplyLeading: false, backgroundColor: Colors.white),
+      floatingActionButton: FloatingActionButton(
         tooltip: 'New Request',
         onPressed: _navigateToCreate,
-        icon: const Icon(Icons.add),
-        label: const Text('New Request'),
-        backgroundColor: Colors.indigo,
+        child: const Icon(Icons.add),
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: _getRequestsStream(),
         builder: (context, snapshot) {
@@ -516,7 +513,7 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
 
           return Column(
             children: [
-              _buildHeader(stats, isWaiting),
+              _buildHeader(stats),
               if (_hasActiveFilters) _buildActiveFiltersBar(),
               const Divider(height: 1, thickness: 1),
               Expanded(
@@ -544,157 +541,92 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
     }
   }
 
-  Widget _buildHeader(Map<String, dynamic> stats, bool isWaiting) {
+  Widget _buildHeader(Map<String, dynamic> stats) {
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.all(16),
-      child: Column(
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+      child: Row(
         children: [
-          // Row 1: Request Status KPIs
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _buildKpiCard('Total Requests', stats['Total'].toString(), Icons.assignment, Colors.blueGrey),
-                _buildKpiCard('Open / New', stats['Open'].toString(), Icons.fiber_new, Colors.blue),
-                _buildKpiCard('Assigned', stats['Assigned'].toString(), Icons.assignment_ind, Colors.purple),
-                _buildKpiCard('Visit Created', stats['VisitCreated'].toString(), Icons.directions_car, Colors.indigo),
-                _buildKpiCard('In Progress', stats['InProgress'].toString(), Icons.build, Colors.orange),
-                _buildKpiCard('Report Submitted', stats['ReportSub'].toString(), Icons.fact_check, Colors.teal),
-                _buildKpiCard('Quote Created', stats['QuoteCreated'].toString(), Icons.request_quote, Colors.green),
-                _buildKpiCard('Pay Pending', stats['PayPending'].toString(), Icons.payments, Colors.red),
-                _buildKpiCard('Disp. Pending', stats['DispPending'].toString(), Icons.local_shipping, Colors.brown),
-                _buildKpiCard('Inst. Pending', stats['InstPending'].toString(), Icons.handyman, Colors.deepOrange),
-                _buildKpiCard('Completed', stats['Completed'].toString(), Icons.done_all, Colors.lightGreen),
-                _buildKpiCard('Closed', stats['Closed'].toString(), Icons.lock, Colors.grey),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 320),
+            child: SizedBox(
+              height: 38,
+              child: TextField(
+                controller: _searchController,
+                onChanged: _onSearchChanged,
+                decoration: InputDecoration(
+                  hintText: 'Search Request, Customer, Serial...',
+                  prefixIcon: const Icon(Icons.search, size: 18),
+                  suffixIcon: _searchQuery.trim().isEmpty ? null : IconButton(icon: const Icon(Icons.close, size: 17), onPressed: () { _searchController.clear(); _onSearchChanged(''); }),
+                  isDense: true, filled: true, fillColor: Colors.grey.shade100,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                ),
+                style: const TextStyle(fontSize: 13),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+              height: 38, width: 38,
+              child: Material(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(10),
+                  child: InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: () => _openFilterSheet(stats),
+                      child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Icon(Icons.tune_rounded, size: 18, color: Colors.grey.shade800),
+                            if (_hasActiveFilters) Positioned(right: 8, top: 8, child: Container(width: 7, height: 7, decoration: BoxDecoration(color: Colors.blue.shade700, shape: BoxShape.circle))),
+                          ]
+                      )
+                  )
+              )
+          ),
+          const SizedBox(width: 8),
+          Container(
+            height: 38,
+            decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(10)),
+            child: PopupMenuButton<String>(
+              icon: Icon(
+                  _viewMode == 'Table' ? Icons.table_rows :
+                  _viewMode == 'Kanban' ? Icons.view_kanban :
+                  _viewMode == 'Analytics' ? Icons.analytics :
+                  _viewMode == 'Timeline' ? Icons.timeline : Icons.grid_view,
+                  size: 20, color: Colors.grey.shade700
+              ),
+              tooltip: 'View Mode',
+              onSelected: _setViewMode,
+              itemBuilder: (context) => [
+                const PopupMenuItem(value: 'Card', child: Text('Card View')),
+                const PopupMenuItem(value: 'Table', child: Text('Table View')),
+                const PopupMenuItem(value: 'Kanban', child: Text('Kanban View')),
+                const PopupMenuItem(value: 'Timeline', child: Text('Timeline View')),
+                const PopupMenuItem(value: 'Analytics', child: Text('Analytics View')),
               ],
             ),
           ),
-          const SizedBox(height: 12),
-
-          // Row 2: Cross Module KPIs
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _buildMiniStatText(label: 'Total Visits:', value: stats['TotalVisits'].toString()),
-                const SizedBox(width: 16),
-                _buildMiniStatText(label: 'Total Quotes:', value: stats['TotalQuotes'].toString()),
-                const SizedBox(width: 16),
-                _buildMiniStatText(label: 'Total Invoices:', value: stats['TotalInvoices'].toString()),
-                const SizedBox(width: 16),
-                _buildMiniStatText(label: 'Total Dispatches:', value: stats['TotalDispatches'].toString()),
-                const SizedBox(width: 16),
-                _buildMiniStatText(label: 'Total Installs:', value: stats['TotalInstallations'].toString()),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 40,
-                  child: TextField(
-                    controller: _searchController,
-                    onChanged: _onSearchChanged,
-                    decoration: InputDecoration(
-                      hintText: 'Search Request, Customer, Serial, Tech, Quote...',
-                      prefixIcon: const Icon(Icons.search, size: 18),
-                      suffixIcon: _searchQuery.isNotEmpty ? IconButton(
-                        icon: const Icon(Icons.close, size: 16),
-                        onPressed: () {
-                          _searchController.clear();
-                          _onSearchChanged('');
-                        },
-                      ) : null,
-                      filled: true,
-                      fillColor: Colors.grey.shade100,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                    ),
-                    style: const TextStyle(fontSize: 13),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Container(
-                height: 40,
-                decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
-                child: IconButton(
-                  icon: const Icon(Icons.filter_list, size: 20),
-                  tooltip: 'Filters',
-                  onPressed: _openFilterSheet,
-                  color: _hasActiveFilters ? Colors.indigo : Colors.grey.shade700,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                height: 40,
-                decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
-                child: PopupMenuButton<String>(
-                  icon: Icon(
-                      _viewMode == 'Table' ? Icons.table_rows :
-                      _viewMode == 'Kanban' ? Icons.view_kanban :
-                      _viewMode == 'Analytics' ? Icons.analytics :
-                      _viewMode == 'Timeline' ? Icons.timeline : Icons.grid_view,
-                      size: 20
-                  ),
-                  tooltip: 'View Mode',
-                  onSelected: _setViewMode,
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(value: 'Card', child: Text('Card View')),
-                    const PopupMenuItem(value: 'Table', child: Text('Table View')),
-                    const PopupMenuItem(value: 'Kanban', child: Text('Kanban View')),
-                    const PopupMenuItem(value: 'Timeline', child: Text('Timeline View')),
-                    const PopupMenuItem(value: 'Analytics', child: Text('Analytics View')),
+          if (_selectedIds.isNotEmpty) ...[
+            const SizedBox(width: 16),
+            Text('${_selectedIds.length} selected', style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 13)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    IconButton(icon: const Icon(Icons.table_view, color: Colors.green, size: 20), onPressed: _bulkExportExcel, tooltip: 'Export Excel'),
+                    IconButton(icon: const Icon(Icons.assignment_ind, color: Colors.blue, size: 20), onPressed: _bulkAssign, tooltip: 'Bulk Assign'),
+                    IconButton(icon: const Icon(Icons.edit_note, color: Colors.orange, size: 20), onPressed: _bulkUpdateStatus, tooltip: 'Bulk Status Update'),
+                    IconButton(icon: const Icon(Icons.delete, color: Colors.red, size: 20), onPressed: _bulkDelete, tooltip: 'Bulk Delete'),
+                    IconButton(icon: const Icon(Icons.close, color: Colors.grey, size: 20), onPressed: _clearSelection, tooltip: 'Clear Selection'),
                   ],
                 ),
               ),
-            ],
-          )
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMiniStatText({required String label, required String value}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.grey.shade300)),
-      child: Row(
-        children: [
-          Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
-          const SizedBox(width: 4),
-          Text(value, style: TextStyle(fontSize: 12, color: Colors.indigo.shade800, fontWeight: FontWeight.w800)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildKpiCard(String title, String value, IconData icon, MaterialColor color) {
-    return Container(
-      width: 140,
-      margin: const EdgeInsets.only(right: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.shade50,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.shade100),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 14, color: color.shade700),
-              const SizedBox(width: 6),
-              Expanded(child: Text(title, style: TextStyle(fontSize: 10, color: color.shade800, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis)),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: color.shade900), maxLines: 1, overflow: TextOverflow.ellipsis),
+            )
+          ]
         ],
       ),
     );
@@ -703,7 +635,7 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
   Widget _buildActiveFiltersBar() {
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
       child: Row(
         children: [
           Expanded(
@@ -728,8 +660,8 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
   Widget _buildFilterChip(String label) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: Colors.indigo.shade50, borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.indigo.shade100)),
-      child: Text(label, style: TextStyle(fontSize: 10, color: Colors.indigo.shade700, fontWeight: FontWeight.bold)),
+      decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.blue.shade100)),
+      child: Text(label, style: TextStyle(fontSize: 10, color: Colors.blue.shade700, fontWeight: FontWeight.bold)),
     );
   }
 
@@ -748,74 +680,73 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
     );
   }
 
-  // --- WORKFLOW PIPELINE HELPER ---
-  Widget _buildWorkflowPipeline(Map<String, dynamic> data) {
+  // --- WORKFLOW PIPELINE & METRICS HELPER ---
+  Widget _buildWorkflowAndMetrics(Map<String, dynamic> data, List<String> metricsList) {
     final status = _safeString(data['status']);
-
-    // Standard pipeline stages with full names
-    final steps = ['Request', 'Visit', 'Report', 'Quotation', 'Payment', 'Dispatch', 'Install', 'Closed'];
-
-    // Determine active index based on aggregate data heuristics
+    final steps = ['Req', 'Visit', 'Rep', 'Quote', 'Pay', 'Disp', 'Inst', 'Cls'];
     int activeIndex = 0;
 
-    if (status == 'Closed') {
-      activeIndex = 7;
-    } else if (status == 'Completed' || status == 'Resolved') {
-      activeIndex = 6;
-    } else if (_safeString(data['dispatchStatus']) == 'Dispatched') {
-      activeIndex = 5;
-    } else if (_safeString(data['paymentStatus']) == 'Paid') {
-      activeIndex = 4;
-    } else if (_safeInt(data['quotationCount']) > 0) {
-      activeIndex = 3;
-    } else if (status == 'Report Submitted') {
-      activeIndex = 2;
-    } else if (status == 'Visit Created' || status == 'In Progress') {
-      activeIndex = 1;
-    }
+    if (status == 'Closed') activeIndex = 7;
+    else if (status == 'Completed' || status == 'Resolved') activeIndex = 6;
+    else if (_safeString(data['dispatchStatus']) == 'Dispatched') activeIndex = 5;
+    else if (_safeString(data['paymentStatus']) == 'Paid') activeIndex = 4;
+    else if (_safeInt(data['quotationCount']) > 0) activeIndex = 3;
+    else if (status == 'Report Submitted') activeIndex = 2;
+    else if (status == 'Visit Created' || status == 'In Progress') activeIndex = 1;
+
+    List<Widget> children = [];
 
     if (status == 'Cancelled') {
-      return Text('PIPELINE CANCELLED', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.red.shade700));
+      children.add(Text('CANCELLED', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.grey.shade600)));
+    } else {
+      for (int i = 0; i < steps.length; i++) {
+        bool isCompleted = i <= activeIndex;
+        children.add(Text(
+            '${steps[i]}${isCompleted ? '✓' : '○'}',
+            style: TextStyle(
+                fontSize: 11,
+                fontWeight: isCompleted ? FontWeight.bold : FontWeight.w500,
+                color: isCompleted ? Colors.green.shade700 : Colors.grey.shade400
+            )
+        ));
+
+        // Add subtle separator
+        if (i < steps.length - 1) {
+          children.add(Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2.0),
+            child: Icon(Icons.chevron_right, size: 10, color: Colors.grey.shade300),
+          ));
+        }
+      }
+    }
+
+    if (metricsList.isNotEmpty) {
+      children.add(Container(
+          width: 3, height: 3,
+          margin: const EdgeInsets.symmetric(horizontal: 6),
+          decoration: BoxDecoration(color: Colors.grey.shade400, shape: BoxShape.circle)
+      ));
+      children.add(Text(
+          metricsList.join('  •  '),
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.grey.shade700)
+      ));
     }
 
     return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: List.generate(steps.length, (index) {
-          bool isActive = index <= activeIndex;
-          bool isCurrent = index == activeIndex;
-
-          return Container(
-            height: 22,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            margin: EdgeInsets.only(right: index == steps.length - 1 ? 0 : 4),
-            decoration: BoxDecoration(
-              color: isActive ? Colors.indigo : Colors.grey.shade200,
-              borderRadius: BorderRadius.circular(12),
-              border: isCurrent ? Border.all(color: Colors.orange, width: 2) : null,
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              steps[index],
-              style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: isActive ? Colors.white : Colors.grey.shade600
-              ),
-            ),
-          );
-        }),
-      ),
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: children,
+        )
     );
   }
 
   // --- LIST VIEWS ---
 
   Widget _buildCardView(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
+    return ListView.builder(
       itemCount: docs.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 16),
       itemBuilder: (ctx, i) => _buildRequestCard(docs[i].id, docs[i].data()),
     );
   }
@@ -831,7 +762,14 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
     final machineCount = serviceItems.length;
     final machineDisplay = machineCount > 1 ? '$machineCount Machines' : (firstMachine.isEmpty ? 'Unknown Machine' : firstMachine);
 
-    final ownerName = _safeString(data['assignedManagerName']).isNotEmpty
+    // OWNERSHIP
+    final salesOwner = _safeString(data['salesPersonName']).isNotEmpty
+        ? _safeString(data['salesPersonName'])
+        : _safeString(data['customerOwnerName']).isNotEmpty
+        ? _safeString(data['customerOwnerName'])
+        : _safeString(data['recordOwnerName']);
+
+    final serviceOwner = _safeString(data['assignedManagerName']).isNotEmpty
         ? _safeString(data['assignedManagerName'])
         : (_safeString(data['assignedCoordinatorName']).isNotEmpty
         ? _safeString(data['assignedCoordinatorName'])
@@ -842,11 +780,15 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
         : _safeString(data['assignedTechnicianName'] ?? data['engineerName']);
     final techUid = _safeString(data['currentTechnicianUid'] ?? data['assignedTechnicianUid']);
 
+    final createdBy = _safeString(data['createdByName'] ?? data['createdBy']);
+    final createdDate = _formatDateOnly(_extractDate(data['createdAt']));
+
+    // METRICS
     final qCount = _safeInt(data['quotationCount']);
     final latestQuoteAmt = _safeDouble(data['latestQuotationAmount']);
-    final payStatus = _safeString(data['paymentStatus']).isNotEmpty ? _safeString(data['paymentStatus']) : 'N/A';
-    final dispStatus = _safeString(data['dispatchStatus']).isNotEmpty ? _safeString(data['dispatchStatus']) : 'N/A';
-    final instStatus = _safeString(data['installationStatus']).isNotEmpty ? _safeString(data['installationStatus']) : 'N/A';
+    final payStatus = _safeString(data['paymentStatus']);
+    final dispStatus = _safeString(data['dispatchStatus']);
+    final instStatus = _safeString(data['installationStatus']);
 
     final openVisits = _safeInt(data['openVisitsCount']);
     final compVisits = _safeInt(data['completedVisitsCount']);
@@ -855,227 +797,154 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
     final isSelected = _selectedIds.contains(docId);
     final isOverdue = _checkOverdue(_extractDate(data['createdAt']), priority, status);
 
-    return Card(
-      elevation: 1,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: isSelected ? Colors.indigo : Colors.grey.shade200, width: isSelected ? 2 : 1)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Checkbox(
-                      value: isSelected,
-                      onChanged: (_) => _toggleSelection(docId),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(color: Colors.indigo.shade50, borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.indigo.shade100)),
-                      child: Text(reqNo.isNotEmpty ? reqNo : 'DRAFT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.indigo.shade900)),
-                    ),
-                    if (isOverdue) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(color: Colors.red.shade600, borderRadius: BorderRadius.circular(4)),
-                        child: const Text('OVERDUE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.5)),
-                      ),
-                    ]
-                  ],
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(_timeAgoStrict(lastActivity), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                    const SizedBox(height: 4),
-                    Text('Last Activity', style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
-                  ],
-                )
-              ],
-            ),
-            const SizedBox(height: 12),
+    List<String> metricsList = [];
+    metricsList.add('V:$openVisits/$compVisits');
+    if (qCount > 0) metricsList.add('Q:$qCount');
+    if (latestQuoteAmt > 0) metricsList.add('₹${_formatCurrency(latestQuoteAmt).replaceAll('₹', '').trim()}');
+    if (payStatus.isNotEmpty && payStatus != 'N/A') metricsList.add('Pay:$payStatus');
+    if (dispStatus.isNotEmpty && dispStatus != 'N/A') metricsList.add('Disp:$dispStatus');
+    if (instStatus.isNotEmpty && instStatus != 'N/A') metricsList.add('Inst:$instStatus');
+    if (priority.isNotEmpty && priority != 'N/A') metricsList.add('Pri:$priority');
 
-            // Core Identity
-            Row(
-              children: [
-                CircleAvatar(radius: 20, backgroundColor: Colors.blueGrey.shade50, child: const Icon(Icons.business, color: Colors.blueGrey, size: 20)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(customer.isNotEmpty ? customer : 'Unknown Customer', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      const SizedBox(height: 2),
-                      Text(machineDisplay, style: TextStyle(color: Colors.grey.shade700, fontSize: 13, fontStyle: FontStyle.italic)),
-                    ],
-                  ),
-                ),
-                Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.manage_accounts, size: 14, color: Colors.grey.shade600),
-                            const SizedBox(width: 4),
-                            Text('Owner: ${ownerName.isEmpty ? 'N/A' : ownerName}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade800)),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.engineering, size: 14, color: Colors.indigo.shade600),
-                            const SizedBox(width: 4),
-                            Text('Tech: ${techName.isEmpty ? 'N/A' : techName}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.indigo.shade800)),
-                          ],
-                        ),
-                      ],
-                    )
-                )
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // Pipeline & Badges
-            _buildWorkflowPipeline(data),
-            const SizedBox(height: 12),
-
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _buildStatusChip(status),
-                if (priority.isNotEmpty) _buildPriorityChip(priority),
-                _buildMiniBadge('Visits: $openVisits Open / $compVisits Done', Colors.blueGrey),
-                if (qCount > 0) _buildMiniBadge('Quotes: $qCount', Colors.green),
-                if (latestQuoteAmt > 0) _buildMiniBadge('Val: ${_formatCurrency(latestQuoteAmt)}', Colors.teal),
-                if (payStatus != 'N/A') _buildMiniBadge('Pay: $payStatus', Colors.orange),
-                if (dispStatus != 'N/A') _buildMiniBadge('Disp: $dispStatus', Colors.brown),
-                if (instStatus != 'N/A') _buildMiniBadge('Inst: $instStatus', Colors.purple),
-              ],
-            ),
-            const Divider(height: 24),
-
-            // Quick Actions
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: () => _navigateToDetails(docId, data),
-                      icon: const Icon(Icons.launch, size: 16),
-                      label: const Text('Request 360'),
-                      style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
-                    ),
-                    if (status != 'Closed' && status != 'Cancelled')
-                      OutlinedButton.icon(
-                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AddServiceVisitScreen(
-                          companyId: widget.companyId,
-                          currentUserUid: widget.currentUserUid,
-                          currentUserName: widget.currentUserName,
-                          prefillRequestId: docId,
-                        ))),
-                        icon: const Icon(Icons.add_location_alt, size: 16, color: Colors.purple),
-                        label: const Text('Visit', style: TextStyle(color: Colors.purple)),
-                        style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
-                      ),
-                    if (openVisits > 0 || compVisits > 0)
-                      OutlinedButton.icon(
-                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ServiceRequestDetailsScreen( // Open 360 and default to Visits tab ideally, simplified to 360
-                          companyId: widget.companyId,
-                          currentUserUid: widget.currentUserUid,
-                          currentUserName: widget.currentUserName,
-                          requestId: docId,
-                          requestData: data,
-                        ))),
-                        icon: const Icon(Icons.directions_car, size: 16, color: Colors.blue),
-                        label: const Text('View Visit', style: TextStyle(color: Colors.blue)),
-                        style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
-                      ),
-                    if (status != 'Closed' && status != 'Cancelled')
-                      OutlinedButton.icon(
-                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CreateServiceQuotationScreen(
-                          companyId: widget.companyId,
-                          currentUserUid: widget.currentUserUid,
-                          serviceRequestSeed: {'id': docId, ...data},
-                        ))),
-                        icon: const Icon(Icons.request_quote, size: 16, color: Colors.green),
-                        label: const Text('Create Quote', style: TextStyle(color: Colors.green)),
-                        style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
-                      ),
-                    if (qCount > 0)
-                      OutlinedButton.icon(
-                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ServiceRequestDetailsScreen(
-                          companyId: widget.companyId,
-                          currentUserUid: widget.currentUserUid,
-                          currentUserName: widget.currentUserName,
-                          requestId: docId,
-                          requestData: data,
-                        ))), // Direct them to 360 to see all quotes
-                        icon: const Icon(Icons.receipt_long, size: 16, color: Colors.teal),
-                        label: const Text('Quote 360', style: TextStyle(color: Colors.teal)),
-                        style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
-                      ),
-                    if (techUid.isNotEmpty)
-                      OutlinedButton.icon(
-                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ServiceTechnicianDetailsScreen(
-                          companyId: widget.companyId,
-                          currentUserUid: widget.currentUserUid,
-                          currentUserName: widget.currentUserName,
-                          userId: techUid,
-                          technicianData: {'id': techUid, 'name': techName},
-                        ))),
-                        icon: const Icon(Icons.engineering, size: 16, color: Colors.indigo),
-                        label: const Text('Tech 360', style: TextStyle(color: Colors.indigo)),
-                        style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
-                      ),
-                    if (_isAdminOrCoordinator && status != 'Closed' && status != 'Cancelled')
-                      FilledButton.icon(
-                        onPressed: () => _closeRequest(docId),
-                        icon: const Icon(Icons.done_all, size: 16),
-                        label: const Text('Close'),
-                        style: FilledButton.styleFrom(visualDensity: VisualDensity.compact, backgroundColor: Colors.green),
+    return InkWell(
+        onTap: () => _navigateToDetails(docId, data),
+        child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: isSelected ? _kSelectedRowDecoration : _kRowDecoration,
+            child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: Checkbox(
+                        visualDensity: VisualDensity.compact,
+                        value: isSelected,
+                        onChanged: (_) => _toggleSelection(docId),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       )
-                  ],
-                ),
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert, color: Colors.grey),
-                  onSelected: (val) {
-                    if (val == 'edit') _navigateToEdit(docId, data);
-                    if (val == 'quote') {
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => CreateServiceQuotationScreen(
-                        companyId: widget.companyId,
-                        currentUserUid: widget.currentUserUid,
-                        serviceRequestSeed: {'id': docId, ...data},
-                      )));
-                    }
-                    if (val == 'close') _closeRequest(docId);
-                    if (val == 'del') _softDelete(docId);
-                  },
-                  itemBuilder: (ctx) => [
-                    const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit, size: 18), SizedBox(width: 8), Text('Edit Request')])),
-                    const PopupMenuItem(value: 'quote', child: Row(children: [Icon(Icons.request_quote, size: 18), SizedBox(width: 8), Text('Create Quotation')])),
-                    if (status != 'Closed') const PopupMenuItem(value: 'close', child: Row(children: [Icon(Icons.done_all, size: 18, color: Colors.green), SizedBox(width: 8), Text('Close Request', style: TextStyle(color: Colors.green))])),
-                    const PopupMenuItem(value: 'del', child: Row(children: [Icon(Icons.delete, size: 18, color: Colors.red), SizedBox(width: 8), Text('Delete', style: TextStyle(color: Colors.red))])),
-                  ],
-                )
-              ],
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // TOP ROW
+                            Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Text(reqNo.isNotEmpty ? reqNo : 'DRAFT', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Colors.blue.shade800, letterSpacing: 0.3)),
+                                  const SizedBox(width: 8),
+                                  Text('•  ${_timeAgoStrict(lastActivity)}', style: _kActivityTextStyle),
+                                  if (isOverdue) ...[
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                      decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.red.shade100)),
+                                      child: Text('OVERDUE', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.red.shade700)),
+                                    ),
+                                  ],
+                                ]
+                            ),
+                            const SizedBox(height: 4),
+
+                            // CUSTOMER & MACHINE
+                            Text(customer.isNotEmpty ? customer : 'Unknown Customer', style: _kCompanyNameStyle, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            const SizedBox(height: 1),
+                            Text(machineDisplay, style: _kSecondaryTextStyle, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            const SizedBox(height: 4),
+
+                            // OWNERSHIP
+                            Text(
+                                'Sales: ${salesOwner.isEmpty ? 'N/A' : salesOwner}  •  Service: ${serviceOwner.isEmpty ? 'N/A' : serviceOwner}  •  Tech: ${techName.isEmpty ? 'N/A' : techName}',
+                                style: TextStyle(fontSize: 11, color: Colors.blueGrey.shade700, fontWeight: FontWeight.w500),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis
+                            ),
+                            const SizedBox(height: 6),
+
+                            // WORKFLOW + METRICS INTEGRATED
+                            _buildWorkflowAndMetrics(data, metricsList),
+                          ]
+                      )
+                  ),
+                  const SizedBox(width: 12),
+                  // RIGHT COLUMN STATUS PANEL (COMPRESSED)
+                  SizedBox(
+                    width: 85,
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          SizedBox(
+                              width: 24, height: 24,
+                              child: PopupMenuButton<String>(
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                icon: const Icon(Icons.more_vert, size: 20, color: Color(0xFF64748B)),
+                                onSelected: (val) {
+                                  if (val == '360') _navigateToDetails(docId, data);
+                                  if (val == 'edit') _navigateToEdit(docId, data);
+                                  if (val == 'create_visit') {
+                                    Navigator.push(context, MaterialPageRoute(builder: (_) => AddServiceVisitScreen(companyId: widget.companyId, currentUserUid: widget.currentUserUid, currentUserName: widget.currentUserName, prefillRequestId: docId)));
+                                  }
+                                  if (val == 'view_visit') {
+                                    Navigator.push(context, MaterialPageRoute(builder: (_) => ServiceRequestDetailsScreen(companyId: widget.companyId, currentUserUid: widget.currentUserUid, currentUserName: widget.currentUserName, requestId: docId, requestData: data)));
+                                  }
+                                  if (val == 'create_quote') {
+                                    Navigator.push(context, MaterialPageRoute(builder: (_) => CreateServiceQuotationScreen(companyId: widget.companyId, currentUserUid: widget.currentUserUid, serviceRequestSeed: {'id': docId, ...data})));
+                                  }
+                                  if (val == 'quote_360') {
+                                    Navigator.push(context, MaterialPageRoute(builder: (_) => ServiceRequestDetailsScreen(companyId: widget.companyId, currentUserUid: widget.currentUserUid, currentUserName: widget.currentUserName, requestId: docId, requestData: data)));
+                                  }
+                                  if (val == 'tech_360') {
+                                    Navigator.push(context, MaterialPageRoute(builder: (_) => ServiceTechnicianDetailsScreen(companyId: widget.companyId, currentUserUid: widget.currentUserUid, currentUserName: widget.currentUserName, userId: techUid, technicianData: {'id': techUid, 'name': techName})));
+                                  }
+                                  if (val == 'close') _closeRequest(docId);
+                                  if (val == 'del') _softDelete(docId);
+                                  if (val == 'export') _showSnack('Exporting request $reqNo to Excel...');
+                                  if (val == 'assign') _showSnack('Assign tool placeholder...');
+                                  if (val == 'status') _showSnack('Status Update tool placeholder...');
+                                },
+                                itemBuilder: (ctx) => [
+                                  const PopupMenuItem(value: '360', child: Text('Open Request 360')),
+                                  const PopupMenuItem(value: 'edit', child: Text('Edit Request')),
+                                  if (status != 'Closed' && status != 'Cancelled')
+                                    const PopupMenuItem(value: 'create_visit', child: Text('Create Visit')),
+                                  if (openVisits > 0 || compVisits > 0)
+                                    const PopupMenuItem(value: 'view_visit', child: Text('View Visit')),
+                                  if (status != 'Closed' && status != 'Cancelled')
+                                    const PopupMenuItem(value: 'create_quote', child: Text('Create Quotation')),
+                                  if (qCount > 0)
+                                    const PopupMenuItem(value: 'quote_360', child: Text('Quote 360')),
+                                  if (techUid.isNotEmpty)
+                                    const PopupMenuItem(value: 'tech_360', child: Text('Technician 360')),
+                                  const PopupMenuDivider(),
+                                  const PopupMenuItem(value: 'export', child: Text('Export')),
+                                  const PopupMenuItem(value: 'assign', child: Text('Assign')),
+                                  const PopupMenuItem(value: 'status', child: Text('Status Update')),
+                                  const PopupMenuDivider(),
+                                  if (_isAdminOrCoordinator && status != 'Closed' && status != 'Cancelled')
+                                    const PopupMenuItem(value: 'close', child: Text('Close Request', style: TextStyle(color: Colors.green))),
+                                  const PopupMenuItem(value: 'del', child: Text('Delete Request', style: TextStyle(color: Colors.red))),
+                                ],
+                              )
+                          ),
+                          const SizedBox(height: 4),
+                          Text('STATUS', style: TextStyle(fontSize: 8.5, color: Colors.grey.shade500, fontWeight: FontWeight.bold)),
+                          Text(status.toUpperCase(), style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900, color: _getStatusColor(status)), textAlign: TextAlign.right, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          const SizedBox(height: 4),
+                          Text('CREATED BY', style: TextStyle(fontSize: 8.5, color: Colors.grey.shade500, fontWeight: FontWeight.bold)),
+                          Text(createdBy.isNotEmpty ? createdBy : 'System', style: TextStyle(fontSize: 10.5, color: Colors.grey.shade800, fontWeight: FontWeight.w600), textAlign: TextAlign.right, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          const SizedBox(height: 4),
+                          Text('CREATED', style: TextStyle(fontSize: 8.5, color: Colors.grey.shade500, fontWeight: FontWeight.bold)),
+                          Text(createdDate.isNotEmpty && createdDate != '-' ? createdDate : 'N/A', style: TextStyle(fontSize: 10.5, color: Colors.grey.shade800, fontWeight: FontWeight.w600), textAlign: TextAlign.right),
+                        ]
+                    ),
+                  )
+                ]
             )
-          ],
-        ),
-      ),
+        )
     );
   }
 
@@ -1090,16 +959,16 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                color: Colors.grey.shade200,
+                color: Colors.grey.shade100,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: const Row(
                   children: [
-                    SizedBox(width: 200, child: Text('Request No / Customer', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13))),
-                    SizedBox(width: 160, child: Text('Machine', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13))),
-                    SizedBox(width: 140, child: Text('Priority & Status', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13))),
-                    SizedBox(width: 140, child: Text('Owner / Tech', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13))),
-                    SizedBox(width: 120, child: Text('Last Activity', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13))),
-                    SizedBox(width: 120, child: Text('Action', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13), textAlign: TextAlign.center)),
+                    SizedBox(width: 200, child: Text('Request No / Customer', style: _kTableHeaderStyle)),
+                    SizedBox(width: 150, child: Text('Machine', style: _kTableHeaderStyle)),
+                    SizedBox(width: 130, child: Text('Priority & Status', style: _kTableHeaderStyle)),
+                    SizedBox(width: 150, child: Text('Sales / Service / Tech', style: _kTableHeaderStyle)),
+                    SizedBox(width: 120, child: Text('Last Activity', style: _kTableHeaderStyle)),
+                    SizedBox(width: 80, child: Text('Action', style: _kTableHeaderStyle, textAlign: TextAlign.center)),
                   ],
                 ),
               ),
@@ -1120,8 +989,14 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
     final status = _safeString(data['status']);
     final priority = _safeString(data['priority']);
 
-    // Separation of Owner vs Technician in Table View
-    final ownerName = _safeString(data['assignedManagerName']).isNotEmpty
+    // OWNERSHIP FALLBACK LOGIC
+    final salesOwner = _safeString(data['salesPersonName']).isNotEmpty
+        ? _safeString(data['salesPersonName'])
+        : _safeString(data['customerOwnerName']).isNotEmpty
+        ? _safeString(data['customerOwnerName'])
+        : _safeString(data['recordOwnerName']);
+
+    final serviceOwner = _safeString(data['assignedManagerName']).isNotEmpty
         ? _safeString(data['assignedManagerName'])
         : (_safeString(data['assignedCoordinatorName']).isNotEmpty
         ? _safeString(data['assignedCoordinatorName'])
@@ -1139,15 +1014,9 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
     final machineDisplayString = machineCount > 1 ? '$machineCount Machines' : (firstMachine.isEmpty ? '-' : firstMachine);
 
     return InkWell(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ServiceRequestDetailsScreen(
-        companyId: widget.companyId,
-        currentUserUid: widget.currentUserUid,
-        currentUserName: widget.currentUserName,
-        requestId: doc.id,
-        requestData: data,
-      ))),
+      onTap: () => _navigateToDetails(doc.id, data),
       child: Container(
-        decoration: BoxDecoration(color: Colors.white, border: Border(bottom: BorderSide(color: Colors.grey.shade200))),
+        decoration: _kRowDecoration,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
@@ -1155,60 +1024,60 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
               width: 200,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(reqNo.isNotEmpty ? reqNo : '-', style: TextStyle(fontSize: 12, color: Colors.indigo.shade700, fontWeight: FontWeight.w800)),
+                  Text(reqNo.isNotEmpty ? reqNo : '-', style: TextStyle(fontSize: 12, color: Colors.blue.shade700, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 4),
-                  Text(custName.isNotEmpty ? custName : '(Unknown)', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(custName.isNotEmpty ? custName : '(Unknown)', style: _kTableTextStyle, maxLines: 1, overflow: TextOverflow.ellipsis),
                 ],
               ),
             ),
             SizedBox(
-              width: 160,
-              child: Text(machineDisplayString, style: TextStyle(fontSize: 13, color: Colors.grey.shade800, fontWeight: FontWeight.w500), maxLines: 2, overflow: TextOverflow.ellipsis),
-            ),
-            SizedBox(
-              width: 140,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildStatusChip(status),
-                  const SizedBox(height: 6),
-                  if (priority.isNotEmpty) _buildPriorityChip(priority),
-                ],
+              width: 150,
+              child: Container(
+                  alignment: Alignment.centerLeft,
+                  child: Text(machineDisplayString, style: _kTableMutedStyle, maxLines: 2, overflow: TextOverflow.ellipsis)
               ),
             ),
             SizedBox(
-              width: 140,
+              width: 130,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  if (techName.isNotEmpty) Text('Tech: $techName', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  if (techName.isNotEmpty && ownerName.isNotEmpty) const SizedBox(height: 2),
-                  if (ownerName.isNotEmpty) Text('Owner: $ownerName', style: TextStyle(fontSize: 11, color: techName.isNotEmpty ? Colors.grey.shade600 : Colors.black87, fontWeight: techName.isNotEmpty ? FontWeight.normal : FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  if (techName.isEmpty && ownerName.isEmpty) const Text('-', style: TextStyle(fontSize: 13)),
+                  Text(status.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _getStatusColor(status))),
+                  const SizedBox(height: 4),
+                  if (priority.isNotEmpty) Text(priority.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _getPriorityColor(priority))),
                 ],
               ),
             ),
-            SizedBox(width: 120, child: Text(_timeAgoStrict(latestActivityDate), style: const TextStyle(fontSize: 13))),
+            SizedBox(
+              width: 150,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (techName.isNotEmpty) Text('Tech: $techName', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.black87), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  if (serviceOwner.isNotEmpty) Text('Svc: $serviceOwner', style: TextStyle(fontSize: 10, color: Colors.grey.shade700, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  if (salesOwner.isNotEmpty) Text('Sales: $salesOwner', style: TextStyle(fontSize: 10, color: Colors.grey.shade700, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  if (techName.isEmpty && serviceOwner.isEmpty && salesOwner.isEmpty) const Text('-', style: TextStyle(fontSize: 12)),
+                ],
+              ),
+            ),
             SizedBox(
                 width: 120,
+                child: Container(
+                    alignment: Alignment.centerLeft,
+                    child: Text(_timeAgoStrict(latestActivityDate), style: _kTableMutedStyle)
+                )
+            ),
+            SizedBox(
+                width: 80,
                 child: Center(
-                  child: FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-                      visualDensity: VisualDensity.compact,
-                      backgroundColor: Colors.blueGrey,
-                    ),
-                    icon: const Icon(Icons.launch, size: 14),
-                    label: const Text('Open', style: TextStyle(fontSize: 11)),
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ServiceRequestDetailsScreen(
-                      companyId: widget.companyId,
-                      currentUserUid: widget.currentUserUid,
-                      currentUserName: widget.currentUserName,
-                      requestId: doc.id,
-                      requestData: data,
-                    ))),
+                  child: IconButton(
+                    icon: Icon(Icons.launch, size: 18, color: Colors.blueGrey.shade600),
+                    tooltip: 'Open',
+                    onPressed: () => _navigateToDetails(doc.id, data),
                   ),
                 )
             ),
@@ -1240,11 +1109,12 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
           children: columns.map((colName) {
             final colDocs = board[colName]!;
             return Container(
-              width: 300,
+              width: 280,
               margin: const EdgeInsets.only(right: 16),
               decoration: BoxDecoration(
-                color: Colors.grey.shade200,
-                borderRadius: BorderRadius.circular(12),
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade300),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1271,7 +1141,8 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
                             final data = colDocs[i].data();
                             return Card(
                                 margin: const EdgeInsets.only(bottom: 8),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6), side: BorderSide(color: Colors.grey.shade300)),
                                 child: InkWell(
                                   onTap: () => _navigateToDetails(colDocs[i].id, data),
                                   child: Padding(
@@ -1282,8 +1153,8 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
                                         Row(
                                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                           children: [
-                                            Text(_safeString(data['requestNumber']), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.indigo)),
-                                            _buildPriorityChip(_safeString(data['priority'])),
+                                            Text(_safeString(data['requestNumber']), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blue.shade700)),
+                                            Text(_safeString(data['priority']).toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _getPriorityColor(_safeString(data['priority'])))),
                                           ],
                                         ),
                                         const SizedBox(height: 8),
@@ -1331,8 +1202,8 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
           children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(color: Colors.indigo.shade50, borderRadius: BorderRadius.circular(8)),
-              child: Text(month, style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo.shade900)),
+              decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(8)),
+              child: Text(month, style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue.shade900)),
             ),
             const SizedBox(height: 16),
             ...monthDocs.map((doc) {
@@ -1372,13 +1243,13 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(reqNo.isNotEmpty ? reqNo : 'Draft', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                                  _buildPriorityChip(priority),
+                                  Text(priority.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _getPriorityColor(priority))),
                                 ],
                               ),
                               const SizedBox(height: 4),
                               Text(customer, style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
                               const SizedBox(height: 8),
-                              _buildStatusChip(status),
+                              Text(status.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _getStatusColor(status))),
                             ],
                           ),
                         ),
@@ -1470,7 +1341,7 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
         child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Analytics & Dashboards', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.indigo)),
+              const Text('Analytics & Dashboards', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.blue)),
               const SizedBox(height: 24),
 
               LayoutBuilder(
@@ -1539,11 +1410,11 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
                 ]
             ),
             const SizedBox(height: 24),
-            _buildBarChartRow('0 - 2 Days', age0to2, total, Colors.green),
+            _buildBarChartRow('0 - 2 Days', age0to2, total, Colors.blueGrey.shade600),
             const SizedBox(height: 12),
-            _buildBarChartRow('3 - 5 Days', age3to5, total, Colors.orange),
+            _buildBarChartRow('3 - 5 Days', age3to5, total, Colors.blueGrey.shade700),
             const SizedBox(height: 12),
-            _buildBarChartRow('> 5 Days', ageOver5, total, Colors.red),
+            _buildBarChartRow('> 5 Days', ageOver5, total, Colors.grey.shade800),
           ],
         )
     );
@@ -1561,21 +1432,21 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
           children: [
             const Row(
                 children: [
-                  Icon(Icons.gavel, color: Colors.indigo),
+                  Icon(Icons.gavel, color: Colors.blue),
                   SizedBox(width: 8),
                   Text('SLA Performance (Open)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ]
             ),
             const SizedBox(height: 24),
-            _buildBarChartRow('Compliant', compliant, total, Colors.teal),
+            _buildBarChartRow('Compliant', compliant, total, Colors.blue.shade600),
             const SizedBox(height: 12),
-            _buildBarChartRow('Breached', breached, total, Colors.red.shade700),
+            _buildBarChartRow('Breached', breached, total, Colors.grey.shade800),
             const SizedBox(height: 24),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('Total Open Monitored: ${compliant + breached}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
-                Text('Compliance: ${((compliant / total) * 100).toStringAsFixed(1)}%', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo.shade700)),
+                Text('Compliance: ${((compliant / total) * 100).toStringAsFixed(1)}%', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue.shade700)),
               ],
             )
           ],
@@ -1650,20 +1521,20 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
   Widget _buildEscalationDashboard(List<QueryDocumentSnapshot<Map<String, dynamic>>> escalations) {
     return Container(
         padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.red.shade200)),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade400)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
                 children: [
-                  const Icon(Icons.warning, color: Colors.red),
+                  const Icon(Icons.warning, color: Colors.grey),
                   const SizedBox(width: 8),
-                  Text('Escalated & Breached Tickets (${escalations.length})', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red)),
+                  Text('Escalated & Breached Tickets (${escalations.length})', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey.shade800)),
                 ]
             ),
             const SizedBox(height: 16),
             if (escalations.isEmpty)
-              const Padding(padding: EdgeInsets.all(16), child: Text('No escalations detected. Great job!', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)))
+              const Padding(padding: EdgeInsets.all(16), child: Text('No escalations detected. Great job!', style: TextStyle(color: Colors.blueGrey, fontWeight: FontWeight.bold)))
             else
               ...escalations.take(5).map((doc) {
                 final data = doc.data();
@@ -1676,22 +1547,22 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
                   child: Container(
                     margin: const EdgeInsets.only(bottom: 8),
                     padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
+                    decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(reqNo, style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red.shade900)),
-                            Text(customer, style: TextStyle(fontSize: 12, color: Colors.red.shade700)),
+                            Text(reqNo, style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey.shade900)),
+                            Text(customer, style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
                           ],
                         ),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(_timeAgoStrict(date), style: const TextStyle(fontWeight: FontWeight.bold)),
-                            const Text('Overdue', style: TextStyle(fontSize: 10, color: Colors.red)),
+                            Text('Overdue', style: TextStyle(fontSize: 10, color: Colors.grey.shade800)),
                           ],
                         )
                       ],
@@ -1706,58 +1577,18 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
 
   // --- HELPERS ---
 
-  Widget _buildMiniBadge(String text, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4), border: Border.all(color: color.withValues(alpha: 0.3))),
-      child: Text(text.toUpperCase(), style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: color)),
-    );
-  }
-
-  Widget _buildStatusChip(String status) {
-    final Color color = _getStatusColor(status);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Text(
-        status.toUpperCase(),
-        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color),
-      ),
-    );
-  }
-
-  Widget _buildPriorityChip(String priority) {
-    final Color color = _getPriorityColor(priority);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Text(
-        priority.toUpperCase(),
-        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color),
-      ),
-    );
-  }
-
   Color _getStatusColor(String status) {
     switch (status) {
-      case 'New': return Colors.blue;
-      case 'Assigned': return Colors.purple;
-      case 'Visit Created': return Colors.indigo;
-      case 'In Progress': return Colors.orange;
-      case 'Report Submitted': return Colors.teal;
+      case 'New': return Colors.blue.shade600;
+      case 'Assigned': return Colors.blue.shade700;
+      case 'Visit Created': return Colors.blue.shade800;
+      case 'In Progress': return Colors.blue.shade900;
+      case 'Report Submitted': return Colors.blueGrey.shade600;
       case 'Completed':
-      case 'Resolved': return Colors.green;
-      case 'Closed': return Colors.grey;
-      case 'Cancelled': return Colors.red;
-      default: return Colors.blueGrey;
+      case 'Resolved': return Colors.blueGrey.shade700;
+      case 'Closed': return Colors.grey.shade600;
+      case 'Cancelled': return Colors.grey.shade800;
+      default: return Colors.grey.shade500;
     }
   }
 
@@ -1765,14 +1596,33 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
     switch (priority) {
       case 'Critical': return Colors.red.shade700;
       case 'High': return Colors.orange.shade700;
-      case 'Medium': return Colors.blue.shade700;
-      case 'Low': return Colors.grey.shade700;
-      default: return Colors.grey;
+      case 'Medium': return Colors.blue.shade600;
+      case 'Low': return Colors.grey.shade600;
+      default: return Colors.grey.shade500;
     }
   }
 
+  Widget _buildStatChip(String title, dynamic value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('$title:', style: TextStyle(fontSize: 12, color: Colors.grey.shade800, fontWeight: FontWeight.w600)),
+          const SizedBox(width: 4),
+          Text(value.toString(), style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color)),
+        ],
+      ),
+    );
+  }
+
   // --- FILTERS SHEET ---
-  Future<void> _openFilterSheet() async {
+  Future<void> _openFilterSheet(Map<String, dynamic> stats) async {
     String tStatus = _statusFilter;
     String tPriority = _priorityFilter;
     String tCategory = _categoryFilter;
@@ -1794,8 +1644,44 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('Filters', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                  const Text('Request Stats', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.blueGrey)),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8, runSpacing: 8,
+                    children: [
+                      _buildStatChip('Total', stats['Total'], Colors.blueGrey.shade800),
+                      _buildStatChip('Open', stats['Open'], Colors.blue.shade700),
+                      _buildStatChip('Assigned', stats['Assigned'], Colors.blue.shade600),
+                      _buildStatChip('In Progress', stats['InProgress'], Colors.blue.shade500),
+                      _buildStatChip('Visit Created', stats['VisitCreated'], Colors.blueGrey.shade600),
+                      _buildStatChip('Reports', stats['ReportSub'], Colors.blueGrey.shade500),
+                      _buildStatChip('Quotes', stats['QuoteCreated'], Colors.blueGrey.shade400),
+                      _buildStatChip('Pay Pending', stats['PayPending'], Colors.grey.shade700),
+                      _buildStatChip('Completed', stats['Completed'], Colors.grey.shade600),
+                      _buildStatChip('Closed', stats['Closed'], Colors.grey.shade500),
+                    ],
+                  ),
                   const SizedBox(height: 20),
+
+                  const Text('Cross Module Stats', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.blueGrey)),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8, runSpacing: 8,
+                    children: [
+                      _buildStatChip('Total Visits', stats['TotalVisits'], Colors.blueGrey.shade700),
+                      _buildStatChip('Total Quotes', stats['TotalQuotes'], Colors.blueGrey.shade600),
+                      _buildStatChip('Invoices', stats['TotalInvoices'], Colors.blue.shade600),
+                      _buildStatChip('Dispatches', stats['TotalDispatches'], Colors.grey.shade700),
+                      _buildStatChip('Installs', stats['TotalInstallations'], Colors.grey.shade600),
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+                  const Divider(),
+                  const SizedBox(height: 16),
+
+                  const Text('Filters', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 16),
 
                   // Date Range Picker
                   InkWell(
@@ -1875,82 +1761,6 @@ class _ServiceRequestListScreenState extends State<ServiceRequestListScreen> {
                     ],
                   ),
                 ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-// ==========================================
-// SHARED ENTERPRISE UI COMPONENTS
-// ==========================================
-
-class _MiniStatText extends StatelessWidget {
-  final String label;
-  final String value;
-  const _MiniStatText({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Text('$label: ', style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
-        Text(value, style: TextStyle(fontSize: 13, color: Colors.indigo.shade800, fontWeight: FontWeight.w800)),
-      ],
-    );
-  }
-}
-
-class _EmptyRequestsState extends StatelessWidget {
-  final bool hasSearch;
-  final VoidCallback onReset;
-  const _EmptyRequestsState({required this.hasSearch, required this.onReset});
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(28),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight - 40),
-            child: IntrinsicHeight(
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircleAvatar(
-                      radius: 36,
-                      backgroundColor: Colors.indigo.shade50,
-                      child: Icon(
-                        hasSearch ? Icons.search_off : Icons.support_agent_outlined,
-                        size: 36,
-                        color: Colors.indigo.shade400,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      hasSearch ? 'No matching service requests found' : 'No service requests found',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      hasSearch ? 'Try changing the search text or filter.' : 'Click the button below to log your first service request.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-                    ),
-                    const SizedBox(height: 24),
-                    if (hasSearch)
-                      FilledButton.tonal(
-                          onPressed: onReset,
-                          child: const Text('Clear Search & Filters', style: TextStyle(fontWeight: FontWeight.bold))
-                      ),
-                  ],
-                ),
               ),
             ),
           ),

@@ -1,6 +1,28 @@
+// FILE PATH: lib/modules/crm/contacts/screens_add_contact.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import 'add_contact/add_contact_widgets.dart';
+
+part 'add_contact/add_contact_form_sections.dart';
+part 'add_contact/add_contact_header_footer.dart';
+part 'add_contact/add_contact_layout_sections.dart';
+
+// --- HELPERS ---
+bool _safeBool(dynamic val) {
+  if (val == null) return false;
+  if (val is bool) return val;
+  if (val is int) return val == 1;
+  final s = val.toString().trim().toLowerCase();
+  return s == 'true' || s == '1' || s == 'yes';
+}
+
+String _safeString(dynamic val) {
+  return (val ?? '').toString().trim();
+}
+
+// --- SCREEN ---
 class ScreensAddContact extends StatefulWidget {
   final DocumentReference<Map<String, dynamic>> companyRef;
   final DocumentSnapshot<Map<String, dynamic>>? contactDoc;
@@ -17,239 +39,262 @@ class ScreensAddContact extends StatefulWidget {
 
 class _ScreensAddContactState extends State<ScreensAddContact> {
   final _formKey = GlobalKey<FormState>();
-  final _name = TextEditingController();
-  final _designation = TextEditingController();
-  final _department = TextEditingController();
-  final _phone = TextEditingController();
-  final _email = TextEditingController();
-  final _remarks = TextEditingController();
 
-  String _status = 'Active';
-  String _category = 'General';
+  // Core Controllers
+  final _nameController = TextEditingController();
+  final _designationController = TextEditingController();
+
+  // Communication Controllers
+  final _phoneController = TextEditingController();
+  final _alternatePhoneController = TextEditingController();
+  final _officePhoneController = TextEditingController();
+  final _extensionController = TextEditingController();
+  final _emailController = TextEditingController();
+
+  // Social & Notes Controllers
+  final _linkedinController = TextEditingController();
+  final _assistantNameController = TextEditingController();
+  final _internalNotesController = TextEditingController();
+  final _escalationNotesController = TextEditingController();
+
+  // Enterprise Selectors
   bool _isPrimary = false;
-  bool _saving = false;
+  String _contactStatus = 'Active';
+  String _contactType = 'Commercial';
+  String _department = 'Management';
+  String _decisionRole = 'User';
+  String _authorityLevel = 'Manager / Head';
+  String _preferredComm = 'Phone';
+
+  // Multi-Location
+  String? _linkedAddressId;
+  String? _linkedAddressLabel;
+  List<Map<String, dynamic>> _companyAddresses = [];
+
+  bool _isSaving = false;
+  bool _isLoadingCompany = true;
+  String _companyName = '';
+  String _companyLocation = '';
+
+  CollectionReference<Map<String, dynamic>> get _contactsRef =>
+      widget.companyRef.collection('contacts');
 
   bool get _isEdit => widget.contactDoc != null;
 
   @override
   void initState() {
     super.initState();
-    final data = widget.contactDoc?.data();
-    if (data == null) return;
-    _name.text = _read(data, ['name', 'contactName', 'personName']);
-    _designation.text = _read(data, ['designation', 'position']);
-    _department.text = _read(data, ['department']);
-    _phone.text = _read(data, ['phone', 'mobile', 'contactNo', 'contactNumber']);
-    _email.text = _read(data, ['email', 'mail']);
-    _remarks.text = _read(data, ['remarks', 'notes']);
-    _status = _read(data, ['status']).isEmpty ? 'Active' : _read(data, ['status']);
-    _category = _read(data, ['category', 'type']).isEmpty ? 'General' : _read(data, ['category', 'type']);
-    _isPrimary = _readBool(data['isPrimary'] ?? data['primary']);
+    _loadCompanyInfo();
+
+    final doc = widget.contactDoc;
+    if (doc != null) {
+      final data = doc.data() ?? {};
+
+      // Core
+      _nameController.text = _safeString(data['name']);
+      _designationController.text = _safeString(data['designation']);
+      _isPrimary = _safeBool(data['isPrimary']);
+
+      bool isActive = data.containsKey('isActive') ? _safeBool(data['isActive']) : true;
+      _contactStatus = _safeString(data['contactStatus']).isNotEmpty ? _safeString(data['contactStatus']) : (isActive ? 'Active' : 'Inactive');
+
+      // Contact Numbers
+      _phoneController.text = _safeString(data['phone']);
+      _alternatePhoneController.text = _safeString(data['alternatePhone']);
+      _officePhoneController.text = _safeString(data['officePhone']);
+      _extensionController.text = _safeString(data['extension']);
+      _emailController.text = _safeString(data['email']);
+
+      // Selectors
+      _contactType = _safeString(data['contactType']).isNotEmpty ? _safeString(data['contactType']) : 'Commercial';
+      _department = _safeString(data['department']).isNotEmpty ? _safeString(data['department']) : 'Management';
+      _decisionRole = _safeString(data['decisionRole']).isNotEmpty ? _safeString(data['decisionRole']) : 'User';
+      _authorityLevel = _safeString(data['authorityLevel']).isNotEmpty ? _safeString(data['authorityLevel']) : 'Manager / Head';
+      _preferredComm = _safeString(data['preferredCommunicationMode']).isNotEmpty ? _safeString(data['preferredCommunicationMode']) : 'Phone';
+
+      // Location Link
+      _linkedAddressId = _safeString(data['linkedAddressId']).isNotEmpty ? _safeString(data['linkedAddressId']) : null;
+      _linkedAddressLabel = _safeString(data['linkedAddressLabel']).isNotEmpty ? _safeString(data['linkedAddressLabel']) : null;
+
+      // Extras
+      _linkedinController.text = _safeString(data['linkedin']);
+      _assistantNameController.text = _safeString(data['assistantName']);
+      _internalNotesController.text = _safeString(data['internalNotes']);
+      _escalationNotesController.text = _safeString(data['escalationNotes']);
+    }
+  }
+
+  Future<void> _loadCompanyInfo() async {
+    try {
+      final snapshot = await widget.companyRef.get();
+      final data = snapshot.data() ?? {};
+
+      final companyName = _safeString(data['companyName'].toString().isNotEmpty ? data['companyName'] : data['name']);
+      final city = _safeString(data['city']);
+      final state = _safeString(data['state']);
+
+      String location = '';
+      if (city.isNotEmpty && state.isNotEmpty) {
+        location = '$city, $state';
+      } else if (city.isNotEmpty) {
+        location = city;
+      } else if (state.isNotEmpty) {
+        location = state;
+      }
+
+      if (data['addresses'] is List) {
+        final List<dynamic> rawAddresses = data['addresses'];
+        _companyAddresses = rawAddresses.whereType<Map<String, dynamic>>().toList();
+      }
+
+      if (_linkedAddressId != null && !_companyAddresses.any((a) => a['id'] == _linkedAddressId || a['label'] == _linkedAddressLabel)) {
+        _linkedAddressId = null;
+        _linkedAddressLabel = null;
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _companyName = companyName;
+        _companyLocation = location;
+        _isLoadingCompany = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoadingCompany = false);
+    }
   }
 
   @override
   void dispose() {
-    _name.dispose();
-    _designation.dispose();
-    _department.dispose();
-    _phone.dispose();
-    _email.dispose();
-    _remarks.dispose();
+    _nameController.dispose();
+    _designationController.dispose();
+    _phoneController.dispose();
+    _alternatePhoneController.dispose();
+    _officePhoneController.dispose();
+    _extensionController.dispose();
+    _emailController.dispose();
+    _linkedinController.dispose();
+    _assistantNameController.dispose();
+    _internalNotesController.dispose();
+    _escalationNotesController.dispose();
     super.dispose();
   }
 
-  String _read(Map<String, dynamic> data, List<String> keys) {
-    for (final key in keys) {
-      final value = data[key];
-      if (value != null && value.toString().trim().isNotEmpty) {
-        return value.toString().trim();
-      }
-    }
-    return '';
+  void _setPrimaryContact(bool? value) {
+    setState(() => _isPrimary = value ?? false);
   }
 
-  bool _readBool(dynamic value) {
-    if (value is bool) return value;
-    if (value is int) return value == 1;
-    final text = value.toString().toLowerCase().trim();
-    return text == 'true' || text == 'yes' || text == '1';
+  Future<void> _unsetOtherPrimaryContacts() async {
+    final existingContacts = await _contactsRef.get();
+    final batch = FirebaseFirestore.instance.batch();
+
+    for (final doc in existingContacts.docs) {
+      if (widget.contactDoc != null && doc.id == widget.contactDoc!.id) continue;
+
+      if (doc.data()['isPrimary'] == true) {
+        batch.update(doc.reference, {
+          'isPrimary': false,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+    }
+    await batch.commit();
   }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _saving = true);
+    FocusScope.of(context).unfocus();
 
-    final payload = <String, dynamic>{
-      'name': _name.text.trim(),
-      'designation': _designation.text.trim(),
-      'department': _department.text.trim(),
-      'phone': _phone.text.trim(),
-      'mobile': _phone.text.trim(),
-      'email': _email.text.trim(),
-      'status': _status,
-      'category': _category,
-      'type': _category,
-      'isPrimary': _isPrimary,
-      'remarks': _remarks.text.trim(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('User not logged in'), backgroundColor: Colors.red));
+      return;
+    }
+
+    setState(() => _isSaving = true);
 
     try {
-      if (_isEdit) {
-        await widget.contactDoc!.reference.set(payload, SetOptions(merge: true));
-      } else {
-        await widget.companyRef.collection('contacts').add({
-          ...payload,
+      if (_isPrimary) await _unsetOtherPrimaryContacts();
+
+      final baseData = <String, dynamic>{
+        'name': _nameController.text.trim(),
+        'designation': _designationController.text.trim(),
+        'department': _department,
+        'contactType': _contactType,
+        'decisionRole': _decisionRole,
+        'authorityLevel': _authorityLevel,
+
+        'isPrimary': _isPrimary,
+        'contactStatus': _contactStatus,
+        'isActive': _contactStatus == 'Active',
+
+        'phone': _phoneController.text.trim(),
+        'alternatePhone': _alternatePhoneController.text.trim(),
+        'officePhone': _officePhoneController.text.trim(),
+        'extension': _extensionController.text.trim(),
+        'email': _emailController.text.trim(),
+        'preferredCommunicationMode': _preferredComm,
+
+        'linkedAddressId': _linkedAddressId ?? '',
+        'linkedAddressLabel': _linkedAddressLabel ?? '',
+
+        'linkedin': _linkedinController.text.trim(),
+        'assistantName': _assistantNameController.text.trim(),
+        'internalNotes': _internalNotesController.text.trim(),
+        'escalationNotes': _escalationNotesController.text.trim(),
+      };
+
+      if (widget.contactDoc == null) {
+        await _contactsRef.add({
+          ...baseData,
           'createdAt': FieldValue.serverTimestamp(),
+          'createdBy': currentUser.uid,
+          'createdByUid': currentUser.uid,
+          'updatedAt': FieldValue.serverTimestamp(),
+          'updatedBy': currentUser.uid,
+          'updatedByUid': currentUser.uid,
+        });
+      } else {
+        await widget.contactDoc!.reference.update({
+          ...baseData,
+          'updatedAt': FieldValue.serverTimestamp(),
+          'updatedBy': currentUser.uid,
+          'updatedByUid': currentUser.uid,
         });
       }
+
       if (!mounted) return;
-      Navigator.pop(context, true);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_isEdit ? 'Contact updated successfully' : 'Contact created successfully'), backgroundColor: Colors.green));
+      Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unable to save contact: $e')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save contact: $e'), backgroundColor: Colors.red));
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xfff6f8fb),
+      backgroundColor: const Color(0xFFF1F5F9), // Enterprise CRM background
       appBar: AppBar(
+        title: Text(_isEdit ? 'Edit Contact' : 'New Contact', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
         backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF0F172A),
         elevation: 0,
-        foregroundColor: const Color(0xff0f172a),
-        title: Text(_isEdit ? 'Edit Contact' : 'Add Contact'),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: FilledButton.icon(
-              onPressed: _saving ? null : _save,
-              icon: _saving
-                  ? const SizedBox(
-                      height: 16,
-                      width: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.save_outlined, size: 18),
-              label: Text(_saving ? 'Saving...' : 'Save Contact'),
-            ),
-          ),
-        ],
+        centerTitle: true,
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 920),
-          child: Card(
-            margin: const EdgeInsets.all(24),
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-              side: BorderSide(color: Colors.grey.shade300),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Form(
-                key: _formKey,
-                child: ListView(
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.contact_page_outlined),
-                        const SizedBox(width: 10),
-                        Text(
-                          _isEdit ? 'Update contact details' : 'Create customer contact',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    Wrap(
-                      runSpacing: 16,
-                      spacing: 16,
-                      children: [
-                        _field(_name, 'Contact Name *', Icons.person_outline, requiredField: true),
-                        _field(_designation, 'Designation', Icons.badge_outlined),
-                        _field(_department, 'Department', Icons.apartment_outlined),
-                        _field(_phone, 'Phone / Mobile', Icons.phone_outlined),
-                        _field(_email, 'Email', Icons.email_outlined, email: true),
-                        _dropdown('Status', _status, ['Active', 'Inactive'], (v) => setState(() => _status = v!)),
-                        _dropdown('Category', _category, ['General', 'Decision Maker', 'Purchase', 'Stores', 'Technical', 'Accounts'], (v) => setState(() => _category = v!)),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      value: _isPrimary,
-                      onChanged: (value) => setState(() => _isPrimary = value),
-                      title: const Text('Primary Contact'),
-                    ),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _remarks,
-                      minLines: 3,
-                      maxLines: 5,
-                      decoration: _decoration('Remarks', Icons.notes_outlined),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
+      body: _isLoadingCompany
+          ? const Center(child: CircularProgressIndicator())
+          : Form(
+        key: _formKey,
+        child: Column(
+          children: [
+            Expanded(child: _buildScrollableContent()),
+            _buildBottomSaveBar(),
+          ],
         ),
-      ),
-    );
-  }
-
-  Widget _field(
-    TextEditingController controller,
-    String label,
-    IconData icon, {
-    bool requiredField = false,
-    bool email = false,
-  }) {
-    return SizedBox(
-      width: 420,
-      child: TextFormField(
-        controller: controller,
-        decoration: _decoration(label, icon),
-        validator: (value) {
-          final text = value?.trim() ?? '';
-          if (requiredField && text.isEmpty) return 'Required';
-          if (email && text.isNotEmpty && !text.contains('@')) return 'Enter valid email';
-          return null;
-        },
-      ),
-    );
-  }
-
-  Widget _dropdown(String label, String value, List<String> items, ValueChanged<String?> onChanged) {
-    final currentValue = items.contains(value) ? value : items.first;
-    return SizedBox(
-      width: 420,
-      child: DropdownButtonFormField<String>(
-        value: currentValue,
-        items: items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-        onChanged: onChanged,
-        decoration: _decoration(label, Icons.arrow_drop_down_circle_outlined),
-      ),
-    );
-  }
-
-  InputDecoration _decoration(String label, IconData icon) {
-    return InputDecoration(
-      labelText: label,
-      prefixIcon: Icon(icon, size: 20),
-      filled: true,
-      fillColor: Colors.white,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey.shade300),
       ),
     );
   }
