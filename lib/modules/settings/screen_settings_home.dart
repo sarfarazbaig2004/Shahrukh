@@ -9,6 +9,7 @@ import 'package:QUIK/auth/register/register_screen_local.dart';
 import 'package:QUIK/core/theme/app_theme.dart';
 import 'package:QUIK/modules/notifications/screen_notification_center.dart';
 import 'package:QUIK/modules/settings/screen_company_profile_bank_settings.dart';
+import 'package:QUIK/modules/settings/quotation_settings_screen.dart';
 import 'package:QUIK/modules/settings/letterhead_settings_screen.dart';
 
 enum _SettingsSection { personal, workspace, access, system, danger }
@@ -819,6 +820,25 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
                 },
               ),
             if (!isExportImport) ...[
+              _ActionTile(
+                title: 'Quotation Settings',
+                subtitle:
+                    'Upload quotation letterhead and configure quotation print options.',
+                icon: Icons.receipt_long_outlined,
+                enabled: isAdminOrManager,
+                onTap: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => QuotationSettingsScreen(
+                        companyId: widget.companyId,
+                        currentUserUid:
+                            FirebaseAuth.instance.currentUser?.uid ?? '',
+                        currentUserName: widget.userEmail,
+                      ),
+                    ),
+                  );
+                },
+              ),
               _ActionTile(
                 title: 'Branches & Locations',
                 subtitle:
