@@ -241,14 +241,8 @@ class QuotationDataService {
               .toString()
               .trim();
 
-      String userRole = (membershipData?['role'] ?? rootData['role'] ?? 'Sales')
-          .toString()
-          .trim();
-
-      if (sigDesignation.isEmpty) {
-        sigDesignation = userDepartment.isNotEmpty
-            ? userDepartment
-            : userRole.toUpperCase();
+      if (sigDesignation.isEmpty && userDepartment.isNotEmpty) {
+        sigDesignation = userDepartment;
       }
 
       final sigPhone =

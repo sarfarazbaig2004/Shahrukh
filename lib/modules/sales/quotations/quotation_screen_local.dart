@@ -753,7 +753,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         } else if (userDepartment.isNotEmpty) {
           _signDesignationController.text = userDepartment;
         } else {
-          _signDesignationController.text = _currentUserRole.toUpperCase();
+          _signDesignationController.text = '';
         }
       }
     } catch (e) {
