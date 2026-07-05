@@ -4766,77 +4766,110 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                       ? _selectedContactId
                                       : null;
 
+                                  String contactOptionLabel(
+                                    QueryDocumentSnapshot<Map<String, dynamic>>
+                                    doc,
+                                  ) {
+                                    final data = doc.data();
+                                    return (data['name'] ??
+                                            data['contactName'] ??
+                                            data['personName'] ??
+                                            data['fullName'] ??
+                                            '')
+                                        .toString()
+                                        .trim();
+                                  }
+
+                                  String contactOptionSubtitle(
+                                    QueryDocumentSnapshot<Map<String, dynamic>>
+                                    doc,
+                                  ) {
+                                    final data = doc.data();
+                                    return [
+                                          data['mobile'] ?? data['phone'],
+                                          data['email'],
+                                          data['designation'],
+                                          data['department'],
+                                        ]
+                                        .where(
+                                          (e) =>
+                                              e != null &&
+                                              e.toString().trim().isNotEmpty,
+                                        )
+                                        .map((e) => e.toString().trim())
+                                        .join(' • ');
+                                  }
+
+                                  String selectedContactLabel =
+                                      _contactPersonController.text.trim();
+                                  if (validContactId != null) {
+                                    final selectedMatches = contacts
+                                        .where((d) => d.id == validContactId)
+                                        .toList();
+                                    if (selectedMatches.isNotEmpty) {
+                                      selectedContactLabel = contactOptionLabel(
+                                        selectedMatches.first,
+                                      );
+                                    }
+                                  }
+
                                   return Column(
                                     children: [
                                       Padding(
                                         padding: const EdgeInsets.only(
                                           bottom: 12,
                                         ),
-                                        child: DropdownButtonFormField<String>(
-                                          isExpanded: true,
-                                          value: validContactId,
-                                          decoration: InputDecoration(
-                                            labelText: 'Select Contact Person',
-                                            prefixIcon: const Icon(
-                                              Icons.person_outline,
-                                            ),
-                                            border: OutlineInputBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                            ),
-                                            filled: true,
-                                            fillColor: Colors.grey.shade50,
-                                            isDense: true,
-                                          ),
-                                          items: contacts
-                                              .map<DropdownMenuItem<String>>(
-                                                (
-                                                  doc,
-                                                ) => DropdownMenuItem<String>(
-                                                  value: doc.id,
-                                                  child: Text(
-                                                    (doc.data()['name'] ??
-                                                            doc.data()['contactName'] ??
-                                                            '')
-                                                        .toString(),
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  ),
-                                                ),
-                                              )
-                                              .toList(),
-                                          selectedItemBuilder:
-                                              (BuildContext context) {
-                                                return contacts.map<Widget>((
-                                                  doc,
-                                                ) {
-                                                  return Text(
-                                                    (doc.data()['name'] ??
-                                                            doc.data()['contactName'] ??
-                                                            '')
-                                                        .toString(),
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  );
-                                                }).toList();
-                                              },
-                                          onChanged: _isReadOnly
-                                              ? null
-                                              : (v) {
-                                                  setState(() {
-                                                    _selectedContactId = v;
-                                                    _selectedContactData = null;
-                                                    if (v != null) {
-                                                      final matches = contacts
-                                                          .where(
-                                                            (c) => c.id == v,
-                                                          );
-                                                      _selectedContactData =
-                                                          matches.isNotEmpty
-                                                          ? matches.first.data()
-                                                          : null;
+                                        child:
+                                            RawAutocomplete<
+                                              QueryDocumentSnapshot<
+                                                Map<String, dynamic>
+                                              >
+                                            >(
+                                              initialValue: TextEditingValue(
+                                                text: selectedContactLabel,
+                                              ),
+                                              displayStringForOption:
+                                                  contactOptionLabel,
+                                              optionsBuilder:
+                                                  (
+                                                    TextEditingValue
+                                                    textEditingValue,
+                                                  ) {
+                                                    final query =
+                                                        textEditingValue.text
+                                                            .trim()
+                                                            .toLowerCase();
+
+                                                    if (query.isEmpty) {
+                                                      return contacts;
+                                                    }
+
+                                                    return contacts.where((
+                                                      doc,
+                                                    ) {
+                                                      final searchable = [
+                                                        contactOptionLabel(doc),
+                                                        contactOptionSubtitle(
+                                                          doc,
+                                                        ),
+                                                      ].join(' ').toLowerCase();
+
+                                                      return searchable
+                                                          .contains(query);
+                                                    });
+                                                  },
+                                              onSelected:
+                                                  (
+                                                    QueryDocumentSnapshot<
+                                                      Map<String, dynamic>
+                                                    >
+                                                    doc,
+                                                  ) {
+                                                    setState(() {
+                                                      _selectedContactId =
+                                                          doc.id;
+                                                      _selectedContactData = doc
+                                                          .data();
                                                       _updateContactSnapshots(
                                                         _selectedContactData,
                                                       );
@@ -4844,11 +4877,117 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                                         'Contact Changed By User',
                                                         name: 'QuotationScreen',
                                                       );
-                                                    }
-                                                  });
-                                                },
-                                        ),
+                                                    });
+                                                  },
+                                              fieldViewBuilder:
+                                                  (
+                                                    context,
+                                                    textController,
+                                                    focusNode,
+                                                    onFieldSubmitted,
+                                                  ) {
+                                                    return TextFormField(
+                                                      controller:
+                                                          textController,
+                                                      focusNode: focusNode,
+                                                      readOnly: _isReadOnly,
+                                                      decoration: InputDecoration(
+                                                        labelText:
+                                                            'Search Contact Person',
+                                                        hintText:
+                                                            'Type name, mobile, email, designation',
+                                                        prefixIcon: const Icon(
+                                                          Icons.person_search,
+                                                        ),
+                                                        suffixIcon: const Icon(
+                                                          Icons.search,
+                                                        ),
+                                                        border: OutlineInputBorder(
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                8,
+                                                              ),
+                                                        ),
+                                                        filled: true,
+                                                        fillColor:
+                                                            Colors.grey.shade50,
+                                                        isDense: true,
+                                                      ),
+                                                    );
+                                                  },
+                                              optionsViewBuilder: (context, onSelected, options) {
+                                                final optionList = options
+                                                    .toList(growable: false);
+
+                                                return Align(
+                                                  alignment: Alignment.topLeft,
+                                                  child: Material(
+                                                    elevation: 6,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          8,
+                                                        ),
+                                                    child: ConstrainedBox(
+                                                      constraints:
+                                                          const BoxConstraints(
+                                                            maxHeight: 260,
+                                                            maxWidth: 560,
+                                                          ),
+                                                      child: ListView.builder(
+                                                        padding:
+                                                            EdgeInsets.zero,
+                                                        shrinkWrap: true,
+                                                        itemCount:
+                                                            optionList.length,
+                                                        itemBuilder: (context, index) {
+                                                          final doc =
+                                                              optionList[index];
+                                                          final title =
+                                                              contactOptionLabel(
+                                                                doc,
+                                                              );
+                                                          final subtitle =
+                                                              contactOptionSubtitle(
+                                                                doc,
+                                                              );
+
+                                                          return ListTile(
+                                                            dense: true,
+                                                            leading: const Icon(
+                                                              Icons
+                                                                  .person_outline,
+                                                            ),
+                                                            title: Text(
+                                                              title.isEmpty
+                                                                  ? 'Unnamed Contact'
+                                                                  : title,
+                                                              maxLines: 1,
+                                                              overflow:
+                                                                  TextOverflow
+                                                                      .ellipsis,
+                                                            ),
+                                                            subtitle:
+                                                                subtitle.isEmpty
+                                                                ? null
+                                                                : Text(
+                                                                    subtitle,
+                                                                    maxLines: 1,
+                                                                    overflow:
+                                                                        TextOverflow
+                                                                            .ellipsis,
+                                                                  ),
+                                                            onTap: () =>
+                                                                onSelected(doc),
+                                                          );
+                                                        },
+                                                      ),
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                            ),
                                       ),
+
                                       Row(
                                         children: [
                                           Expanded(
