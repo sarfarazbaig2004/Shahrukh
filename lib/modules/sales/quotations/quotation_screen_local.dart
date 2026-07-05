@@ -105,6 +105,10 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   final TextEditingController _mobileController = TextEditingController();
   final TextEditingController _contactPersonController =
       TextEditingController();
+  final TextEditingController _contactDepartmentController =
+      TextEditingController();
+  final TextEditingController _contactDesignationController =
+      TextEditingController();
   final TextEditingController _gstController = TextEditingController();
   String _customerState = '';
   Map<String, dynamic>? _customerInsights;
@@ -122,6 +126,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   String _contactPersonSnapshot = '';
   String _contactEmailSnapshot = '';
   String _contactMobileSnapshot = '';
+  String _contactDepartmentSnapshot = '';
+  String _contactDesignationSnapshot = '';
 
   final TextEditingController _quotationSequenceController =
       TextEditingController();
@@ -491,7 +497,13 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
           data['contactMobile']?.toString() ??
           data['clientMobile']?.toString() ??
           '';
+      _contactDepartmentSnapshot =
+          (data['contactDepartment'] ?? data['department'] ?? '').toString();
+      _contactDesignationSnapshot =
+          (data['contactDesignation'] ?? data['designation'] ?? '').toString();
       _contactPersonController.text = _contactPersonSnapshot;
+      _contactDepartmentController.text = _contactDepartmentSnapshot;
+      _contactDesignationController.text = _contactDesignationSnapshot;
 
       final existingCustomerGstin =
           (data['customerGstin'] ??
@@ -633,6 +645,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     _emailController.dispose();
     _mobileController.dispose();
     _contactPersonController.dispose();
+    _contactDepartmentController.dispose();
+    _contactDesignationController.dispose();
     _gstController.dispose();
     _quotationSequenceController.dispose();
     _subjectController.dispose();
@@ -857,7 +871,11 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         _contactEmailSnapshot = '';
         _contactMobileSnapshot = '';
         _contactPersonSnapshot = '';
+        _contactDepartmentSnapshot = '';
+        _contactDesignationSnapshot = '';
         _contactPersonController.clear();
+        _contactDepartmentController.clear();
+        _contactDesignationController.clear();
         _emailController.clear();
         _mobileController.clear();
       }
@@ -878,6 +896,17 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                 '')
             .toString()
             .trim();
+    final cDepartment = (contactData['department'] ?? contactData['dept'] ?? '')
+        .toString()
+        .trim();
+    final cDesignation =
+        (contactData['designation'] ??
+                contactData['jobTitle'] ??
+                contactData['title'] ??
+                contactData['position'] ??
+                '')
+            .toString()
+            .trim();
 
     if (!restoreMode) {
       _contactPersonController.text = cName;
@@ -886,6 +915,10 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       _contactEmailSnapshot = cEmail;
       _mobileController.text = cPhone;
       _contactMobileSnapshot = cPhone;
+      _contactDepartmentController.text = cDepartment;
+      _contactDepartmentSnapshot = cDepartment;
+      _contactDesignationController.text = cDesignation;
+      _contactDesignationSnapshot = cDesignation;
     } else {
       if (_contactPersonController.text.trim().isEmpty && cName.isNotEmpty) {
         _contactPersonController.text = cName;
@@ -898,6 +931,16 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       if (_mobileController.text.trim().isEmpty && cPhone.isNotEmpty) {
         _mobileController.text = cPhone;
         _contactMobileSnapshot = cPhone;
+      }
+      if (_contactDepartmentController.text.trim().isEmpty &&
+          cDepartment.isNotEmpty) {
+        _contactDepartmentController.text = cDepartment;
+        _contactDepartmentSnapshot = cDepartment;
+      }
+      if (_contactDesignationController.text.trim().isEmpty &&
+          cDesignation.isNotEmpty) {
+        _contactDesignationController.text = cDesignation;
+        _contactDesignationSnapshot = cDesignation;
       }
     }
   }
@@ -2199,6 +2242,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       'clientEmail': _emailController.text.trim(),
       'clientMobile': _mobileController.text.trim(),
       'contactPerson': _contactPersonController.text.trim(),
+      'contactDepartment': _contactDepartmentController.text.trim(),
+      'contactDesignation': _contactDesignationController.text.trim(),
       'terms': _dynamicTerms
           .map(
             (term) => {
@@ -4310,6 +4355,23 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
             Expanded(child: _buildItemTextField(_emailController, 'Email ID')),
             const SizedBox(width: 10),
             Expanded(
+              child: _buildItemTextField(
+                _contactDesignationController,
+                'Designation',
+              ),
+            ),
+          ],
+        ),
+        Row(
+          children: [
+            Expanded(
+              child: _buildItemTextField(
+                _contactDepartmentController,
+                'Department',
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
               child: _buildItemTextField(_gstController, 'Customer GSTIN'),
             ),
           ],
@@ -4790,6 +4852,40 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                             child: _buildItemTextField(
                                               _emailController,
                                               'Email ID',
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: _buildItemTextField(
+                                              _contactDesignationController,
+                                              'Designation',
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: _buildItemTextField(
+                                              _contactDepartmentController,
+                                              'Department',
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: _buildItemTextField(
+                                              _contactDesignationController,
+                                              'Designation',
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: _buildItemTextField(
+                                              _contactDepartmentController,
+                                              'Department',
                                             ),
                                           ),
                                         ],
