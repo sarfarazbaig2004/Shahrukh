@@ -1111,6 +1111,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     String name = (i['name'] ?? i['productName'] ?? i['itemName'] ?? '')
         .toString();
     String desc = (i['description'] ?? i['details'] ?? '').toString();
+    String scopeOfSupply =
+        (i['scopeOfSupply'] ?? i['scope_of_supply'] ?? i['supplyScope'] ?? '')
+            .toString();
     String hsn = (i['hsnCode'] ?? '').toString();
     double qty = double.tryParse(i['quantity']?.toString() ?? '1') ?? 1.0;
     String uom = (i['uom'] ?? i['unit'] ?? 'Nos').toString();
@@ -1301,6 +1304,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       itemCode: itemCode,
       name: name,
       description: desc,
+      scopeOfSupply: scopeOfSupply,
       hsnCode: hsn,
       quantity: qty,
       uom: uom,
