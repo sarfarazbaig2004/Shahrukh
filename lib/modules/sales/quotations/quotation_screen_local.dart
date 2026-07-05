@@ -4363,9 +4363,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         _selectedAddressId!.isNotEmpty;
 
     final bool showContactDropdown =
-        _selectedCustomerId != null &&
-        _selectedContactId != null &&
-        _selectedContactId!.isNotEmpty;
+        _selectedCustomerId != null && _selectedCustomerId!.isNotEmpty;
 
     List<QuotationLineItem> topLevelItems = _items
         .where((i) => _itemExtras[i.id]?['parentId'] == null)
@@ -4670,46 +4668,6 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                       .toList();
                                   if (contacts.isEmpty)
                                     return _buildLegacyContactFields();
-
-                                  if (_selectedAddressId != null) {
-                                    bool anyContactHasAddress = contacts.any((
-                                      d,
-                                    ) {
-                                      final data = d.data();
-                                      final addrId = data['addressId'];
-                                      final linked =
-                                          data['linkedAddressIds'] as List?;
-                                      final assigned =
-                                          data['assignedAddressId'];
-                                      return addrId != null ||
-                                          (linked != null &&
-                                              linked.isNotEmpty) ||
-                                          assigned != null;
-                                    });
-
-                                    if (anyContactHasAddress) {
-                                      contacts = contacts.where((d) {
-                                        if (d.id == _selectedContactId)
-                                          return true;
-
-                                        final data = d.data();
-                                        final addrId = data['addressId'];
-                                        final linked =
-                                            data['linkedAddressIds'] as List?;
-                                        final assigned =
-                                            data['assignedAddressId'];
-
-                                        if (addrId == _selectedAddressId)
-                                          return true;
-                                        if (assigned == _selectedAddressId)
-                                          return true;
-                                        if (linked != null &&
-                                            linked.contains(_selectedAddressId))
-                                          return true;
-                                        return false;
-                                      }).toList();
-                                    }
-                                  }
 
                                   if (contacts.isEmpty) {
                                     return Column(
