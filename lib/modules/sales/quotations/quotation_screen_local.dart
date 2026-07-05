@@ -3544,6 +3544,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     final formKey = GlobalKey<FormState>();
     final nameCtrl = TextEditingController(text: itemToEdit?.name ?? '');
     final descCtrl = TextEditingController(text: itemToEdit?.description ?? '');
+    final scopeCtrl = TextEditingController(
+      text: itemToEdit?.scopeOfSupply ?? '',
+    );
     final hsnCtrl = TextEditingController(text: itemToEdit?.hsnCode ?? '');
     final qtyCtrl = TextEditingController(
       text: itemToEdit?.quantity.toString() ?? '1',
@@ -3951,6 +3954,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     final formKey = GlobalKey<FormState>();
     final nameCtrl = TextEditingController(text: itemToEdit?.name ?? '');
     final descCtrl = TextEditingController(text: itemToEdit?.description ?? '');
+    final scopeCtrl = TextEditingController(
+      text: itemToEdit?.scopeOfSupply ?? '',
+    );
     final qtyCtrl = TextEditingController(
       text: itemToEdit?.quantity.toString() ?? '1',
     );
