@@ -45,6 +45,7 @@ class QuotationScreenLocal extends StatefulWidget {
 class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final ScrollController _scrollController = ScrollController();
+  final FocusNode _customerNameFocusNode = FocusNode();
 
   String? _companyId;
   String? _currentUserUid;
@@ -97,6 +98,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   String _paymentStatus = 'Pending';
 
   String? _selectedCustomerId;
+  String _selectedCustomerLabel = '';
   final TextEditingController _clientNameController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
@@ -519,6 +521,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     }
 
     _clientNameController.text = data['clientName']?.toString() ?? '';
+    _selectedCustomerLabel = _clientNameController.text.trim();
     _gstController.text = data['gstNo']?.toString() ?? '';
     _isInterState = data['isInterState'] as bool? ?? false;
 
@@ -624,6 +627,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _customerNameFocusNode.dispose();
     _clientNameController.dispose();
     _addressController.dispose();
     _emailController.dispose();
@@ -961,6 +965,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
           _clientNameController.text =
               (data['companyName'] ?? data['name'] ?? '').toString();
         }
+        _selectedCustomerLabel = _clientNameController.text.trim();
         if (!restoreMode || _gstController.text.trim().isEmpty) {
           _gstController.text =
               (data['customerGstin'] ??
@@ -2470,6 +2475,207 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
           if (trailing != null) trailing,
         ],
       ),
+    );
+  }
+
+  Query<Map<String, dynamic>> _customerAutocompleteQuery() {
+    Query<Map<String, dynamic>> query = FirebaseFirestore.instance
+        .collection('companies')
+        .doc(_companyId)
+        .collection('customers');
+
+    if (!_isAdminOrManager && _currentUserUid != null) {
+      query = query.where('createdBy', isEqualTo: _currentUserUid);
+    }
+
+    return query;
+  }
+
+  bool _isSelectableCustomer(Map<String, dynamic> data) {
+    if (data['isActive'] == false) return false;
+    if (data['isDeleted'] == true) return false;
+    if (data['archived'] == true) return false;
+    if (data['mergedInto'] != null) return false;
+
+    final status = (data['status'] ?? '').toString().toLowerCase();
+    if (status == 'deleted' || status == 'inactive') return false;
+
+    return true;
+  }
+
+  String _customerDisplayName(Map<String, dynamic> customer) {
+    return (customer['companyName'] ??
+            customer['customerName'] ??
+            customer['name'] ??
+            customer['clientName'] ??
+            '')
+        .toString()
+        .trim();
+  }
+
+  String _customerSubtitle(Map<String, dynamic> customer) {
+    final contact = (customer['contactPerson'] ?? customer['contactName'] ?? '')
+        .toString()
+        .trim();
+    final mobile = (customer['mobile'] ?? customer['phone'] ?? '')
+        .toString()
+        .trim();
+    final gst =
+        (customer['customerGstin'] ??
+                customer['customerGSTIN'] ??
+                customer['customerGstNo'] ??
+                customer['gstin'] ??
+                customer['gstNo'] ??
+                '')
+            .toString()
+            .trim();
+
+    return [contact, mobile, gst].where((e) => e.isNotEmpty).join(' | ');
+  }
+
+  void _clearSelectedCustomerIfTyping(String value) {
+    if (_isRestoring || _isReadOnly || _hasLinkedInquiry) return;
+
+    final typed = value.trim();
+    if (_selectedCustomerId == null || typed == _selectedCustomerLabel) return;
+
+    setState(() {
+      _selectedCustomerId = null;
+      _selectedCustomerLabel = '';
+      _selectedAddressId = null;
+      _selectedAddressData = null;
+      _customerAddresses = [];
+      _selectedContactId = null;
+      _selectedContactData = null;
+      _customerInsights = null;
+      _customerPrimaryAddressSnapshot = '';
+      _customerPrimaryCitySnapshot = '';
+      _customerPrimaryStateSnapshot = '';
+      _customerPrimaryPincodeSnapshot = '';
+      _customerState = '';
+      _addressController.clear();
+      _updateContactSnapshots(null);
+      _gstController.clear();
+      _isInterState = false;
+    });
+  }
+
+  Widget _buildCustomerNameAutocomplete({
+    String? Function(String?)? validator,
+  }) {
+    if (_companyId == null || _companyId!.isEmpty) {
+      return _buildItemTextField(
+        _clientNameController,
+        'Customer Name *',
+        validator: validator,
+      );
+    }
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _customerAutocompleteQuery().snapshots(),
+      builder: (context, snapshot) {
+        final docs =
+            snapshot.data?.docs ??
+            <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+
+        return RawAutocomplete<Map<String, dynamic>>(
+          textEditingController: _clientNameController,
+          focusNode: _customerNameFocusNode,
+          displayStringForOption: _customerDisplayName,
+          optionsBuilder: (TextEditingValue value) {
+            final text = value.text.trim().toLowerCase();
+            if (text.isEmpty)
+              return const Iterable<Map<String, dynamic>>.empty();
+
+            final matches = docs
+                .map((doc) => {'id': doc.id, ...doc.data()})
+                .where(_isSelectableCustomer)
+                .where((customer) {
+                  final searchText = [
+                    customer['companyName'],
+                    customer['customerName'],
+                    customer['name'],
+                    customer['clientName'],
+                    customer['contactPerson'],
+                    customer['contactName'],
+                    customer['mobile'],
+                    customer['phone'],
+                  ].where((e) => e != null).join(' ').toLowerCase();
+
+                  return searchText.contains(text);
+                })
+                .take(20);
+
+            return matches;
+          },
+          onSelected: (customer) {
+            _selectedCustomerLabel = _customerDisplayName(customer);
+            _applyCustomer(customer);
+          },
+          fieldViewBuilder:
+              (context, textController, focusNode, onFieldSubmitted) {
+                return TextFormField(
+                  controller: textController,
+                  focusNode: focusNode,
+                  validator: validator,
+                  readOnly: _isReadOnly || _hasLinkedInquiry,
+                  onChanged: _clearSelectedCustomerIfTyping,
+                  decoration: _dec(
+                    'Customer Name *',
+                    hint: 'Type customer or company name',
+                    prefixIcon: const Icon(Icons.search),
+                  ),
+                );
+              },
+          optionsViewBuilder: (context, onSelected, options) {
+            final optionList = options.toList();
+
+            return Align(
+              alignment: Alignment.topLeft,
+              child: Material(
+                elevation: 6,
+                borderRadius: BorderRadius.circular(12),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxHeight: 280,
+                    maxWidth: 620,
+                  ),
+                  child: ListView.separated(
+                    padding: EdgeInsets.zero,
+                    shrinkWrap: true,
+                    itemCount: optionList.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final customer = optionList[index];
+                      final title = _customerDisplayName(customer);
+                      final subtitle = _customerSubtitle(customer);
+
+                      return ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.business_outlined),
+                        title: Text(
+                          title.isEmpty ? 'Unnamed Customer' : title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: subtitle.isEmpty
+                            ? null
+                            : Text(
+                                subtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                        onTap: () => onSelected(customer),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -4254,24 +4460,6 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                             _buildSectionHeader(
                               'Customer Details',
                               Icons.business,
-                              trailing: (_isReadOnly || _hasLinkedInquiry)
-                                  ? null
-                                  : OutlinedButton.icon(
-                                      onPressed: () async {
-                                        final c = await _selectCustomerDialog();
-                                        if (c != null) _applyCustomer(c);
-                                      },
-                                      icon: const Icon(Icons.search, size: 18),
-                                      label: const Text('CRM Lookup'),
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: accentColor,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
                             ),
                             if (_customerInsights != null)
                               Container(
@@ -4345,10 +4533,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                   ],
                                 ),
                               ),
-                            _buildItemTextField(
-                              _clientNameController,
-                              'Company Name *',
-                              validator: (v) => v!.isEmpty ? 'Required' : null,
+                            _buildCustomerNameAutocomplete(
+                              validator: (v) =>
+                                  v!.trim().isEmpty ? 'Required' : null,
                             ),
                             if (showAddressDropdown) ...[
                               DropdownButtonFormField<String>(
