@@ -25,7 +25,7 @@ const _kTableMutedStyle = TextStyle(fontSize: 12, color: Color(0xFF64748B));
 const _kTableHeaderStyle = TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF334155));
 
 const _kRowPadding = EdgeInsets.symmetric(horizontal: 16, vertical: 12);
-const _kCardPadding = EdgeInsets.symmetric(horizontal: 16, vertical: 16);
+const _kCardPadding = EdgeInsets.symmetric(horizontal: 16, vertical: 10);
 const _kTableContainerPadding = EdgeInsets.symmetric(horizontal: 16, vertical: 12);
 
 final _kRowBorder = Border(bottom: BorderSide(color: Colors.grey.shade200));

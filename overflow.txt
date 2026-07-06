@@ -1,0 +1,266 @@
+      ),
+    );
+  }
+}
+
+// ==========================================
+// OPTIMIZED ENTERPRISE UI COMPONENTS
+// ==========================================
+
+class _SkeletonLoader extends StatelessWidget {
+  const _SkeletonLoader({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      itemCount: 15,
+      itemBuilder: (ctx, i) => Container(
+        decoration: _kRowDecoration,
+        padding: _kRowPadding,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(height: 20, width: 20, color: Colors.grey.shade100),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(height: 14, width: 200, color: Colors.grey.shade100),
+                  const SizedBox(height: 8),
+                  Container(height: 12, width: 120, color: Colors.grey.shade100),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class CustomerCardWidget extends StatelessWidget {
+  final CustomerListItem doc;
+  final bool isSelected;
+  final ValueChanged<String> onToggleSelection;
+  final Map<String, String> userNameCache;
+  final bool canEdit;
+  final bool canDelete;
+  final String currentUserId;
+  final CustomerActionCallbacks callbacks;
+
+  const CustomerCardWidget({
+    Key? key,
+    required this.doc,
+    required this.isSelected,
+    required this.onToggleSelection,
+    required this.userNameCache,
+    required this.canEdit,
+    required this.canDelete,
+    required this.currentUserId,
+    required this.callbacks,
+  }) : super(key: key);
+
+  String _resolveUserName(String uid, String fallback) {
+    if (uid.isEmpty) return '';
+    if (uid == currentUserId) return 'You';
+    if (userNameCache.containsKey(uid)) return userNameCache[uid]!;
+    return fallback.isNotEmpty ? fallback : uid;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final assignedDisplay = _resolveUserName(doc.assignedToUid, doc.assignedToName);
+    final createdByDisplay = _resolveUserName(doc.createdByUid, '');
+    final updatedByDisplay = _resolveUserName(doc.updatedByUid, '');
+
+    return InkWell(
+      onTap: () => callbacks.onProfile(doc),
+      child: Container(
+        padding: _kCardPadding,
+        decoration: isSelected ? _kSelectedRowDecoration : _kRowDecoration,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Checkbox(value: isSelected, onChanged: (_) => onToggleSelection(doc.id), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4))),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 6,
+                      children: [
+                        Text(doc.displayName.isNotEmpty ? doc.displayName : '(Unnamed)', style: _kCompanyNameStyle),
+                        if (doc.customerCode.isNotEmpty) Text(doc.customerCode, style: _kCustomerCodeStyle),
+                        const SizedBox(width: 6),
+                        if (doc.status.isNotEmpty) _CompactChip(label: doc.status, backgroundColor: _statusBg(doc.status), textColor: _statusFg(doc.status)),
+                      ]
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 16, runSpacing: 4,
+                    children: [
+                      if (doc.contactName.isNotEmpty) _IconText(Icons.person_outline, doc.contactName),
+                      if (doc.phone.isNotEmpty) _IconText(Icons.phone_outlined, doc.phone),
+                      if (assignedDisplay.isNotEmpty) _IconText(Icons.assignment_ind_outlined, assignedDisplay),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  // AUDIT TRAIL INFO ROW
+                  Wrap(
+                    spacing: 8, runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text('Created: ${_formatCompactDate(doc.createdAt)} by $createdByDisplay', style: _kActivityTextStyle),
+                      const Text('•', style: _kActivityTextStyle),
+                      Text('Updated: ${_formatCompactDate(doc.updatedAt)} by $updatedByDisplay', style: _kActivityTextStyle),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            if (doc.email.isNotEmpty) Tooltip(message: doc.email, child: const Icon(Icons.email_outlined, size: 16, color: Color(0xFF94A3B8))),
+            if (doc.email.isNotEmpty && doc.locationText.isNotEmpty) const SizedBox(width: 12),
+            if (doc.locationText.isNotEmpty) Tooltip(message: doc.locationText, child: const Icon(Icons.location_on_outlined, size: 16, color: Color(0xFF94A3B8))),
+            const SizedBox(width: 12),
+            PopupMenuButton<String>(
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              icon: const Icon(Icons.more_vert, size: 20, color: Color(0xFF64748B)),
+              tooltip: 'Actions',
+              onSelected: (value) {
+                if (value == 'profile') callbacks.onProfile(doc);
+                else if (value == 'edit') callbacks.onEdit(doc);
+                else if (value == 'contacts') callbacks.onContacts(doc);
+                else if (value == 'timeline') callbacks.onTimeline(doc);
+                else if (value == 'add_contact') callbacks.onAddContact(doc);
+                else if (value == 'delete') callbacks.onDelete(doc);
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(value: 'profile', child: Text('View Customer 360')),
+                if (canEdit) const PopupMenuItem(value: 'edit', child: Text('Edit Customer')),
+                const PopupMenuItem(value: 'contacts', child: Text('View Contacts')),
+                const PopupMenuItem(value: 'timeline', child: Text('Activity Timeline')),
+                if (canEdit) const PopupMenuItem(value: 'add_contact', child: Text('Add Contact')),
+                if (canDelete) const PopupMenuDivider(),
+                if (canDelete) const PopupMenuItem(value: 'delete', child: Text('Delete Customer', style: TextStyle(color: Colors.red))),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class CustomerTableRowWidget extends StatelessWidget {
+  final CustomerListItem doc;
+  final bool isSelected;
+  final ValueChanged<String> onToggleSelection;
+  final Map<String, String> userNameCache;
+  final bool canEdit;
+  final bool canDelete;
+  final CustomerActionCallbacks callbacks;
+
+  const CustomerTableRowWidget({
+    Key? key,
+    required this.doc,
+    required this.isSelected,
+    required this.onToggleSelection,
+    required this.userNameCache,
+    required this.canEdit,
+    required this.canDelete,
+    required this.callbacks,
+  }) : super(key: key);
+
+  String _resolveUserName(String uid, String fallback) {
+    if (uid.isEmpty) return '';
+    if (userNameCache.containsKey(uid)) return userNameCache[uid]!;
+    return fallback.isNotEmpty ? fallback : uid;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final assignedDisplay = doc.assignedToUid.isNotEmpty ? _resolveUserName(doc.assignedToUid, doc.assignedToName) : '-';
+
+    return InkWell(
+      onTap: () => callbacks.onProfile(doc),
+      child: Container(
+        decoration: isSelected ? _kSelectedRowDecoration : _kRowDecoration,
+        padding: _kCardPadding,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            SizedBox(width: 40, child: Checkbox(value: isSelected, onChanged: (_) => onToggleSelection(doc.id))),
+            SizedBox(
+              width: 250,
+              child: Container(
+                alignment: Alignment.centerLeft,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(doc.displayName.isNotEmpty ? doc.displayName : '(Unnamed)', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    if (doc.customerCode.isNotEmpty) Text(doc.customerCode, style: _kCustomerCodeStyle, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(width: 160, child: Container(alignment: Alignment.centerLeft, child: Text(doc.locationText.isNotEmpty ? doc.locationText : '-', style: _kTableTextStyle, maxLines: 1, overflow: TextOverflow.ellipsis))),
+            SizedBox(
+              width: 140,
+              child: Container(
+                alignment: Alignment.centerLeft,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(doc.contactName.isNotEmpty ? doc.contactName : '-', style: _kTableTextStyle, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text(doc.phone, style: _kTableMutedStyle, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(
+              width: 120,
+              child: Container(
+                alignment: Alignment.centerLeft,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(doc.status.isNotEmpty ? doc.status : '-', style: TextStyle(fontSize: 12, color: _statusFg(doc.status), fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text(doc.customerStage, style: _kTableMutedStyle, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(width: 130, child: Container(alignment: Alignment.centerLeft, child: Text(assignedDisplay, style: _kTableTextStyle, maxLines: 1, overflow: TextOverflow.ellipsis))),
+            SizedBox(
+                width: 120,
+                child: Container(
+                  alignment: Alignment.centerLeft,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('C: ${_formatCompactDate(doc.createdAt)}', style: _kActivityTextStyle, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      Text('U: ${_formatCompactDate(doc.updatedAt)}', style: _kActivityTextStyle, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ],
+                  ),
+                )
+            ),
+            SizedBox(
+                width: 60,
+                child: Container(
+                  alignment: Alignment.centerLeft,
+                  child: PopupMenuButton<String>(
+                    icon: Icon(Icons.more_vert, color: Colors.grey.shade600),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    tooltip: 'Actions',

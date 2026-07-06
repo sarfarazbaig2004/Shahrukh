@@ -42,6 +42,7 @@ dependencies:
   geolocator: ^13.0.1
   geocoding: ^3.0.0
   image_picker: ^1.2.2
+  unorm_dart: ^0.3.2
 
 dev_dependencies:
   flutter_test:
@@ -54,5 +55,4 @@ flutter:
   assets:
     - assets/images/memco_logo.png
     - assets/images/memco_watermark.png
-    - functions/node_modules/@jest/reporters/assets/jest_logo.png
     - assets/images/

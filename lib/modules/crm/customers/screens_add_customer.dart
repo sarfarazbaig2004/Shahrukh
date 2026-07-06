@@ -5,6 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:QUIK/modules/crm/customers/customer_duplicate_helper.dart';
+import 'package:QUIK/modules/crm/customers/customer_duplicate_search_service.dart';
+import 'package:QUIK/modules/crm/customers/screens_customer_360.dart';
+import 'package:QUIK/modules/crm/customers/widgets/customer_duplicate_lookup_field.dart';
+
 // --- PRODUCTION SAFE ID GENERATOR ---
 String _generateSecureId() {
   final random = Random.secure();
@@ -41,11 +46,7 @@ bool _parseBool(dynamic value, {bool fallback = false}) {
 
 // --- ENTERPRISE VALIDATORS & NORMALIZERS ---
 String _normalizePhone(String phone) {
-  String cleaned = phone.replaceAll(RegExp(r'[^\d+]'), '');
-  if (cleaned.isNotEmpty && !cleaned.startsWith('+') && cleaned.length >= 10) {
-    // Optional: Add default country code if missing
-  }
-  return cleaned;
+  return normalizePhone(phone);
 }
 
 bool _isValidPan(String pan) {
@@ -917,6 +918,7 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
   final Map<String, String> _cachedUserNames = {};
 
   late Stream<QuerySnapshot<Map<String, dynamic>>> _activeUsersStream;
+  late final CustomerDuplicateSearchService _liveDuplicateSearchService;
 
   Map<String, dynamic> _initialCustomerState = {};
 
@@ -954,9 +956,24 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
     _addressListNotifier.value++;
   }
 
+  void _openDuplicateCustomer(CustomerDuplicateSuggestion suggestion) {
+    FocusScope.of(context).unfocus();
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ScreensCustomer360(
+          customerRef: suggestion.reference,
+          companyId: widget.companyId,
+          currentUserRole: widget.currentUserRole,
+          currentUserName: _currentUserName,
+        ),
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
+    _liveDuplicateSearchService = CustomerDuplicateSearchService(_customersCol);
     _assignedToUid = widget.currentUserUid;
     _status = 'Active';
     _priority = 'Medium';
@@ -1542,6 +1559,12 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
       }
     }
 
+    final normalizedName = normalizeCustomerName(data['companyName']);
+    if (normalizedName.isNotEmpty) {
+      addNgrams(normalizedName);
+      keywords.add(normalizedName);
+    }
+
     addNgrams(data['companyName']);
     addNgrams(data['customerCode']);
     addNgrams(data['phone']);
@@ -1655,6 +1678,31 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
         .set({'count': fallbackNext}, SetOptions(merge: true));
 
     return 'CUST-${fallbackNext.toString().padLeft(4, '0')}';
+  }
+
+  Future<String?> _checkCustomerDuplicate({
+    String? name,
+    String? gst,
+    String? phone,
+    String? email,
+  }) async {
+    final customerDocs = await _customersCol.get();
+    final customerList = customerDocs.docs.map((doc) {
+      final data = doc.data();
+      return {
+        'id': doc.id,
+        ...data,
+      };
+    }).toList();
+
+    return findDuplicateMatch(
+      customers: customerList,
+      currentCustomerId: widget.existingDoc?.id,
+      name: name,
+      gst: gst,
+      phone: phone,
+      email: email,
+    );
   }
 
   // --- DUPLICATE CHECK WARNINGS ---
@@ -1822,8 +1870,8 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
           'gst': addr.gstController.text.trim().toUpperCase(),
           'contactPerson': addr.contactPersonController.text.trim(),
           'contactPhone': addr.contactPhoneController.text.trim(),
-          'contactPhoneNormalized': _normalizePhone(addr.contactPhoneController.text),
-          'contactEmail': addr.contactEmailController.text.trim().toLowerCase(),
+          'contactPhoneNormalized': normalizePhone(addr.contactPhoneController.text),
+          'contactEmail': normalizeEmail(addr.contactEmailController.text),
           'tags': addr.tags,
           'isPrimary': addr.isPrimary,
           'isActive': addr.isActive,
@@ -1858,20 +1906,25 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
       final finalIndustry = _industry == 'Other' ? (customIndustry.isNotEmpty ? customIndustry : 'Other') : (_industry ?? '').trim();
 
       final name = _companyController.text.trim();
-      final gst = _gstController.text.trim().toUpperCase();
+      final gst = normalizeGST(_gstController.text);
+      final phone = normalizePhone(_phoneController.text);
+      final email = normalizeEmail(_businessEmailController.text);
 
-      if (widget.existingDoc == null && gst.isNotEmpty) {
-        final dupSnap = await _customersCol.where('companyName', isEqualTo: name).where('gst', isEqualTo: gst).limit(1).get();
-        if (_saveSessionId != currentSession) return;
+      final duplicateField = await _checkCustomerDuplicate(
+        name: name,
+        gst: gst,
+        phone: phone,
+        email: email,
+      );
+      if (_saveSessionId != currentSession) return;
 
-        if (dupSnap.docs.isNotEmpty) {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('This Company Name + GST already exists'), backgroundColor: Colors.red),
-          );
-          _safeSetState(() => _isSaving = false);
-          return;
-        }
+      if (duplicateField != null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(duplicateValidationMessage(duplicateField)), backgroundColor: Colors.red),
+        );
+        _safeSetState(() => _isSaving = false);
+        return;
       }
 
       final assignedToName = await _getUserNameByUid(assignedTo);
@@ -1887,18 +1940,24 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
 
         'name': name,
         'companyName': name,
-        'companyNameLower': name.toLowerCase(),
+        'companyNameLower': normalizeCustomerName(name),
+        'companyNameNormalized': normalizeCustomerName(name),
+        'customerNameNormalized': normalizeCustomerName(name),
         'phone': _phoneController.text.trim(),
-        'phoneNormalized': _normalizePhone(_phoneController.text),
+        'phoneNormalized': normalizePhone(_phoneController.text),
+        'phoneNumberNormalized': normalizePhone(_phoneController.text),
+        'phoneLast10': normalizeCustomerPhoneLast10(_phoneController.text),
         'phoneDigitsOnly': _phoneController.text.replaceAll(RegExp(r'\D'), ''),
         'companyPhone': _phoneController.text.trim(),
         'alternatePhone': _altPhoneController.text.trim(),
-        'alternatePhoneNormalized': _normalizePhone(_altPhoneController.text),
+        'alternatePhoneNormalized': normalizePhone(_altPhoneController.text),
         'email': _businessEmailController.text.trim(),
-        'emailNormalized': _businessEmailController.text.trim().toLowerCase(),
-        'emailLower': _businessEmailController.text.trim().toLowerCase(),
+        'emailNormalized': normalizeEmail(_businessEmailController.text),
+        'emailLower': normalizeEmail(_businessEmailController.text),
         'businessEmail': _businessEmailController.text.trim(),
         'gst': gst,
+        'gstNumberNormalized': normalizeGST(_gstController.text),
+        'gstNormalized': normalizeGST(_gstController.text),
         'pan': _panController.text.trim().toUpperCase(),
         'website': _websiteController.text.trim(),
 
@@ -2018,9 +2077,9 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
             'designation': _designationController.text.trim(),
             'department': _departmentController.text.trim(),
             'phone': contactPhone,
-            'phoneNormalized': _normalizePhone(contactPhone),
-            'email': contactEmail.toLowerCase(),
-            'emailNormalized': contactEmail.toLowerCase(),
+            'phoneNormalized': normalizePhone(contactPhone),
+            'email': normalizeEmail(contactEmail),
+            'emailNormalized': normalizeEmail(contactEmail),
             'isPrimary': true,
             'isActive': true,
             'startDate': FieldValue.serverTimestamp(),
@@ -2290,11 +2349,18 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
         children: [
           _ResponsiveRow(
             children: [
-              _buildTextField(
-                controller: _companyController,
-                label: 'Company / Firm Name *',
-                icon: Icons.apartment_outlined,
-                validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+              CustomerDuplicateLookupField(
+                lookupType: CustomerDuplicateLookupType.name,
+                searchService: _liveDuplicateSearchService,
+                excludedCustomerId: widget.existingDoc?.id,
+                onViewCustomer: _openDuplicateCustomer,
+                fieldBuilder: (onChanged) => _buildTextField(
+                  controller: _companyController,
+                  label: 'Company / Firm Name *',
+                  icon: Icons.apartment_outlined,
+                  validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                  onChanged: onChanged,
+                ),
               ),
               _buildTextField(
                 controller: _websiteController,
@@ -2307,12 +2373,19 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
           const SizedBox(height: 12),
           _ResponsiveRow(
             children: [
-              _buildTextField(
-                controller: _phoneController,
-                label: 'Primary Phone *',
-                icon: Icons.phone_outlined,
-                keyboardType: TextInputType.phone,
-                validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+              CustomerDuplicateLookupField(
+                lookupType: CustomerDuplicateLookupType.phone,
+                searchService: _liveDuplicateSearchService,
+                excludedCustomerId: widget.existingDoc?.id,
+                onViewCustomer: _openDuplicateCustomer,
+                fieldBuilder: (onChanged) => _buildTextField(
+                  controller: _phoneController,
+                  label: 'Primary Phone *',
+                  icon: Icons.phone_outlined,
+                  keyboardType: TextInputType.phone,
+                  validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                  onChanged: onChanged,
+                ),
               ),
               _buildTextField(
                 controller: _altPhoneController,
@@ -2325,23 +2398,37 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
           const SizedBox(height: 12),
           _ResponsiveRow(
             children: [
-              _buildTextField(
-                controller: _businessEmailController,
-                label: 'Business Email',
-                icon: Icons.email_outlined,
-                keyboardType: TextInputType.emailAddress,
-                validator: (v) {
-                  final email = (v ?? '').trim();
-                  if (email.isEmpty) return null;
-                  if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) return 'Enter valid email';
-                  return null;
-                },
+              CustomerDuplicateLookupField(
+                lookupType: CustomerDuplicateLookupType.email,
+                searchService: _liveDuplicateSearchService,
+                excludedCustomerId: widget.existingDoc?.id,
+                onViewCustomer: _openDuplicateCustomer,
+                fieldBuilder: (onChanged) => _buildTextField(
+                  controller: _businessEmailController,
+                  label: 'Business Email',
+                  icon: Icons.email_outlined,
+                  keyboardType: TextInputType.emailAddress,
+                  onChanged: onChanged,
+                  validator: (v) {
+                    final email = (v ?? '').trim();
+                    if (email.isEmpty) return null;
+                    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) return 'Enter valid email';
+                    return null;
+                  },
+                ),
               ),
-              _buildTextField(
-                controller: _gstController,
-                label: 'Primary GST',
-                icon: Icons.receipt_long_outlined,
-                textCapitalization: TextCapitalization.characters,
+              CustomerDuplicateLookupField(
+                lookupType: CustomerDuplicateLookupType.gst,
+                searchService: _liveDuplicateSearchService,
+                excludedCustomerId: widget.existingDoc?.id,
+                onViewCustomer: _openDuplicateCustomer,
+                fieldBuilder: (onChanged) => _buildTextField(
+                  controller: _gstController,
+                  label: 'Primary GST',
+                  icon: Icons.receipt_long_outlined,
+                  textCapitalization: TextCapitalization.characters,
+                  onChanged: onChanged,
+                ),
               ),
             ],
           ),
