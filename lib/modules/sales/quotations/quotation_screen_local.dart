@@ -2636,26 +2636,40 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
             if (text.isEmpty)
               return const Iterable<Map<String, dynamic>>.empty();
 
-            final matches = docs
+            final customers = docs
                 .map((doc) => {'id': doc.id, ...doc.data()})
                 .where(_isSelectableCustomer)
-                .where((customer) {
-                  final searchText = [
-                    customer['companyName'],
-                    customer['customerName'],
-                    customer['name'],
-                    customer['clientName'],
-                    customer['contactPerson'],
-                    customer['contactName'],
-                    customer['mobile'],
-                    customer['phone'],
-                  ].where((e) => e != null).join(' ').toLowerCase();
+                .toList();
 
-                  return searchText.contains(text);
-                })
-                .take(20);
+            final matches = customers.where((customer) {
+              final searchText = [
+                customer['companyName'],
+                customer['customerName'],
+                customer['name'],
+                customer['clientName'],
+                customer['contactPerson'],
+                customer['contactName'],
+                customer['mobile'],
+                customer['phone'],
+              ].where((e) => e != null).join(' ').toLowerCase();
 
-            return matches;
+              return searchText.contains(text);
+            }).toList();
+
+            matches.sort((a, b) {
+              final aName = _customerDisplayName(a).toLowerCase();
+              final bName = _customerDisplayName(b).toLowerCase();
+
+              final aStarts = aName.startsWith(text);
+              final bStarts = bName.startsWith(text);
+
+              if (aStarts && !bStarts) return -1;
+              if (!aStarts && bStarts) return 1;
+
+              return aName.compareTo(bName);
+            });
+
+            return matches.take(30);
           },
           onSelected: (customer) {
             _selectedCustomerLabel = _customerDisplayName(customer);
