@@ -192,6 +192,448 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         .collection('contacts');
   }
 
+  String _quotationContactDigits(dynamic value) {
+    return (value ?? '').toString().replaceAll(RegExp(r'[^0-9]'), '');
+  }
+
+  String _quotationContactKey(Map<String, dynamic> contact) {
+    final name = (contact['name'] ?? contact['contactName'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+
+    final phone = _quotationContactDigits(
+      contact['mobile'] ?? contact['phone'] ?? contact['contactPhone'],
+    );
+
+    final email = (contact['email'] ?? contact['contactEmail'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+
+    if (phone.isNotEmpty) return 'p:$phone';
+    if (email.isNotEmpty) return 'e:$email';
+    return 'n:$name';
+  }
+
+  Map<String, dynamic> _normalizeQuotationContact(
+    Map<dynamic, dynamic> raw, {
+    required String id,
+    required String source,
+  }) {
+    final name =
+        (raw['name'] ??
+                raw['contactName'] ??
+                raw['contactPerson'] ??
+                raw['personName'] ??
+                raw['fullName'] ??
+                '')
+            .toString()
+            .trim();
+
+    final mobile =
+        (raw['mobile'] ??
+                raw['phone'] ??
+                raw['contactPhone'] ??
+                raw['contactMobile'] ??
+                raw['phoneNumber'] ??
+                '')
+            .toString()
+            .trim();
+
+    final email =
+        (raw['email'] ??
+                raw['contactEmail'] ??
+                raw['emailId'] ??
+                raw['mail'] ??
+                '')
+            .toString()
+            .trim();
+
+    final designation =
+        (raw['designation'] ??
+                raw['jobTitle'] ??
+                raw['title'] ??
+                raw['position'] ??
+                '')
+            .toString()
+            .trim();
+
+    final department =
+        (raw['department'] ?? raw['dept'] ?? raw['division'] ?? '')
+            .toString()
+            .trim();
+
+    return {
+      'id': id,
+      'name': name,
+      'contactName': name,
+      'mobile': mobile,
+      'phone': mobile,
+      'phoneNormalized': mobile,
+      'email': email,
+      'emailNormalized': email,
+      'designation': designation,
+      'department': department,
+      'source': source,
+      'isActive': raw['isActive'] ?? true,
+      'isDeleted': raw['isDeleted'] ?? false,
+    };
+  }
+
+  List<Map<String, dynamic>> _extractQuotationContactsFromCustomer(
+    Map<String, dynamic> customer,
+  ) {
+    final contacts = <Map<String, dynamic>>[];
+
+    void addContact(Map<dynamic, dynamic> raw, String id, String source) {
+      final contact = _normalizeQuotationContact(raw, id: id, source: source);
+
+      final hasData =
+          (contact['name'] ?? '').toString().trim().isNotEmpty ||
+          (contact['mobile'] ?? '').toString().trim().isNotEmpty ||
+          (contact['email'] ?? '').toString().trim().isNotEmpty;
+
+      if (hasData) contacts.add(contact);
+    }
+
+    addContact(customer, 'customer_main_contact', 'customer');
+
+    for (final key in [
+      'contacts',
+      'contactPersons',
+      'contactPeople',
+      'customerContacts',
+      'persons',
+    ]) {
+      final value = customer[key];
+      if (value is List) {
+        for (var i = 0; i < value.length; i++) {
+          final item = value[i];
+          if (item is Map) addContact(item, '${key}_$i', key);
+        }
+      }
+    }
+
+    final addresses = customer['addresses'];
+    if (addresses is List) {
+      for (var i = 0; i < addresses.length; i++) {
+        final address = addresses[i];
+        if (address is Map) {
+          addContact(address, 'address_contact_$i', 'address');
+        }
+      }
+    }
+
+    return contacts;
+  }
+
+  Future<List<Map<String, dynamic>>>
+  _loadAllCustomerContactsForQuotation() async {
+    final customerId = _selectedCustomerId;
+
+    if (_companyId == null ||
+        _companyId!.isEmpty ||
+        customerId == null ||
+        customerId.isEmpty) {
+      return [];
+    }
+
+    final contacts = <Map<String, dynamic>>[];
+    final seen = <String>{};
+
+    void addContact(Map<String, dynamic> contact) {
+      if (contact['isDeleted'] == true) return;
+      if (contact['isActive'] == false) return;
+
+      final hasData =
+          (contact['name'] ?? '').toString().trim().isNotEmpty ||
+          (contact['mobile'] ?? '').toString().trim().isNotEmpty ||
+          (contact['email'] ?? '').toString().trim().isNotEmpty;
+
+      if (!hasData) return;
+
+      final key = _quotationContactKey(contact);
+      if (key.trim().isEmpty || seen.contains(key)) return;
+
+      seen.add(key);
+      contacts.add(contact);
+    }
+
+    try {
+      final customerDoc = await FirebaseFirestore.instance
+          .collection('companies')
+          .doc(_companyId)
+          .collection('customers')
+          .doc(customerId)
+          .get();
+
+      if (customerDoc.exists && customerDoc.data() != null) {
+        for (final contact in _extractQuotationContactsFromCustomer(
+          customerDoc.data()!,
+        )) {
+          addContact(contact);
+        }
+      }
+    } catch (e, st) {
+      developer.log(
+        'Failed to load embedded customer contacts',
+        name: 'QuotationScreen',
+        error: e,
+        stackTrace: st,
+      );
+    }
+
+    try {
+      final subContacts = await _companyContactsRef(customerId).get();
+      for (final doc in subContacts.docs) {
+        addContact(
+          _normalizeQuotationContact(
+            doc.data(),
+            id: doc.id,
+            source: 'customer_contacts_subcollection',
+          ),
+        );
+      }
+    } catch (e, st) {
+      developer.log(
+        'Failed to load customer subcollection contacts',
+        name: 'QuotationScreen',
+        error: e,
+        stackTrace: st,
+      );
+    }
+
+    try {
+      final companyContacts = await FirebaseFirestore.instance
+          .collection('companies')
+          .doc(_companyId)
+          .collection('contacts')
+          .where('customerId', isEqualTo: customerId)
+          .get();
+
+      for (final doc in companyContacts.docs) {
+        addContact(
+          _normalizeQuotationContact(
+            doc.data(),
+            id: doc.id,
+            source: 'company_contacts',
+          ),
+        );
+      }
+    } catch (_) {}
+
+    contacts.sort((a, b) {
+      final aName = (a['name'] ?? '').toString().toLowerCase();
+      final bName = (b['name'] ?? '').toString().toLowerCase();
+      return aName.compareTo(bName);
+    });
+
+    return contacts;
+  }
+
+  String _quotationContactLabel(Map<String, dynamic> contact) {
+    return (contact['name'] ?? contact['contactName'] ?? '').toString().trim();
+  }
+
+  String _quotationContactSubtitle(Map<String, dynamic> contact) {
+    return [
+          contact['mobile'] ?? contact['phone'],
+          contact['email'],
+          contact['designation'],
+          contact['department'],
+        ]
+        .where((e) => e != null && e.toString().trim().isNotEmpty)
+        .map((e) => e.toString().trim())
+        .join(' • ');
+  }
+
+  Widget _buildQuotationContactSelector() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      key: ValueKey('quotation_contacts_${_selectedCustomerId ?? ''}'),
+      future: _loadAllCustomerContactsForQuotation(),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.only(bottom: 12),
+            child: LinearProgressIndicator(),
+          );
+        }
+
+        final contacts = snap.data ?? [];
+
+        if (contacts.isEmpty) {
+          return _buildLegacyContactFields();
+        }
+
+        final validContactId =
+            contacts.any((d) => d['id']?.toString() == _selectedContactId)
+            ? _selectedContactId
+            : null;
+
+        String selectedContactLabel = _contactPersonController.text.trim();
+
+        if (validContactId != null) {
+          final selectedMatches = contacts
+              .where((d) => d['id']?.toString() == validContactId)
+              .toList();
+
+          if (selectedMatches.isNotEmpty) {
+            selectedContactLabel = _quotationContactLabel(
+              selectedMatches.first,
+            );
+          }
+        }
+
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: RawAutocomplete<Map<String, dynamic>>(
+                key: ValueKey(
+                  '${_selectedCustomerId}_${contacts.length}_${validContactId ?? ''}',
+                ),
+                initialValue: TextEditingValue(text: selectedContactLabel),
+                displayStringForOption: _quotationContactLabel,
+                optionsBuilder: (TextEditingValue value) {
+                  final query = value.text.trim().toLowerCase();
+
+                  if (query.isEmpty ||
+                      query == selectedContactLabel.toLowerCase()) {
+                    return contacts;
+                  }
+
+                  return contacts.where((contact) {
+                    final searchable = [
+                      _quotationContactLabel(contact),
+                      _quotationContactSubtitle(contact),
+                    ].join(' ').toLowerCase();
+
+                    return searchable.contains(query);
+                  });
+                },
+                onSelected: (Map<String, dynamic> contact) {
+                  setState(() {
+                    _selectedContactId = contact['id']?.toString();
+                    _selectedContactData = contact;
+                    _updateContactSnapshots(contact);
+                    developer.log(
+                      'Contact Changed By User',
+                      name: 'QuotationScreen',
+                    );
+                  });
+                },
+                fieldViewBuilder:
+                    (context, textController, focusNode, onFieldSubmitted) {
+                      return TextFormField(
+                        controller: textController,
+                        focusNode: focusNode,
+                        readOnly: _isReadOnly,
+                        decoration: InputDecoration(
+                          labelText: 'Search Contact Person',
+                          hintText: 'Type name, mobile, email, designation',
+                          prefixIcon: const Icon(Icons.person_search),
+                          suffixIcon: IconButton(
+                            tooltip: 'Show all contacts',
+                            icon: const Icon(Icons.search),
+                            onPressed: () {
+                              textController.clear();
+                              focusNode.requestFocus();
+                            },
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          filled: true,
+                          fillColor: Colors.grey.shade50,
+                          isDense: true,
+                        ),
+                      );
+                    },
+                optionsViewBuilder: (context, onSelected, options) {
+                  final optionList = options.toList(growable: false);
+
+                  return Align(
+                    alignment: Alignment.topLeft,
+                    child: Material(
+                      elevation: 6,
+                      borderRadius: BorderRadius.circular(8),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxHeight: 300,
+                          maxWidth: 620,
+                        ),
+                        child: ListView.builder(
+                          padding: EdgeInsets.zero,
+                          shrinkWrap: true,
+                          itemCount: optionList.length,
+                          itemBuilder: (context, index) {
+                            final contact = optionList[index];
+                            final title = _quotationContactLabel(contact);
+                            final subtitle = _quotationContactSubtitle(contact);
+
+                            return ListTile(
+                              dense: true,
+                              leading: const Icon(Icons.person_outline),
+                              title: Text(
+                                title.isEmpty ? 'Unnamed Contact' : title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: subtitle.isEmpty
+                                  ? null
+                                  : Text(
+                                      subtitle,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                              onTap: () => onSelected(contact),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildItemTextField(_mobileController, 'Mobile'),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _buildItemTextField(_emailController, 'Email ID'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildItemTextField(
+                    _contactDesignationController,
+                    'Designation',
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _buildItemTextField(
+                    _contactDepartmentController,
+                    'Department',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildItemTextField(_gstController, 'Customer GSTIN'),
+          ],
+        );
+      },
+    );
+  }
+
   Future<Map<String, dynamic>?> _getProductData(String productId) async {
     if (_companyId == null || _companyId!.isEmpty || productId.isEmpty)
       return null;
@@ -1873,6 +2315,12 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
             'mobile': _mobileController.text.trim().isNotEmpty
                 ? _mobileController.text.trim()
                 : _contactMobileSnapshot,
+            'designation': _contactDesignationController.text.trim().isNotEmpty
+                ? _contactDesignationController.text.trim()
+                : _contactDesignationSnapshot,
+            'department': _contactDepartmentController.text.trim().isNotEmpty
+                ? _contactDepartmentController.text.trim()
+                : _contactDepartmentSnapshot,
           };
 
       final payload = {
@@ -4621,6 +5069,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                               validator: (v) =>
                                   v!.trim().isEmpty ? 'Required' : null,
                             ),
+                            const SizedBox(height: 12),
                             if (showAddressDropdown) ...[
                               DropdownButtonFormField<String>(
                                 isExpanded: true,
@@ -4734,333 +5183,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                               ),
                             ],
                             if (showContactDropdown) ...[
-                              StreamBuilder<
-                                QuerySnapshot<Map<String, dynamic>>
-                              >(
-                                stream:
-                                    _companyContactsRef(_selectedCustomerId!)
-                                        .where('isActive', isEqualTo: true)
-                                        .snapshots(),
-                                builder: (context, snap) {
-                                  if (!snap.hasData)
-                                    return _buildLegacyContactFields();
-
-                                  var contacts = snap.data!.docs
-                                      .where(
-                                        (d) =>
-                                            d.data()['isDeleted'] != true ||
-                                            d.id == _selectedContactId,
-                                      )
-                                      .toList();
-                                  if (contacts.isEmpty)
-                                    return _buildLegacyContactFields();
-
-                                  if (contacts.isEmpty) {
-                                    return Column(
-                                      children: [
-                                        const Padding(
-                                          padding: EdgeInsets.only(bottom: 12),
-                                          child: Text(
-                                            'No linked contacts for selected address. Enter manually.',
-                                            style: TextStyle(
-                                              color: Colors.grey,
-                                              fontSize: 13,
-                                            ),
-                                          ),
-                                        ),
-                                        _buildLegacyContactFields(),
-                                      ],
-                                    );
-                                  }
-
-                                  final validContactId =
-                                      contacts.any(
-                                        (d) => d.id == _selectedContactId,
-                                      )
-                                      ? _selectedContactId
-                                      : null;
-
-                                  String contactOptionLabel(
-                                    QueryDocumentSnapshot<Map<String, dynamic>>
-                                    doc,
-                                  ) {
-                                    final data = doc.data();
-                                    return (data['name'] ??
-                                            data['contactName'] ??
-                                            data['personName'] ??
-                                            data['fullName'] ??
-                                            '')
-                                        .toString()
-                                        .trim();
-                                  }
-
-                                  String contactOptionSubtitle(
-                                    QueryDocumentSnapshot<Map<String, dynamic>>
-                                    doc,
-                                  ) {
-                                    final data = doc.data();
-                                    return [
-                                          data['mobile'] ?? data['phone'],
-                                          data['email'],
-                                          data['designation'],
-                                          data['department'],
-                                        ]
-                                        .where(
-                                          (e) =>
-                                              e != null &&
-                                              e.toString().trim().isNotEmpty,
-                                        )
-                                        .map((e) => e.toString().trim())
-                                        .join(' • ');
-                                  }
-
-                                  String selectedContactLabel =
-                                      _contactPersonController.text.trim();
-                                  if (validContactId != null) {
-                                    final selectedMatches = contacts
-                                        .where((d) => d.id == validContactId)
-                                        .toList();
-                                    if (selectedMatches.isNotEmpty) {
-                                      selectedContactLabel = contactOptionLabel(
-                                        selectedMatches.first,
-                                      );
-                                    }
-                                  }
-
-                                  return Column(
-                                    children: [
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                          bottom: 12,
-                                        ),
-                                        child:
-                                            RawAutocomplete<
-                                              QueryDocumentSnapshot<
-                                                Map<String, dynamic>
-                                              >
-                                            >(
-                                              initialValue: TextEditingValue(
-                                                text: selectedContactLabel,
-                                              ),
-                                              displayStringForOption:
-                                                  contactOptionLabel,
-                                              optionsBuilder:
-                                                  (
-                                                    TextEditingValue
-                                                    textEditingValue,
-                                                  ) {
-                                                    final query =
-                                                        textEditingValue.text
-                                                            .trim()
-                                                            .toLowerCase();
-
-                                                    if (query.isEmpty) {
-                                                      return contacts;
-                                                    }
-
-                                                    return contacts.where((
-                                                      doc,
-                                                    ) {
-                                                      final searchable = [
-                                                        contactOptionLabel(doc),
-                                                        contactOptionSubtitle(
-                                                          doc,
-                                                        ),
-                                                      ].join(' ').toLowerCase();
-
-                                                      return searchable
-                                                          .contains(query);
-                                                    });
-                                                  },
-                                              onSelected:
-                                                  (
-                                                    QueryDocumentSnapshot<
-                                                      Map<String, dynamic>
-                                                    >
-                                                    doc,
-                                                  ) {
-                                                    setState(() {
-                                                      _selectedContactId =
-                                                          doc.id;
-                                                      _selectedContactData = doc
-                                                          .data();
-                                                      _updateContactSnapshots(
-                                                        _selectedContactData,
-                                                      );
-                                                      developer.log(
-                                                        'Contact Changed By User',
-                                                        name: 'QuotationScreen',
-                                                      );
-                                                    });
-                                                  },
-                                              fieldViewBuilder:
-                                                  (
-                                                    context,
-                                                    textController,
-                                                    focusNode,
-                                                    onFieldSubmitted,
-                                                  ) {
-                                                    return TextFormField(
-                                                      controller:
-                                                          textController,
-                                                      focusNode: focusNode,
-                                                      readOnly: _isReadOnly,
-                                                      decoration: InputDecoration(
-                                                        labelText:
-                                                            'Search Contact Person',
-                                                        hintText:
-                                                            'Type name, mobile, email, designation',
-                                                        prefixIcon: const Icon(
-                                                          Icons.person_search,
-                                                        ),
-                                                        suffixIcon: const Icon(
-                                                          Icons.search,
-                                                        ),
-                                                        border: OutlineInputBorder(
-                                                          borderRadius:
-                                                              BorderRadius.circular(
-                                                                8,
-                                                              ),
-                                                        ),
-                                                        filled: true,
-                                                        fillColor:
-                                                            Colors.grey.shade50,
-                                                        isDense: true,
-                                                      ),
-                                                    );
-                                                  },
-                                              optionsViewBuilder: (context, onSelected, options) {
-                                                final optionList = options
-                                                    .toList(growable: false);
-
-                                                return Align(
-                                                  alignment: Alignment.topLeft,
-                                                  child: Material(
-                                                    elevation: 6,
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          8,
-                                                        ),
-                                                    child: ConstrainedBox(
-                                                      constraints:
-                                                          const BoxConstraints(
-                                                            maxHeight: 260,
-                                                            maxWidth: 560,
-                                                          ),
-                                                      child: ListView.builder(
-                                                        padding:
-                                                            EdgeInsets.zero,
-                                                        shrinkWrap: true,
-                                                        itemCount:
-                                                            optionList.length,
-                                                        itemBuilder: (context, index) {
-                                                          final doc =
-                                                              optionList[index];
-                                                          final title =
-                                                              contactOptionLabel(
-                                                                doc,
-                                                              );
-                                                          final subtitle =
-                                                              contactOptionSubtitle(
-                                                                doc,
-                                                              );
-
-                                                          return ListTile(
-                                                            dense: true,
-                                                            leading: const Icon(
-                                                              Icons
-                                                                  .person_outline,
-                                                            ),
-                                                            title: Text(
-                                                              title.isEmpty
-                                                                  ? 'Unnamed Contact'
-                                                                  : title,
-                                                              maxLines: 1,
-                                                              overflow:
-                                                                  TextOverflow
-                                                                      .ellipsis,
-                                                            ),
-                                                            subtitle:
-                                                                subtitle.isEmpty
-                                                                ? null
-                                                                : Text(
-                                                                    subtitle,
-                                                                    maxLines: 1,
-                                                                    overflow:
-                                                                        TextOverflow
-                                                                            .ellipsis,
-                                                                  ),
-                                                            onTap: () =>
-                                                                onSelected(doc),
-                                                          );
-                                                        },
-                                                      ),
-                                                    ),
-                                                  ),
-                                                );
-                                              },
-                                            ),
-                                      ),
-
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: _buildItemTextField(
-                                              _mobileController,
-                                              'Mobile',
-                                            ),
-                                          ),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                            child: _buildItemTextField(
-                                              _emailController,
-                                              'Email ID',
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: _buildItemTextField(
-                                              _contactDesignationController,
-                                              'Designation',
-                                            ),
-                                          ),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                            child: _buildItemTextField(
-                                              _contactDepartmentController,
-                                              'Department',
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: _buildItemTextField(
-                                              _contactDesignationController,
-                                              'Designation',
-                                            ),
-                                          ),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                            child: _buildItemTextField(
-                                              _contactDepartmentController,
-                                              'Department',
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      _buildItemTextField(
-                                        _gstController,
-                                        'Customer GSTIN',
-                                      ),
-                                    ],
-                                  );
-                                },
-                              ),
+                              _buildQuotationContactSelector(),
                             ] else ...[
                               _buildLegacyContactFields(),
                             ],
