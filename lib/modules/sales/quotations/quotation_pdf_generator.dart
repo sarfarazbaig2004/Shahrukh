@@ -19,6 +19,7 @@ class QuotationLineItem {
   String itemCode;
   String name;
   String description;
+  String scopeOfSupply;
   String hsnCode;
   double quantity;
   String uom;
@@ -35,6 +36,7 @@ class QuotationLineItem {
     this.itemCode = '',
     required this.name,
     this.description = '',
+    this.scopeOfSupply = '',
     this.hsnCode = '',
     this.quantity = 1,
     this.uom = 'Nos',
@@ -82,6 +84,7 @@ class QuotationLineItem {
       'itemCode': itemCode,
       'name': name,
       'description': description,
+      'scopeOfSupply': scopeOfSupply,
       'hsnCode': hsnCode,
       'quantity': quantity,
       'uom': uom,
@@ -115,6 +118,9 @@ class QuotationLineItem {
       ),
       name: _safeString(map['name']),
       description: _safeString(map['description']),
+      scopeOfSupply: _safeString(
+        map['scopeOfSupply'] ?? map['scope_of_supply'] ?? map['supplyScope'],
+      ),
       hsnCode: _safeString(map['hsnCode']),
       quantity: _toDouble(
         map['quantity'] != null && map['quantity'].toString().isNotEmpty
@@ -235,14 +241,8 @@ class QuotationDataService {
               .toString()
               .trim();
 
-      String userRole = (membershipData?['role'] ?? rootData['role'] ?? 'Sales')
-          .toString()
-          .trim();
-
-      if (sigDesignation.isEmpty) {
-        sigDesignation = userDepartment.isNotEmpty
-            ? userDepartment
-            : userRole.toUpperCase();
+      if (sigDesignation.isEmpty && userDepartment.isNotEmpty) {
+        sigDesignation = userDepartment;
       }
 
       final sigPhone =

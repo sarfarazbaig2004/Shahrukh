@@ -45,6 +45,7 @@ class QuotationScreenLocal extends StatefulWidget {
 class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final ScrollController _scrollController = ScrollController();
+  final FocusNode _customerNameFocusNode = FocusNode();
 
   String? _companyId;
   String? _currentUserUid;
@@ -97,11 +98,16 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   String _paymentStatus = 'Pending';
 
   String? _selectedCustomerId;
+  String _selectedCustomerLabel = '';
   final TextEditingController _clientNameController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _mobileController = TextEditingController();
   final TextEditingController _contactPersonController =
+      TextEditingController();
+  final TextEditingController _contactDepartmentController =
+      TextEditingController();
+  final TextEditingController _contactDesignationController =
       TextEditingController();
   final TextEditingController _gstController = TextEditingController();
   String _customerState = '';
@@ -120,6 +126,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   String _contactPersonSnapshot = '';
   String _contactEmailSnapshot = '';
   String _contactMobileSnapshot = '';
+  String _contactDepartmentSnapshot = '';
+  String _contactDesignationSnapshot = '';
 
   final TextEditingController _quotationSequenceController =
       TextEditingController();
@@ -182,6 +190,448 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         .collection('customers')
         .doc(customerId)
         .collection('contacts');
+  }
+
+  String _quotationContactDigits(dynamic value) {
+    return (value ?? '').toString().replaceAll(RegExp(r'[^0-9]'), '');
+  }
+
+  String _quotationContactKey(Map<String, dynamic> contact) {
+    final name = (contact['name'] ?? contact['contactName'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+
+    final phone = _quotationContactDigits(
+      contact['mobile'] ?? contact['phone'] ?? contact['contactPhone'],
+    );
+
+    final email = (contact['email'] ?? contact['contactEmail'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+
+    if (phone.isNotEmpty) return 'p:$phone';
+    if (email.isNotEmpty) return 'e:$email';
+    return 'n:$name';
+  }
+
+  Map<String, dynamic> _normalizeQuotationContact(
+    Map<dynamic, dynamic> raw, {
+    required String id,
+    required String source,
+  }) {
+    final name =
+        (raw['name'] ??
+                raw['contactName'] ??
+                raw['contactPerson'] ??
+                raw['personName'] ??
+                raw['fullName'] ??
+                '')
+            .toString()
+            .trim();
+
+    final mobile =
+        (raw['mobile'] ??
+                raw['phone'] ??
+                raw['contactPhone'] ??
+                raw['contactMobile'] ??
+                raw['phoneNumber'] ??
+                '')
+            .toString()
+            .trim();
+
+    final email =
+        (raw['email'] ??
+                raw['contactEmail'] ??
+                raw['emailId'] ??
+                raw['mail'] ??
+                '')
+            .toString()
+            .trim();
+
+    final designation =
+        (raw['designation'] ??
+                raw['jobTitle'] ??
+                raw['title'] ??
+                raw['position'] ??
+                '')
+            .toString()
+            .trim();
+
+    final department =
+        (raw['department'] ?? raw['dept'] ?? raw['division'] ?? '')
+            .toString()
+            .trim();
+
+    return {
+      'id': id,
+      'name': name,
+      'contactName': name,
+      'mobile': mobile,
+      'phone': mobile,
+      'phoneNormalized': mobile,
+      'email': email,
+      'emailNormalized': email,
+      'designation': designation,
+      'department': department,
+      'source': source,
+      'isActive': raw['isActive'] ?? true,
+      'isDeleted': raw['isDeleted'] ?? false,
+    };
+  }
+
+  List<Map<String, dynamic>> _extractQuotationContactsFromCustomer(
+    Map<String, dynamic> customer,
+  ) {
+    final contacts = <Map<String, dynamic>>[];
+
+    void addContact(Map<dynamic, dynamic> raw, String id, String source) {
+      final contact = _normalizeQuotationContact(raw, id: id, source: source);
+
+      final hasData =
+          (contact['name'] ?? '').toString().trim().isNotEmpty ||
+          (contact['mobile'] ?? '').toString().trim().isNotEmpty ||
+          (contact['email'] ?? '').toString().trim().isNotEmpty;
+
+      if (hasData) contacts.add(contact);
+    }
+
+    addContact(customer, 'customer_main_contact', 'customer');
+
+    for (final key in [
+      'contacts',
+      'contactPersons',
+      'contactPeople',
+      'customerContacts',
+      'persons',
+    ]) {
+      final value = customer[key];
+      if (value is List) {
+        for (var i = 0; i < value.length; i++) {
+          final item = value[i];
+          if (item is Map) addContact(item, '${key}_$i', key);
+        }
+      }
+    }
+
+    final addresses = customer['addresses'];
+    if (addresses is List) {
+      for (var i = 0; i < addresses.length; i++) {
+        final address = addresses[i];
+        if (address is Map) {
+          addContact(address, 'address_contact_$i', 'address');
+        }
+      }
+    }
+
+    return contacts;
+  }
+
+  Future<List<Map<String, dynamic>>>
+  _loadAllCustomerContactsForQuotation() async {
+    final customerId = _selectedCustomerId;
+
+    if (_companyId == null ||
+        _companyId!.isEmpty ||
+        customerId == null ||
+        customerId.isEmpty) {
+      return [];
+    }
+
+    final contacts = <Map<String, dynamic>>[];
+    final seen = <String>{};
+
+    void addContact(Map<String, dynamic> contact) {
+      if (contact['isDeleted'] == true) return;
+      if (contact['isActive'] == false) return;
+
+      final hasData =
+          (contact['name'] ?? '').toString().trim().isNotEmpty ||
+          (contact['mobile'] ?? '').toString().trim().isNotEmpty ||
+          (contact['email'] ?? '').toString().trim().isNotEmpty;
+
+      if (!hasData) return;
+
+      final key = _quotationContactKey(contact);
+      if (key.trim().isEmpty || seen.contains(key)) return;
+
+      seen.add(key);
+      contacts.add(contact);
+    }
+
+    try {
+      final customerDoc = await FirebaseFirestore.instance
+          .collection('companies')
+          .doc(_companyId)
+          .collection('customers')
+          .doc(customerId)
+          .get();
+
+      if (customerDoc.exists && customerDoc.data() != null) {
+        for (final contact in _extractQuotationContactsFromCustomer(
+          customerDoc.data()!,
+        )) {
+          addContact(contact);
+        }
+      }
+    } catch (e, st) {
+      developer.log(
+        'Failed to load embedded customer contacts',
+        name: 'QuotationScreen',
+        error: e,
+        stackTrace: st,
+      );
+    }
+
+    try {
+      final subContacts = await _companyContactsRef(customerId).get();
+      for (final doc in subContacts.docs) {
+        addContact(
+          _normalizeQuotationContact(
+            doc.data(),
+            id: doc.id,
+            source: 'customer_contacts_subcollection',
+          ),
+        );
+      }
+    } catch (e, st) {
+      developer.log(
+        'Failed to load customer subcollection contacts',
+        name: 'QuotationScreen',
+        error: e,
+        stackTrace: st,
+      );
+    }
+
+    try {
+      final companyContacts = await FirebaseFirestore.instance
+          .collection('companies')
+          .doc(_companyId)
+          .collection('contacts')
+          .where('customerId', isEqualTo: customerId)
+          .get();
+
+      for (final doc in companyContacts.docs) {
+        addContact(
+          _normalizeQuotationContact(
+            doc.data(),
+            id: doc.id,
+            source: 'company_contacts',
+          ),
+        );
+      }
+    } catch (_) {}
+
+    contacts.sort((a, b) {
+      final aName = (a['name'] ?? '').toString().toLowerCase();
+      final bName = (b['name'] ?? '').toString().toLowerCase();
+      return aName.compareTo(bName);
+    });
+
+    return contacts;
+  }
+
+  String _quotationContactLabel(Map<String, dynamic> contact) {
+    return (contact['name'] ?? contact['contactName'] ?? '').toString().trim();
+  }
+
+  String _quotationContactSubtitle(Map<String, dynamic> contact) {
+    return [
+          contact['mobile'] ?? contact['phone'],
+          contact['email'],
+          contact['designation'],
+          contact['department'],
+        ]
+        .where((e) => e != null && e.toString().trim().isNotEmpty)
+        .map((e) => e.toString().trim())
+        .join(' • ');
+  }
+
+  Widget _buildQuotationContactSelector() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      key: ValueKey('quotation_contacts_${_selectedCustomerId ?? ''}'),
+      future: _loadAllCustomerContactsForQuotation(),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.only(bottom: 12),
+            child: LinearProgressIndicator(),
+          );
+        }
+
+        final contacts = snap.data ?? [];
+
+        if (contacts.isEmpty) {
+          return _buildLegacyContactFields();
+        }
+
+        final validContactId =
+            contacts.any((d) => d['id']?.toString() == _selectedContactId)
+            ? _selectedContactId
+            : null;
+
+        String selectedContactLabel = _contactPersonController.text.trim();
+
+        if (validContactId != null) {
+          final selectedMatches = contacts
+              .where((d) => d['id']?.toString() == validContactId)
+              .toList();
+
+          if (selectedMatches.isNotEmpty) {
+            selectedContactLabel = _quotationContactLabel(
+              selectedMatches.first,
+            );
+          }
+        }
+
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: RawAutocomplete<Map<String, dynamic>>(
+                key: ValueKey(
+                  '${_selectedCustomerId}_${contacts.length}_${validContactId ?? ''}',
+                ),
+                initialValue: TextEditingValue(text: selectedContactLabel),
+                displayStringForOption: _quotationContactLabel,
+                optionsBuilder: (TextEditingValue value) {
+                  final query = value.text.trim().toLowerCase();
+
+                  if (query.isEmpty ||
+                      query == selectedContactLabel.toLowerCase()) {
+                    return contacts;
+                  }
+
+                  return contacts.where((contact) {
+                    final searchable = [
+                      _quotationContactLabel(contact),
+                      _quotationContactSubtitle(contact),
+                    ].join(' ').toLowerCase();
+
+                    return searchable.contains(query);
+                  });
+                },
+                onSelected: (Map<String, dynamic> contact) {
+                  setState(() {
+                    _selectedContactId = contact['id']?.toString();
+                    _selectedContactData = contact;
+                    _updateContactSnapshots(contact);
+                    developer.log(
+                      'Contact Changed By User',
+                      name: 'QuotationScreen',
+                    );
+                  });
+                },
+                fieldViewBuilder:
+                    (context, textController, focusNode, onFieldSubmitted) {
+                      return TextFormField(
+                        controller: textController,
+                        focusNode: focusNode,
+                        readOnly: _isReadOnly,
+                        decoration: InputDecoration(
+                          labelText: 'Search Contact Person',
+                          hintText: 'Type name, mobile, email, designation',
+                          prefixIcon: const Icon(Icons.person_search),
+                          suffixIcon: IconButton(
+                            tooltip: 'Show all contacts',
+                            icon: const Icon(Icons.search),
+                            onPressed: () {
+                              textController.clear();
+                              focusNode.requestFocus();
+                            },
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          filled: true,
+                          fillColor: Colors.grey.shade50,
+                          isDense: true,
+                        ),
+                      );
+                    },
+                optionsViewBuilder: (context, onSelected, options) {
+                  final optionList = options.toList(growable: false);
+
+                  return Align(
+                    alignment: Alignment.topLeft,
+                    child: Material(
+                      elevation: 6,
+                      borderRadius: BorderRadius.circular(8),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxHeight: 300,
+                          maxWidth: 620,
+                        ),
+                        child: ListView.builder(
+                          padding: EdgeInsets.zero,
+                          shrinkWrap: true,
+                          itemCount: optionList.length,
+                          itemBuilder: (context, index) {
+                            final contact = optionList[index];
+                            final title = _quotationContactLabel(contact);
+                            final subtitle = _quotationContactSubtitle(contact);
+
+                            return ListTile(
+                              dense: true,
+                              leading: const Icon(Icons.person_outline),
+                              title: Text(
+                                title.isEmpty ? 'Unnamed Contact' : title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: subtitle.isEmpty
+                                  ? null
+                                  : Text(
+                                      subtitle,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                              onTap: () => onSelected(contact),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildItemTextField(_mobileController, 'Mobile'),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _buildItemTextField(_emailController, 'Email ID'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildItemTextField(
+                    _contactDesignationController,
+                    'Designation',
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _buildItemTextField(
+                    _contactDepartmentController,
+                    'Department',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildItemTextField(_gstController, 'Customer GSTIN'),
+          ],
+        );
+      },
+    );
   }
 
   Future<Map<String, dynamic>?> _getProductData(String productId) async {
@@ -489,7 +939,13 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
           data['contactMobile']?.toString() ??
           data['clientMobile']?.toString() ??
           '';
+      _contactDepartmentSnapshot =
+          (data['contactDepartment'] ?? data['department'] ?? '').toString();
+      _contactDesignationSnapshot =
+          (data['contactDesignation'] ?? data['designation'] ?? '').toString();
       _contactPersonController.text = _contactPersonSnapshot;
+      _contactDepartmentController.text = _contactDepartmentSnapshot;
+      _contactDesignationController.text = _contactDesignationSnapshot;
 
       final existingCustomerGstin =
           (data['customerGstin'] ??
@@ -519,6 +975,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     }
 
     _clientNameController.text = data['clientName']?.toString() ?? '';
+    _selectedCustomerLabel = _clientNameController.text.trim();
     _gstController.text = data['gstNo']?.toString() ?? '';
     _isInterState = data['isInterState'] as bool? ?? false;
 
@@ -624,11 +1081,14 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _customerNameFocusNode.dispose();
     _clientNameController.dispose();
     _addressController.dispose();
     _emailController.dispose();
     _mobileController.dispose();
     _contactPersonController.dispose();
+    _contactDepartmentController.dispose();
+    _contactDesignationController.dispose();
     _gstController.dispose();
     _quotationSequenceController.dispose();
     _subjectController.dispose();
@@ -735,7 +1195,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         } else if (userDepartment.isNotEmpty) {
           _signDesignationController.text = userDepartment;
         } else {
-          _signDesignationController.text = _currentUserRole.toUpperCase();
+          _signDesignationController.text = '';
         }
       }
     } catch (e) {
@@ -853,7 +1313,11 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         _contactEmailSnapshot = '';
         _contactMobileSnapshot = '';
         _contactPersonSnapshot = '';
+        _contactDepartmentSnapshot = '';
+        _contactDesignationSnapshot = '';
         _contactPersonController.clear();
+        _contactDepartmentController.clear();
+        _contactDesignationController.clear();
         _emailController.clear();
         _mobileController.clear();
       }
@@ -874,6 +1338,17 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                 '')
             .toString()
             .trim();
+    final cDepartment = (contactData['department'] ?? contactData['dept'] ?? '')
+        .toString()
+        .trim();
+    final cDesignation =
+        (contactData['designation'] ??
+                contactData['jobTitle'] ??
+                contactData['title'] ??
+                contactData['position'] ??
+                '')
+            .toString()
+            .trim();
 
     if (!restoreMode) {
       _contactPersonController.text = cName;
@@ -882,6 +1357,10 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       _contactEmailSnapshot = cEmail;
       _mobileController.text = cPhone;
       _contactMobileSnapshot = cPhone;
+      _contactDepartmentController.text = cDepartment;
+      _contactDepartmentSnapshot = cDepartment;
+      _contactDesignationController.text = cDesignation;
+      _contactDesignationSnapshot = cDesignation;
     } else {
       if (_contactPersonController.text.trim().isEmpty && cName.isNotEmpty) {
         _contactPersonController.text = cName;
@@ -894,6 +1373,16 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       if (_mobileController.text.trim().isEmpty && cPhone.isNotEmpty) {
         _mobileController.text = cPhone;
         _contactMobileSnapshot = cPhone;
+      }
+      if (_contactDepartmentController.text.trim().isEmpty &&
+          cDepartment.isNotEmpty) {
+        _contactDepartmentController.text = cDepartment;
+        _contactDepartmentSnapshot = cDepartment;
+      }
+      if (_contactDesignationController.text.trim().isEmpty &&
+          cDesignation.isNotEmpty) {
+        _contactDesignationController.text = cDesignation;
+        _contactDesignationSnapshot = cDesignation;
       }
     }
   }
@@ -961,6 +1450,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
           _clientNameController.text =
               (data['companyName'] ?? data['name'] ?? '').toString();
         }
+        _selectedCustomerLabel = _clientNameController.text.trim();
         if (!restoreMode || _gstController.text.trim().isEmpty) {
           _gstController.text =
               (data['customerGstin'] ??
@@ -1063,6 +1553,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     String name = (i['name'] ?? i['productName'] ?? i['itemName'] ?? '')
         .toString();
     String desc = (i['description'] ?? i['details'] ?? '').toString();
+    String scopeOfSupply =
+        (i['scopeOfSupply'] ?? i['scope_of_supply'] ?? i['supplyScope'] ?? '')
+            .toString();
     String hsn = (i['hsnCode'] ?? '').toString();
     double qty = double.tryParse(i['quantity']?.toString() ?? '1') ?? 1.0;
     String uom = (i['uom'] ?? i['unit'] ?? 'Nos').toString();
@@ -1253,6 +1746,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       itemCode: itemCode,
       name: name,
       description: desc,
+      scopeOfSupply: scopeOfSupply,
       hsnCode: hsn,
       quantity: qty,
       uom: uom,
@@ -1821,6 +2315,12 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
             'mobile': _mobileController.text.trim().isNotEmpty
                 ? _mobileController.text.trim()
                 : _contactMobileSnapshot,
+            'designation': _contactDesignationController.text.trim().isNotEmpty
+                ? _contactDesignationController.text.trim()
+                : _contactDesignationSnapshot,
+            'department': _contactDepartmentController.text.trim().isNotEmpty
+                ? _contactDepartmentController.text.trim()
+                : _contactDepartmentSnapshot,
           };
 
       final payload = {
@@ -2194,6 +2694,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       'clientEmail': _emailController.text.trim(),
       'clientMobile': _mobileController.text.trim(),
       'contactPerson': _contactPersonController.text.trim(),
+      'contactDepartment': _contactDepartmentController.text.trim(),
+      'contactDesignation': _contactDesignationController.text.trim(),
       'terms': _dynamicTerms
           .map(
             (term) => {
@@ -2470,6 +2972,221 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
           if (trailing != null) trailing,
         ],
       ),
+    );
+  }
+
+  Query<Map<String, dynamic>> _customerAutocompleteQuery() {
+    Query<Map<String, dynamic>> query = FirebaseFirestore.instance
+        .collection('companies')
+        .doc(_companyId)
+        .collection('customers');
+
+    if (!_isAdminOrManager && _currentUserUid != null) {
+      query = query.where('createdBy', isEqualTo: _currentUserUid);
+    }
+
+    return query;
+  }
+
+  bool _isSelectableCustomer(Map<String, dynamic> data) {
+    if (data['isActive'] == false) return false;
+    if (data['isDeleted'] == true) return false;
+    if (data['archived'] == true) return false;
+    if (data['mergedInto'] != null) return false;
+
+    final status = (data['status'] ?? '').toString().toLowerCase();
+    if (status == 'deleted' || status == 'inactive') return false;
+
+    return true;
+  }
+
+  String _customerDisplayName(Map<String, dynamic> customer) {
+    return (customer['companyName'] ??
+            customer['customerName'] ??
+            customer['name'] ??
+            customer['clientName'] ??
+            '')
+        .toString()
+        .trim();
+  }
+
+  String _customerSubtitle(Map<String, dynamic> customer) {
+    final contact = (customer['contactPerson'] ?? customer['contactName'] ?? '')
+        .toString()
+        .trim();
+    final mobile = (customer['mobile'] ?? customer['phone'] ?? '')
+        .toString()
+        .trim();
+    final gst =
+        (customer['customerGstin'] ??
+                customer['customerGSTIN'] ??
+                customer['customerGstNo'] ??
+                customer['gstin'] ??
+                customer['gstNo'] ??
+                '')
+            .toString()
+            .trim();
+
+    return [contact, mobile, gst].where((e) => e.isNotEmpty).join(' | ');
+  }
+
+  void _clearSelectedCustomerIfTyping(String value) {
+    if (_isRestoring || _isReadOnly || _hasLinkedInquiry) return;
+
+    final typed = value.trim();
+    if (_selectedCustomerId == null || typed == _selectedCustomerLabel) return;
+
+    setState(() {
+      _selectedCustomerId = null;
+      _selectedCustomerLabel = '';
+      _selectedAddressId = null;
+      _selectedAddressData = null;
+      _customerAddresses = [];
+      _selectedContactId = null;
+      _selectedContactData = null;
+      _customerInsights = null;
+      _customerPrimaryAddressSnapshot = '';
+      _customerPrimaryCitySnapshot = '';
+      _customerPrimaryStateSnapshot = '';
+      _customerPrimaryPincodeSnapshot = '';
+      _customerState = '';
+      _addressController.clear();
+      _updateContactSnapshots(null);
+      _gstController.clear();
+      _isInterState = false;
+    });
+  }
+
+  Widget _buildCustomerNameAutocomplete({
+    String? Function(String?)? validator,
+  }) {
+    if (_companyId == null || _companyId!.isEmpty) {
+      return _buildItemTextField(
+        _clientNameController,
+        'Customer Name *',
+        validator: validator,
+      );
+    }
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _customerAutocompleteQuery().snapshots(),
+      builder: (context, snapshot) {
+        final docs =
+            snapshot.data?.docs ??
+            <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+
+        return RawAutocomplete<Map<String, dynamic>>(
+          textEditingController: _clientNameController,
+          focusNode: _customerNameFocusNode,
+          displayStringForOption: _customerDisplayName,
+          optionsBuilder: (TextEditingValue value) {
+            final text = value.text.trim().toLowerCase();
+            if (text.isEmpty)
+              return const Iterable<Map<String, dynamic>>.empty();
+
+            final customers = docs
+                .map((doc) => {'id': doc.id, ...doc.data()})
+                .where(_isSelectableCustomer)
+                .toList();
+
+            final matches = customers.where((customer) {
+              final searchText = [
+                customer['companyName'],
+                customer['customerName'],
+                customer['name'],
+                customer['clientName'],
+                customer['contactPerson'],
+                customer['contactName'],
+                customer['mobile'],
+                customer['phone'],
+              ].where((e) => e != null).join(' ').toLowerCase();
+
+              return searchText.contains(text);
+            }).toList();
+
+            matches.sort((a, b) {
+              final aName = _customerDisplayName(a).toLowerCase();
+              final bName = _customerDisplayName(b).toLowerCase();
+
+              final aStarts = aName.startsWith(text);
+              final bStarts = bName.startsWith(text);
+
+              if (aStarts && !bStarts) return -1;
+              if (!aStarts && bStarts) return 1;
+
+              return aName.compareTo(bName);
+            });
+
+            return matches.take(30);
+          },
+          onSelected: (customer) {
+            _selectedCustomerLabel = _customerDisplayName(customer);
+            _applyCustomer(customer);
+          },
+          fieldViewBuilder:
+              (context, textController, focusNode, onFieldSubmitted) {
+                return TextFormField(
+                  controller: textController,
+                  focusNode: focusNode,
+                  validator: validator,
+                  readOnly: _isReadOnly || _hasLinkedInquiry,
+                  onChanged: _clearSelectedCustomerIfTyping,
+                  decoration: _dec(
+                    'Customer Name *',
+                    hint: 'Type customer or company name',
+                    prefixIcon: const Icon(Icons.search),
+                  ),
+                );
+              },
+          optionsViewBuilder: (context, onSelected, options) {
+            final optionList = options.toList();
+
+            return Align(
+              alignment: Alignment.topLeft,
+              child: Material(
+                elevation: 6,
+                borderRadius: BorderRadius.circular(12),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxHeight: 280,
+                    maxWidth: 620,
+                  ),
+                  child: ListView.separated(
+                    padding: EdgeInsets.zero,
+                    shrinkWrap: true,
+                    itemCount: optionList.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final customer = optionList[index];
+                      final title = _customerDisplayName(customer);
+                      final subtitle = _customerSubtitle(customer);
+
+                      return ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.business_outlined),
+                        title: Text(
+                          title.isEmpty ? 'Unnamed Customer' : title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: subtitle.isEmpty
+                            ? null
+                            : Text(
+                                subtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                        onTap: () => onSelected(customer),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -3289,6 +4006,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     final formKey = GlobalKey<FormState>();
     final nameCtrl = TextEditingController(text: itemToEdit?.name ?? '');
     final descCtrl = TextEditingController(text: itemToEdit?.description ?? '');
+    final scopeCtrl = TextEditingController(
+      text: itemToEdit?.scopeOfSupply ?? '',
+    );
     final hsnCtrl = TextEditingController(text: itemToEdit?.hsnCode ?? '');
     final qtyCtrl = TextEditingController(
       text: itemToEdit?.quantity.toString() ?? '1',
@@ -3696,6 +4416,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     final formKey = GlobalKey<FormState>();
     final nameCtrl = TextEditingController(text: itemToEdit?.name ?? '');
     final descCtrl = TextEditingController(text: itemToEdit?.description ?? '');
+    final scopeCtrl = TextEditingController(
+      text: itemToEdit?.scopeOfSupply ?? '',
+    );
     final qtyCtrl = TextEditingController(
       text: itemToEdit?.quantity.toString() ?? '1',
     );
@@ -4104,6 +4827,23 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
             Expanded(child: _buildItemTextField(_emailController, 'Email ID')),
             const SizedBox(width: 10),
             Expanded(
+              child: _buildItemTextField(
+                _contactDesignationController,
+                'Designation',
+              ),
+            ),
+          ],
+        ),
+        Row(
+          children: [
+            Expanded(
+              child: _buildItemTextField(
+                _contactDepartmentController,
+                'Department',
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
               child: _buildItemTextField(_gstController, 'Customer GSTIN'),
             ),
           ],
@@ -4157,9 +4897,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         _selectedAddressId!.isNotEmpty;
 
     final bool showContactDropdown =
-        _selectedCustomerId != null &&
-        _selectedContactId != null &&
-        _selectedContactId!.isNotEmpty;
+        _selectedCustomerId != null && _selectedCustomerId!.isNotEmpty;
 
     List<QuotationLineItem> topLevelItems = _items
         .where((i) => _itemExtras[i.id]?['parentId'] == null)
@@ -4254,24 +4992,6 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                             _buildSectionHeader(
                               'Customer Details',
                               Icons.business,
-                              trailing: (_isReadOnly || _hasLinkedInquiry)
-                                  ? null
-                                  : OutlinedButton.icon(
-                                      onPressed: () async {
-                                        final c = await _selectCustomerDialog();
-                                        if (c != null) _applyCustomer(c);
-                                      },
-                                      icon: const Icon(Icons.search, size: 18),
-                                      label: const Text('CRM Lookup'),
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: accentColor,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
                             ),
                             if (_customerInsights != null)
                               Container(
@@ -4345,11 +5065,11 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                   ],
                                 ),
                               ),
-                            _buildItemTextField(
-                              _clientNameController,
-                              'Company Name *',
-                              validator: (v) => v!.isEmpty ? 'Required' : null,
+                            _buildCustomerNameAutocomplete(
+                              validator: (v) =>
+                                  v!.trim().isEmpty ? 'Required' : null,
                             ),
+                            const SizedBox(height: 12),
                             if (showAddressDropdown) ...[
                               DropdownButtonFormField<String>(
                                 isExpanded: true,
@@ -4463,200 +5183,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                               ),
                             ],
                             if (showContactDropdown) ...[
-                              StreamBuilder<
-                                QuerySnapshot<Map<String, dynamic>>
-                              >(
-                                stream:
-                                    _companyContactsRef(_selectedCustomerId!)
-                                        .where('isActive', isEqualTo: true)
-                                        .snapshots(),
-                                builder: (context, snap) {
-                                  if (!snap.hasData)
-                                    return _buildLegacyContactFields();
-
-                                  var contacts = snap.data!.docs
-                                      .where(
-                                        (d) =>
-                                            d.data()['isDeleted'] != true ||
-                                            d.id == _selectedContactId,
-                                      )
-                                      .toList();
-                                  if (contacts.isEmpty)
-                                    return _buildLegacyContactFields();
-
-                                  if (_selectedAddressId != null) {
-                                    bool anyContactHasAddress = contacts.any((
-                                      d,
-                                    ) {
-                                      final data = d.data();
-                                      final addrId = data['addressId'];
-                                      final linked =
-                                          data['linkedAddressIds'] as List?;
-                                      final assigned =
-                                          data['assignedAddressId'];
-                                      return addrId != null ||
-                                          (linked != null &&
-                                              linked.isNotEmpty) ||
-                                          assigned != null;
-                                    });
-
-                                    if (anyContactHasAddress) {
-                                      contacts = contacts.where((d) {
-                                        if (d.id == _selectedContactId)
-                                          return true;
-
-                                        final data = d.data();
-                                        final addrId = data['addressId'];
-                                        final linked =
-                                            data['linkedAddressIds'] as List?;
-                                        final assigned =
-                                            data['assignedAddressId'];
-
-                                        if (addrId == _selectedAddressId)
-                                          return true;
-                                        if (assigned == _selectedAddressId)
-                                          return true;
-                                        if (linked != null &&
-                                            linked.contains(_selectedAddressId))
-                                          return true;
-                                        return false;
-                                      }).toList();
-                                    }
-                                  }
-
-                                  if (contacts.isEmpty) {
-                                    return Column(
-                                      children: [
-                                        const Padding(
-                                          padding: EdgeInsets.only(bottom: 12),
-                                          child: Text(
-                                            'No linked contacts for selected address. Enter manually.',
-                                            style: TextStyle(
-                                              color: Colors.grey,
-                                              fontSize: 13,
-                                            ),
-                                          ),
-                                        ),
-                                        _buildLegacyContactFields(),
-                                      ],
-                                    );
-                                  }
-
-                                  final validContactId =
-                                      contacts.any(
-                                        (d) => d.id == _selectedContactId,
-                                      )
-                                      ? _selectedContactId
-                                      : null;
-
-                                  return Column(
-                                    children: [
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                          bottom: 12,
-                                        ),
-                                        child: DropdownButtonFormField<String>(
-                                          isExpanded: true,
-                                          value: validContactId,
-                                          decoration: InputDecoration(
-                                            labelText: 'Select Contact Person',
-                                            prefixIcon: const Icon(
-                                              Icons.person_outline,
-                                            ),
-                                            border: OutlineInputBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                            ),
-                                            filled: true,
-                                            fillColor: Colors.grey.shade50,
-                                            isDense: true,
-                                          ),
-                                          items: contacts
-                                              .map<DropdownMenuItem<String>>(
-                                                (
-                                                  doc,
-                                                ) => DropdownMenuItem<String>(
-                                                  value: doc.id,
-                                                  child: Text(
-                                                    (doc.data()['name'] ??
-                                                            doc.data()['contactName'] ??
-                                                            '')
-                                                        .toString(),
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  ),
-                                                ),
-                                              )
-                                              .toList(),
-                                          selectedItemBuilder:
-                                              (BuildContext context) {
-                                                return contacts.map<Widget>((
-                                                  doc,
-                                                ) {
-                                                  return Text(
-                                                    (doc.data()['name'] ??
-                                                            doc.data()['contactName'] ??
-                                                            '')
-                                                        .toString(),
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  );
-                                                }).toList();
-                                              },
-                                          onChanged: _isReadOnly
-                                              ? null
-                                              : (v) {
-                                                  setState(() {
-                                                    _selectedContactId = v;
-                                                    _selectedContactData = null;
-                                                    if (v != null) {
-                                                      final matches = contacts
-                                                          .where(
-                                                            (c) => c.id == v,
-                                                          );
-                                                      _selectedContactData =
-                                                          matches.isNotEmpty
-                                                          ? matches.first.data()
-                                                          : null;
-                                                      _updateContactSnapshots(
-                                                        _selectedContactData,
-                                                      );
-                                                      developer.log(
-                                                        'Contact Changed By User',
-                                                        name: 'QuotationScreen',
-                                                      );
-                                                    }
-                                                  });
-                                                },
-                                        ),
-                                      ),
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: _buildItemTextField(
-                                              _mobileController,
-                                              'Mobile',
-                                            ),
-                                          ),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                            child: _buildItemTextField(
-                                              _emailController,
-                                              'Email ID',
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      _buildItemTextField(
-                                        _gstController,
-                                        'Customer GSTIN',
-                                      ),
-                                    ],
-                                  );
-                                },
-                              ),
+                              _buildQuotationContactSelector(),
                             ] else ...[
                               _buildLegacyContactFields(),
                             ],

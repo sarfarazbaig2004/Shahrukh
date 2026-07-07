@@ -409,6 +409,7 @@ class ExcelQuotationFormat {
     try {
       if (field == 'name') return safe(item.name);
       if (field == 'description') return safe(item.description);
+      if (field == 'scopeOfSupply') return safe(item.scopeOfSupply);
       if (field == 'uom') return safe(item.uom);
       if (field == 'productId') return safe(item.productId);
       if (field == 'hsnCode') return safe(item.hsnCode);
@@ -533,6 +534,10 @@ class ExcelQuotationFormat {
             return safe(d.name);
           case 'description':
             return safe(d.description);
+          case 'scopeOfSupply':
+          case 'scope_of_supply':
+          case 'supplyScope':
+            return safe(d.scopeOfSupply);
           case 'hsnCode':
           case 'hsn':
             return safe(d.hsnCode);
@@ -677,10 +682,14 @@ class ExcelQuotationFormat {
           : field(item, 'productName');
 
       final description = field(item, 'description');
+      final scope = field(item, 'scopeOfSupply').isNotEmpty
+          ? field(item, 'scopeOfSupply')
+          : field(item, 'scope_of_supply');
 
       final parts = <String>[
         name,
         description,
+        if (scope.trim().isNotEmpty) 'Scope of Supply:\n$scope',
       ].where((e) => e.trim().isNotEmpty).toList();
 
       return parts.join('\n');
@@ -707,7 +716,7 @@ class ExcelQuotationFormat {
           safe(text),
           textAlign: align,
           style: style(size: size, bold: bold),
-          maxLines: 8,
+          maxLines: 14,
           overflow: pw.TextOverflow.clip,
         ),
       );
