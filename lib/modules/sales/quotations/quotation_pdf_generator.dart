@@ -7,6 +7,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 // ==========================================
@@ -172,9 +173,9 @@ class QuotationDataService {
       final rootData = userDoc.data() ?? <String, dynamic>{};
 
       final companyId =
-          (rootData['activeCompanyId'] ?? rootData['companyId'] ?? '')
-              .toString()
-              .trim();
+      (rootData['activeCompanyId'] ?? rootData['companyId'] ?? '')
+          .toString()
+          .trim();
       if (companyId.isEmpty || companyId == 'null') return <String, dynamic>{};
 
       DocumentSnapshot compDoc = await FirebaseFirestore.instance
@@ -190,14 +191,14 @@ class QuotationDataService {
       }
 
       final Map<String, dynamic> workspaceData =
-          compDoc.exists && compDoc.data() != null
+      compDoc.exists && compDoc.data() != null
           ? Map<String, dynamic>.from(compDoc.data() as Map)
           : <String, dynamic>{};
 
       Map<String, dynamic>? membershipData;
       if (rootData['memberships'] != null) {
         membershipData =
-            rootData['memberships'][companyId] as Map<String, dynamic>?;
+        rootData['memberships'][companyId] as Map<String, dynamic>?;
       }
 
       Map<String, dynamic> compUserData = <String, dynamic>{};
@@ -216,45 +217,45 @@ class QuotationDataService {
       final authPhone = user.phoneNumber ?? '';
 
       final sigName =
-          (compUserData['name'] ??
-                  compUserData['fullName'] ??
-                  membershipData?['name'] ??
-                  rootData['name'] ??
-                  rootData['fullName'] ??
-                  authName)
-              .toString()
-              .trim();
+      (compUserData['name'] ??
+          compUserData['fullName'] ??
+          membershipData?['name'] ??
+          rootData['name'] ??
+          rootData['fullName'] ??
+          authName)
+          .toString()
+          .trim();
 
       String sigDesignation =
-          (compUserData['designation'] ??
-                  membershipData?['designation'] ??
-                  rootData['designation'] ??
-                  '')
-              .toString()
-              .trim();
+      (compUserData['designation'] ??
+          membershipData?['designation'] ??
+          rootData['designation'] ??
+          '')
+          .toString()
+          .trim();
 
       String userDepartment =
-          (compUserData['department'] ??
-                  membershipData?['department'] ??
-                  rootData['department'] ??
-                  '')
-              .toString()
-              .trim();
+      (compUserData['department'] ??
+          membershipData?['department'] ??
+          rootData['department'] ??
+          '')
+          .toString()
+          .trim();
 
       if (sigDesignation.isEmpty && userDepartment.isNotEmpty) {
         sigDesignation = userDepartment;
       }
 
       final sigPhone =
-          (compUserData['phone'] ??
-                  compUserData['mobile'] ??
-                  membershipData?['phone'] ??
-                  membershipData?['mobile'] ??
-                  rootData['phone'] ??
-                  rootData['mobile'] ??
-                  authPhone)
-              .toString()
-              .trim();
+      (compUserData['phone'] ??
+          compUserData['mobile'] ??
+          membershipData?['phone'] ??
+          membershipData?['mobile'] ??
+          rootData['phone'] ??
+          rootData['mobile'] ??
+          authPhone)
+          .toString()
+          .trim();
 
       String buildCompleteAddress(Map<String, dynamic> data) {
         List<String> addressLines = [];
@@ -291,13 +292,13 @@ class QuotationDataService {
 
       return {
         'companyName':
-            workspaceData['companyName'] ??
+        workspaceData['companyName'] ??
             workspaceData['name'] ??
             workspaceData['entityName'] ??
             '',
         'companyAddress': fullAddress,
         'companyGst':
-            workspaceData['gstin'] ??
+        workspaceData['gstin'] ??
             workspaceData['gstNo'] ??
             workspaceData['gst'] ??
             '',
@@ -418,10 +419,10 @@ class QuotationPdfGenerator {
   }
 
   static double _settingsDouble(
-    Map<String, dynamic> settings,
-    String key,
-    double fallback,
-  ) {
+      Map<String, dynamic> settings,
+      String key,
+      double fallback,
+      ) {
     return _toDouble(settings[key]) == 0 ? fallback : _toDouble(settings[key]);
   }
 
@@ -455,10 +456,28 @@ class QuotationPdfGenerator {
   }
 
   static Future<Map<String, dynamic>> _loadQuotationSettingsForPdf(
-    Map<String, dynamic> quotation,
-  ) async {
-    final companyId = _safeString(quotation['companyId']);
-    if (companyId.isEmpty) return {};
+      Map<String, dynamic> quotation,
+      ) async {
+    var companyId = _safeString(quotation['companyId']);
+
+    if (companyId.isEmpty) {
+      try {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          final userDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .get();
+
+          final rootData = userDoc.data() ?? <String, dynamic>{};
+          companyId = _safeString(
+            rootData['activeCompanyId'] ?? rootData['companyId'],
+          );
+        }
+      } catch (_) {}
+    }
+
+    if (companyId.isEmpty) return <String, dynamic>{};
 
     try {
       final snap = await FirebaseFirestore.instance
@@ -477,23 +496,43 @@ class QuotationPdfGenerator {
             .collection('settings')
             .doc('quotation_settings')
             .get();
+
         data = oldSnap.data() ?? <String, dynamic>{};
       }
-      final type = _normalizeQuotationType(quotation['quotationType']);
-      final selected = data[type];
+
+      final quotationType = _normalizeQuotationType(quotation['quotationType']);
+      final selected = data[quotationType];
+
+      final merged = <String, dynamic>{
+        ...data,
+        'companyId': companyId,
+        'quotationType': quotationType,
+      };
 
       if (selected is Map) {
-        return Map<String, dynamic>.from(selected);
+        merged.addAll(Map<String, dynamic>.from(selected));
       }
-    } catch (_) {}
 
-    return {};
+      final domestic = data['domestic'];
+      if (_safeString(merged['letterheadUrl']).isEmpty && domestic is Map) {
+        final d = Map<String, dynamic>.from(domestic);
+        if (_safeString(d['letterheadUrl']).isNotEmpty) {
+          merged.addAll(d);
+        }
+      }
+
+      return merged;
+    } catch (e) {
+      // ignore: avoid_print
+      print('QUOTATION SETTINGS DEBUG: failed to load settings: $e');
+      return <String, dynamic>{};
+    }
   }
 
   static Map<String, dynamic> _mergeQuotationSettingsIntoQuotation(
-    Map<String, dynamic> quotation,
-    Map<String, dynamic> settings,
-  ) {
+      Map<String, dynamic> quotation,
+      Map<String, dynamic> settings,
+      ) {
     final merged = Map<String, dynamic>.from(quotation);
 
     final settingsTerms = settings['terms'];
@@ -508,17 +547,79 @@ class QuotationPdfGenerator {
   }
 
   static Future<pw.ImageProvider?> _loadSettingsLetterheadImage(
-    Map<String, dynamic> settings,
-  ) async {
-    final url = _safeString(settings['letterheadUrl']);
-    final type = _safeString(settings['letterheadFileType']).toLowerCase();
+      Map<String, dynamic> settings,
+      ) async {
+    String valueFrom(Map<String, dynamic> source, List<String> keys) {
+      for (final key in keys) {
+        final value = _safeString(source[key]);
+        if (value.isNotEmpty) return value;
+      }
+      return '';
+    }
+
+    final url = valueFrom(settings, [
+      'letterheadUrl',
+      'url',
+      'fileUrl',
+      'downloadUrl',
+    ]);
+
+    final savedType = valueFrom(settings, [
+      'letterheadType',
+      'letterheadFileType',
+      'fileType',
+      'type',
+    ]).toLowerCase();
+
+    final lowerUrl = url.toLowerCase();
+
+    String type = savedType;
+    if (lowerUrl.contains('.jpg') || lowerUrl.contains('.jpeg')) {
+      type = 'jpg';
+    } else if (lowerUrl.contains('.png')) {
+      type = 'png';
+    } else if (lowerUrl.contains('.webp')) {
+      type = 'webp';
+    } else if (lowerUrl.contains('.pdf')) {
+      type = 'pdf';
+    }
+
+    // ignore: avoid_print
+    print('QUOTATION LETTERHEAD DEBUG: url=$url type=$type');
 
     if (url.isEmpty) return null;
-    if (type == 'pdf') return null;
+
+    if (type == 'pdf') {
+      // ignore: avoid_print
+      print(
+        'QUOTATION LETTERHEAD DEBUG: PDF letterhead not supported. Upload PNG/JPG.',
+      );
+      return null;
+    }
 
     try {
-      return await networkImage(url);
-    } catch (_) {
+      final bytes = await FirebaseStorage.instance
+          .refFromURL(url)
+          .getData(10 * 1024 * 1024);
+
+      if (bytes != null && bytes.isNotEmpty) {
+        // ignore: avoid_print
+        print('QUOTATION LETTERHEAD DEBUG: Loaded by FirebaseStorage bytes.');
+        return pw.MemoryImage(bytes);
+      }
+    } catch (e) {
+      // ignore: avoid_print
+      print('QUOTATION LETTERHEAD DEBUG: FirebaseStorage load failed: $e');
+    }
+
+    try {
+      final image = await networkImage(url);
+      // ignore: avoid_print
+      print('QUOTATION LETTERHEAD DEBUG: Loaded by networkImage.');
+      return image;
+    } catch (e) {
+      // ignore: avoid_print
+      print('QUOTATION LETTERHEAD DEBUG: networkImage failed: $e');
       return null;
     }
   }
@@ -546,13 +647,13 @@ class QuotationPdfGenerator {
   }
 
   static pw.Widget _buildSettingsBackground(
-    pw.Context context, {
-    required pw.ImageProvider? letterheadImage,
-    required pw.ImageProvider? watermarkImage,
-    required Map<String, dynamic> settings,
-    required String docNumber,
-    required String docDate,
-  }) {
+      pw.Context context, {
+        required pw.ImageProvider? letterheadImage,
+        required pw.ImageProvider? watermarkImage,
+        required Map<String, dynamic> settings,
+        required String docNumber,
+        required String docDate,
+      }) {
     if (letterheadImage == null) {
       return ExcelQuotationFormat.watermarkImage(watermarkImage);
     }
@@ -628,10 +729,10 @@ class QuotationPdfGenerator {
   }
 
   static Future<Uint8List> buildPdf(
-    PdfPageFormat format,
-    Map<String, dynamic> quotation,
-    List<QuotationLineItem> items,
-  ) async {
+      PdfPageFormat format,
+      Map<String, dynamic> quotation,
+      List<QuotationLineItem> items,
+      ) async {
     final memcoWatermark = await _loadMemcoWatermark();
     final memcoHeaderLogo = await _loadMemcoHeaderLogo();
     final quotationSettings = await _loadQuotationSettingsForPdf(quotation);
@@ -639,8 +740,18 @@ class QuotationPdfGenerator {
       quotation,
       quotationSettings,
     );
+
+    // ignore: avoid_print
+    print(
+      "QUOTATION PDF DEBUG: settingsKeys=${quotationSettings.keys.toList()} letterheadUrl=${quotationSettings['letterheadUrl']} letterheadType=${quotationSettings['letterheadType']} companyId=${quotationSettings['companyId']} quotationCompanyId=${quotation['companyId']}",
+    );
     final settingsLetterheadImage = await _loadSettingsLetterheadImage(
       quotationSettings,
+    );
+
+    // ignore: avoid_print
+    print(
+      "QUOTATION PDF DEBUG: letterheadLoaded=${settingsLetterheadImage != null}",
     );
     final doc = pw.Document();
 
@@ -708,7 +819,7 @@ class QuotationPdfGenerator {
     final checkNum = isSO && soNumber.isNotEmpty ? soNumber : quoteNumber;
     final isPreview =
         checkNum.toUpperCase().contains('PREVIEW') ||
-        checkNum.toUpperCase().contains('AUTO-GENERATED');
+            checkNum.toUpperCase().contains('AUTO-GENERATED');
 
     String subjectStr = _safeString(quotation['subject']);
     if (subjectStr.isEmpty) {
@@ -787,10 +898,10 @@ class QuotationPdfGenerator {
   }
 
   static String _legacyFirstNonEmpty(
-    Map<String, dynamic> data,
-    List<String> keys, [
-    String fallback = '',
-  ]) {
+      Map<String, dynamic> data,
+      List<String> keys, [
+        String fallback = '',
+      ]) {
     for (final key in keys) {
       final value = _safeString(data[key]);
       if (value.isNotEmpty) return value;
@@ -847,28 +958,28 @@ class QuotationPdfGenerator {
   }
 
   static pw.Widget _legacyCell(
-    pw.Widget child, {
-    pw.EdgeInsets padding = const pw.EdgeInsets.symmetric(
-      horizontal: 5,
-      vertical: 3,
-    ),
-    pw.Alignment alignment = pw.Alignment.centerLeft,
-  }) {
+      pw.Widget child, {
+        pw.EdgeInsets padding = const pw.EdgeInsets.symmetric(
+          horizontal: 5,
+          vertical: 3,
+        ),
+        pw.Alignment alignment = pw.Alignment.centerLeft,
+      }) {
     return pw.Container(alignment: alignment, padding: padding, child: child);
   }
 
   static pw.Widget _legacyTextCell(
-    String text, {
-    double size = 9,
-    bool bold = false,
-    PdfColor? color,
-    pw.Alignment alignment = pw.Alignment.centerLeft,
-    pw.TextAlign textAlign = pw.TextAlign.left,
-    pw.EdgeInsets padding = const pw.EdgeInsets.symmetric(
-      horizontal: 5,
-      vertical: 3,
-    ),
-  }) {
+      String text, {
+        double size = 9,
+        bool bold = false,
+        PdfColor? color,
+        pw.Alignment alignment = pw.Alignment.centerLeft,
+        pw.TextAlign textAlign = pw.TextAlign.left,
+        pw.EdgeInsets padding = const pw.EdgeInsets.symmetric(
+          horizontal: 5,
+          vertical: 3,
+        ),
+      }) {
     return _legacyCell(
       pw.Text(
         text,
@@ -881,9 +992,9 @@ class QuotationPdfGenerator {
   }
 
   static pw.Widget _buildLegacyMemcoHeader(
-    Map<String, dynamic> quotation,
-    pw.ImageProvider? logoImage,
-  ) {
+      Map<String, dynamic> quotation,
+      pw.ImageProvider? logoImage,
+      ) {
     return ExcelQuotationFormat.header(quotation, logoImage);
   }
 
@@ -892,10 +1003,10 @@ class QuotationPdfGenerator {
   }
 
   static pw.Widget _buildLegacyInfoBox(
-    Map<String, dynamic> quotation,
-    String docNumber,
-    String docDate,
-  ) {
+      Map<String, dynamic> quotation,
+      String docNumber,
+      String docDate,
+      ) {
     return ExcelQuotationFormat.infoBox(quotation, docNumber, docDate);
   }
 
@@ -914,9 +1025,9 @@ class QuotationPdfGenerator {
   }
 
   static pw.Widget _legacyProductDescription(
-    QuotationLineItem item,
-    int index,
-  ) {
+      QuotationLineItem item,
+      int index,
+      ) {
     return ExcelQuotationFormat.productDescription(item);
   }
 
@@ -929,11 +1040,11 @@ class QuotationPdfGenerator {
   }
 
   static pw.Widget _buildLegacyAmountSummary(
-    Map<String, dynamic> quotation,
-    bool isInterState,
-    double roundOff,
-    List<QuotationLineItem> items,
-  ) {
+      Map<String, dynamic> quotation,
+      bool isInterState,
+      double roundOff,
+      List<QuotationLineItem> items,
+      ) {
     return ExcelQuotationFormat.amountSummary(
       quotation,
       isInterState,
@@ -943,8 +1054,8 @@ class QuotationPdfGenerator {
   }
 
   static List<Map<String, String>> _legacyTermsRows(
-    Map<String, dynamic> quotation,
-  ) {
+      Map<String, dynamic> quotation,
+      ) {
     final terms = quotation['dynamicTerms'];
     final rows = <Map<String, String>>[];
 
@@ -976,9 +1087,9 @@ class QuotationPdfGenerator {
   }
 
   static pw.Widget _buildLegacyTermsAndConditions(
-    Map<String, dynamic> quotation,
-    int number,
-  ) {
+      Map<String, dynamic> quotation,
+      int number,
+      ) {
     return ExcelQuotationFormat.terms(quotation);
   }
 
@@ -987,11 +1098,11 @@ class QuotationPdfGenerator {
   }
 
   static pw.Widget _buildEnterpriseHeader(
-    Map<String, dynamic> quotation,
-    pw.ImageProvider? logoImage,
-    bool isPreview,
-    String displayDocumentType,
-  ) {
+      Map<String, dynamic> quotation,
+      pw.ImageProvider? logoImage,
+      bool isPreview,
+      String displayDocumentType,
+      ) {
     List<String> legalIds = [];
     final gst = _safeString(quotation['companyGst']);
     final pan = _safeString(quotation['companyPan']);
@@ -1170,12 +1281,12 @@ class QuotationPdfGenerator {
   }
 
   static pw.Widget _buildTwoColumnInfo(
-    Map<String, dynamic> quotation,
-    String soNumber,
-    String quoteNumber,
-    String docDateStr,
-    bool isSO,
-  ) {
+      Map<String, dynamic> quotation,
+      String soNumber,
+      String quoteNumber,
+      String docDateStr,
+      bool isSO,
+      ) {
     final clientName = _safeString(
       quotation['clientName'] ??
           quotation['customerName'] ??
@@ -1388,9 +1499,9 @@ class QuotationPdfGenerator {
   }
 
   static pw.Widget _buildProductsTable(
-    List<QuotationLineItem> items,
-    bool isInterState,
-  ) {
+      List<QuotationLineItem> items,
+      bool isInterState,
+      ) {
     if (items.isEmpty) {
       return pw.Container(
         padding: const pw.EdgeInsets.all(32),
@@ -1436,40 +1547,40 @@ class QuotationPdfGenerator {
               ),
             ),
             children:
-                [
-                  'No.',
-                  'Description',
-                  'HSN',
-                  'Qty',
-                  'Rate',
-                  'Tax',
-                  'Amount',
-                ].map((text) {
-                  return pw.Container(
-                    padding: const pw.EdgeInsets.symmetric(
-                      vertical: 7,
-                      horizontal: 5,
-                    ),
-                    alignment:
-                        (text == 'No.' ||
-                            text == 'Qty' ||
-                            text == 'HSN' ||
-                            text == 'Tax')
-                        ? pw.Alignment.center
-                        : (text == 'Description'
-                              ? pw.Alignment.centerLeft
-                              : pw.Alignment.centerRight),
-                    child: pw.Text(
-                      text,
-                      style: pw.TextStyle(
-                        color: PdfColors.white,
-                        fontSize: 7.7,
-                        fontWeight: pw.FontWeight.bold,
-                        letterSpacing: 0.25,
-                      ),
-                    ),
-                  );
-                }).toList(),
+            [
+              'No.',
+              'Description',
+              'HSN',
+              'Qty',
+              'Rate',
+              'Tax',
+              'Amount',
+            ].map((text) {
+              return pw.Container(
+                padding: const pw.EdgeInsets.symmetric(
+                  vertical: 7,
+                  horizontal: 5,
+                ),
+                alignment:
+                (text == 'No.' ||
+                    text == 'Qty' ||
+                    text == 'HSN' ||
+                    text == 'Tax')
+                    ? pw.Alignment.center
+                    : (text == 'Description'
+                    ? pw.Alignment.centerLeft
+                    : pw.Alignment.centerRight),
+                child: pw.Text(
+                  text,
+                  style: pw.TextStyle(
+                    color: PdfColors.white,
+                    fontSize: 7.7,
+                    fontWeight: pw.FontWeight.bold,
+                    letterSpacing: 0.25,
+                  ),
+                ),
+              );
+            }).toList(),
           ),
 
           ...List.generate(items.length, (i) {
@@ -1525,9 +1636,9 @@ class QuotationPdfGenerator {
             }
 
             pw.Widget cell(
-              pw.Widget child, {
-              pw.Alignment align = pw.Alignment.centerRight,
-            }) {
+                pw.Widget child, {
+                  pw.Alignment align = pw.Alignment.centerRight,
+                }) {
               return pw.Container(
                 padding: const pw.EdgeInsets.symmetric(
                   vertical: 7,
@@ -1539,10 +1650,10 @@ class QuotationPdfGenerator {
             }
 
             pw.Widget textCell(
-              String text, {
-              pw.Alignment align = pw.Alignment.centerRight,
-              bool bold = false,
-            }) {
+                String text, {
+                  pw.Alignment align = pw.Alignment.centerRight,
+                  bool bold = false,
+                }) {
               return cell(
                 pw.Text(
                   text,
@@ -1595,10 +1706,10 @@ class QuotationPdfGenerator {
   }
 
   static pw.Widget _buildTotalSummaryCard(
-    Map<String, dynamic> quotation,
-    bool isInterState,
-    double roundOff,
-  ) {
+      Map<String, dynamic> quotation,
+      bool isInterState,
+      double roundOff,
+      ) {
     pw.Widget calcRow(String label, String value, {bool bold = false}) {
       return pw.Padding(
         padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 16),
@@ -1714,10 +1825,10 @@ class QuotationPdfGenerator {
   }
 
   static pw.Widget _buildBottomSection(
-    Map<String, dynamic> quotation,
-    bool isInterState,
-    double roundOff,
-  ) {
+      Map<String, dynamic> quotation,
+      bool isInterState,
+      double roundOff,
+      ) {
     final terms = quotation['dynamicTerms'];
     final companyName = _safeString(quotation['companyName']);
     final sigName = _safeString(quotation['signatureName']);

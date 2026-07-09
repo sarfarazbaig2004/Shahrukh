@@ -134,7 +134,8 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
       if (user == null) {
         if (mounted) {
           setState(() {
-            _errorMessage = 'User authentication required. Please log in again.';
+            _errorMessage =
+            'User authentication required. Please log in again.';
             _isLoadingContext = false;
           });
         }
@@ -177,8 +178,8 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
       }
 
       _companyId = resolvedCompanyId;
-      _currentUserName =
-          (userData['name'] ?? userData['fullName'] ?? '').toString();
+      _currentUserName = (userData['name'] ?? userData['fullName'] ?? '')
+          .toString();
 
       final companyUserDoc = await FirebaseFirestore.instance
           .collection(_kCollectionCompanies)
@@ -231,7 +232,10 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
     // 🔥 FIX: Remove .where() filters from here.
     // Mixing OR filters + orderBy immediately crashes without a custom index.
     // We now fetch safely and let `_applyLocalFilters` handle the RBAC logic perfectly.
-    _primaryQuery = _quotationCollection!.orderBy('createdAt', descending: true);
+    _primaryQuery = _quotationCollection!.orderBy(
+      'createdAt',
+      descending: true,
+    );
   }
 
   String _safeString(dynamic value, {String fallback = ''}) {
@@ -277,8 +281,10 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
 
       if (docSnap.exists) {
         final data = docSnap.data();
-        final name =
-        _safeString(data?['name'] ?? data?['fullName'], fallback: 'Unknown');
+        final name = _safeString(
+          data?['name'] ?? data?['fullName'],
+          fallback: 'Unknown',
+        );
         _userNameCache[uid] = name;
         return name;
       }
@@ -350,10 +356,11 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
               companyData['companyEmail'] ?? companyData['email'] ?? '';
           safeData['companyLogoUrl'] ??=
               companyData['companyLogoUrl'] ?? companyData['logoUrl'] ?? '';
-          safeData['companyGst'] ??= companyData['companyGst'] ??
-              companyData['gstin'] ??
-              companyData['gstNo'] ??
-              '';
+          safeData['companyGst'] ??=
+              companyData['companyGst'] ??
+                  companyData['gstin'] ??
+                  companyData['gstNo'] ??
+                  '';
           safeData['companyPan'] ??=
               companyData['companyPan'] ?? companyData['pan'] ?? '';
           safeData['companyIec'] ??=
@@ -363,11 +370,14 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
         }
       }
 
-      final itemsList =
-      (safeData['items'] is List) ? (safeData['items'] as List) : [];
+      final itemsList = (safeData['items'] is List)
+          ? (safeData['items'] as List)
+          : [];
       final parsedItems = itemsList
-          .map((e) => QuotationLineItem.fromMap(
-          Map<String, dynamic>.from(e as Map)))
+          .map(
+            (e) =>
+            QuotationLineItem.fromMap(Map<String, dynamic>.from(e as Map)),
+      )
           .toList();
 
       if (mounted) {
@@ -378,8 +388,8 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => QuotationPreviewScreen(
-              quotation: safeData, items: parsedItems),
+          builder: (_) =>
+              QuotationPreviewScreen(quotation: safeData, items: parsedItems),
         ),
       );
     } catch (e) {
@@ -399,6 +409,11 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
       return;
     }
 
+    if (_convertingDocs[docId] == true) {
+      _showSnack('Conversion in progress. Please wait.');
+      return;
+    }
+
     if ((data['status'] ?? '').toString().toLowerCase() == 'converted') {
       _showSnack('Already converted to Sales Order.', isError: true);
       return;
@@ -409,31 +424,50 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
     final bool isApproved = status == 'Approved' || approval == 'Approved';
 
     if (!isApproved) {
-      _showSnack('Quotation must be Approved before converting to SO.', isError: true);
+      _showSnack(
+        'Quotation must be Approved before converting to SO.',
+        isError: true,
+      );
       return;
     }
 
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => QuotationScreenLocal(
-          userId: widget.userId,
-          companyId: _companyId,
-          quotationId: docId,
-          existingQuotation: data,
-          prepareSalesOrderMode: true,
-        ),
-      ),
+    final confirm = await _showConfirmDialog(
+      'Prepare Sales Order',
+      'Open quotation ${data['quoteNumber']} to prepare and confirm the Sales Order?',
     );
+    if (confirm != true) return;
 
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() => _convertingDocs[docId] = true);
+
+    try {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => QuotationScreenLocal(
+            userId: widget.userId,
+            companyId: _companyId,
+            quotationId: docId,
+            existingQuotation: data,
+            prepareSalesOrderMode: true,
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _convertingDocs.remove(docId);
+        });
+      }
+    }
   }
 
   Future<void> _createRevision(String docId, Map<String, dynamic> data) async {
     final inquiryId = data['inquiryId'] ?? data['inquiryRefNo'];
     if (inquiryId == null || inquiryId.toString().trim().isEmpty) {
       _showSnack(
-          'Warning: Cannot revise a quotation that is not linked to an Inquiry.',
-          isError: true);
+        'Warning: Cannot revise a quotation that is not linked to an Inquiry.',
+        isError: true,
+      );
       return;
     }
 
@@ -478,12 +512,12 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
             'user': {
               'uid': _currentUserUid,
               'name': _currentUserName,
-              'role': _currentUserRole
+              'role': _currentUserRole,
             },
             'system': {
               'platform': 'flutter',
               'module': 'quotation_revision',
-              'version': '1.0'
+              'version': '1.0',
             },
             'note': 'Revision ${currentVersion + 1} created from $docId',
           },
@@ -515,12 +549,12 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
             'user': {
               'uid': _currentUserUid,
               'name': _currentUserName,
-              'role': _currentUserRole
+              'role': _currentUserRole,
             },
             'system': {
               'platform': 'flutter',
               'module': 'quotation_approval',
-              'version': '1.0'
+              'version': '1.0',
             },
             'note': 'Approval set to $status',
           },
@@ -553,12 +587,12 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
             'user': {
               'uid': _currentUserUid,
               'name': _currentUserName,
-              'role': _currentUserRole
+              'role': _currentUserRole,
             },
             'system': {
               'platform': 'flutter',
               'module': 'quotation_cancel',
-              'version': '1.0'
+              'version': '1.0',
             },
             'note': 'Quotation cancelled',
           },
@@ -621,7 +655,8 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
         final createdBy = _safeString(data['createdBy']);
         final assignedToUsers = data['assignedToUsers'] as List<dynamic>? ?? [];
 
-        if (createdBy != _currentUserUid && !assignedToUsers.contains(_currentUserUid)) {
+        if (createdBy != _currentUserUid &&
+            !assignedToUsers.contains(_currentUserUid)) {
           matchesRole = false;
         }
       }
@@ -643,7 +678,8 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
       final isDeleted = data['isDeleted'] == true;
 
       final items = data['items'] is List ? data['items'] as List : const [];
-      final itemText = items.map((item) {
+      final itemText = items
+          .map((item) {
         if (item is Map) {
           return [
             item['name'],
@@ -654,18 +690,22 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
           ].map(_safeString).join(' ');
         }
         return _safeString(item);
-      }).join(' ').toLowerCase();
+      })
+          .join(' ')
+          .toLowerCase();
 
-      final matchesSearch = search.isEmpty ||
-          quoteNumber.contains(search) ||
-          customer.contains(search) ||
-          inquiry.contains(search) ||
-          createdByName.contains(search) ||
-          status.toLowerCase().contains(search) ||
-          grandTotal.contains(search) ||
-          itemText.contains(search);
-      final matchesStatus = _statusFilter == 'All' ||
-          status.toLowerCase() == _statusFilter.toLowerCase();
+      final matchesSearch =
+          search.isEmpty ||
+              quoteNumber.contains(search) ||
+              customer.contains(search) ||
+              inquiry.contains(search) ||
+              createdByName.contains(search) ||
+              status.toLowerCase().contains(search) ||
+              grandTotal.contains(search) ||
+              itemText.contains(search);
+      final matchesStatus =
+          _statusFilter == 'All' ||
+              status.toLowerCase() == _statusFilter.toLowerCase();
 
       return matchesRole && !isDeleted && matchesSearch && matchesStatus;
     }).toList();
@@ -735,7 +775,9 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
                         border: OutlineInputBorder(),
                       ),
                       items: _statuses
-                          .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                          .map(
+                            (e) => DropdownMenuItem(value: e, child: Text(e)),
+                      )
                           .toList(),
                       onChanged: (value) {
                         setModalState(() {
@@ -752,7 +794,9 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
                         border: OutlineInputBorder(),
                       ),
                       items: _sortOptions
-                          .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                          .map(
+                            (e) => DropdownMenuItem(value: e, child: Text(e)),
+                      )
                           .toList(),
                       onChanged: (value) {
                         setModalState(() {
@@ -812,7 +856,10 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
   @override
   Widget build(BuildContext context) {
     if (_isLoadingContext) {
-      return const Scaffold(backgroundColor: Colors.white, body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(child: CircularProgressIndicator()),
+      );
     }
     if (_errorMessage != null) {
       return Scaffold(
@@ -879,11 +926,16 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
               int sent = 0;
 
               for (final doc in filteredDocs) {
-                final status = (doc.data()['status'] ?? '').toString().toLowerCase();
-                final approvalStatus = (doc.data()['approvalStatus'] ?? '').toString().toLowerCase();
+                final status = (doc.data()['status'] ?? '')
+                    .toString()
+                    .toLowerCase();
+                final approvalStatus = (doc.data()['approvalStatus'] ?? '')
+                    .toString()
+                    .toLowerCase();
 
                 if (status == 'sent') sent++;
-                if (status == 'approved' || approvalStatus == 'approved') approved++;
+                if (status == 'approved' || approvalStatus == 'approved')
+                  approved++;
                 if (status == 'converted') converted++;
               }
 
@@ -978,13 +1030,22 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Row(
                       children: [
-                        _MiniStatText(label: 'Total', value: totalQuotes.toString()),
+                        _MiniStatText(
+                          label: 'Total',
+                          value: totalQuotes.toString(),
+                        ),
                         const SizedBox(width: 14),
                         _MiniStatText(label: 'Sent', value: sent.toString()),
                         const SizedBox(width: 14),
-                        _MiniStatText(label: 'Approved', value: approved.toString()),
+                        _MiniStatText(
+                          label: 'Approved',
+                          value: approved.toString(),
+                        ),
                         const SizedBox(width: 14),
-                        _MiniStatText(label: 'Converted', value: converted.toString()),
+                        _MiniStatText(
+                          label: 'Converted',
+                          value: converted.toString(),
+                        ),
                       ],
                     ),
                   ),
@@ -1007,10 +1068,16 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
                             onPressed: _resetFilters,
                             style: TextButton.styleFrom(
                               minimumSize: Size.zero,
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
-                            child: const Text('Clear Filters', style: TextStyle(fontSize: 12)),
+                            child: const Text(
+                              'Clear Filters',
+                              style: TextStyle(fontSize: 12),
+                            ),
                           ),
                         ],
                       ),
@@ -1020,7 +1087,8 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
                     child: filteredDocs.isEmpty
                         ? _EmptyQuotationsState(
                       hasSearch:
-                      searchValue.trim().isNotEmpty || _hasActiveFilters,
+                      searchValue.trim().isNotEmpty ||
+                          _hasActiveFilters,
                       onReset: () {
                         _clearSearch();
                         _resetFilters();
@@ -1029,35 +1097,63 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
                         : ListView.separated(
                       padding: const EdgeInsets.fromLTRB(16, 4, 16, 90),
                       itemCount: filteredDocs.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      separatorBuilder: (_, __) =>
+                      const SizedBox(height: 8),
                       itemBuilder: (context, index) {
                         final doc = filteredDocs[index];
                         final data = doc.data();
 
-                        final rawQNo = data['quoteNumber']?.toString().trim() ?? '';
+                        final rawQNo =
+                            data['quoteNumber']?.toString().trim() ?? '';
                         final qNo = rawQNo.isEmpty ? 'Draft' : rawQNo;
-                        final version = data['version']?.toString() ?? '1';
-                        final customer = data['clientName']?.toString() ?? 'Unknown Customer';
+                        final version =
+                            data['version']?.toString() ?? '1';
+                        final customer =
+                            data['clientName']?.toString() ??
+                                'Unknown Customer';
 
                         final amt = _money(data['grandTotal']);
-                        final status = data['status']?.toString() ?? 'Draft';
-                        final approval = data['approvalStatus']?.toString() ?? 'Pending';
-                        final paymentStat = data['paymentStatus']?.toString() ?? 'Pending';
-                        final inqRef = (data['inquiryRefNo'] ?? data['inquiryNumber'] ?? data['inquiryId'] ?? '').toString();
+                        final status =
+                            data['status']?.toString() ?? 'Draft';
+                        final approval =
+                            data['approvalStatus']?.toString() ??
+                                'Pending';
+                        final paymentStat =
+                            data['paymentStatus']?.toString() ??
+                                'Pending';
+                        final inqRef =
+                        (data['inquiryRefNo'] ??
+                            data['inquiryNumber'] ??
+                            data['inquiryId'] ??
+                            '')
+                            .toString();
 
-                        bool isCancelled = status.toLowerCase() == 'cancelled';
-                        bool isApproved = status.toLowerCase() == 'approved' || approval.toLowerCase() == 'approved';
-                        bool isSent = status.toLowerCase() == 'sent';
-                        bool isConverted = status.toLowerCase() == 'converted';
+                        bool isCancelled =
+                            status.toLowerCase() == 'cancelled';
+                        bool isApproved =
+                            status.toLowerCase() == 'approved' ||
+                                approval.toLowerCase() == 'approved';
+                        bool isConverted =
+                            status.toLowerCase() == 'converted';
 
-                        bool canEdit = !isCancelled && !isApproved && !isConverted;
-                        bool isConverting = _convertingDocs[doc.id] == true;
+                        bool canEdit =
+                            !isCancelled && !isApproved && !isConverted;
+                        bool isConverting =
+                            _convertingDocs[doc.id] == true;
 
-                        final String createdByUid = _parseSafeString(data['createdBy']);
-                        final String explicitlyStoredName = _safeString(data['createdByName']);
+                        final String createdByUid = _parseSafeString(
+                          data['createdBy'],
+                        );
+                        final String explicitlyStoredName = _safeString(
+                          data['createdByName'],
+                        );
 
-                        final Timestamp? createdAtRaw = _safeTimestamp(data['createdAt']);
-                        final Timestamp? nextFollowUpRaw = _safeTimestamp(data['nextFollowUpDate']);
+                        final Timestamp? createdAtRaw = _safeTimestamp(
+                          data['createdAt'],
+                        );
+                        final Timestamp? nextFollowUpRaw = _safeTimestamp(
+                          data['nextFollowUpDate'],
+                        );
 
                         return Container(
                           decoration: BoxDecoration(
@@ -1071,14 +1167,17 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
                           child: Padding(
                             padding: const EdgeInsets.all(10),
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              crossAxisAlignment:
+                              CrossAxisAlignment.start,
                               children: [
                                 Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  crossAxisAlignment:
+                                  CrossAxisAlignment.start,
                                   children: [
                                     CircleAvatar(
                                       radius: 18,
-                                      backgroundColor: Colors.blue.shade50,
+                                      backgroundColor:
+                                      Colors.blue.shade50,
                                       child: Text(
                                         customer.isNotEmpty
                                             ? customer[0].toUpperCase()
@@ -1093,12 +1192,14 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
                                     const SizedBox(width: 8),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                         children: [
                                           Text(
                                             '$qNo (v$version)',
                                             maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
+                                            overflow:
+                                            TextOverflow.ellipsis,
                                             style: const TextStyle(
                                               fontSize: 14.5,
                                               fontWeight: FontWeight.w700,
@@ -1108,7 +1209,8 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
                                           Text(
                                             customer,
                                             maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
+                                            overflow:
+                                            TextOverflow.ellipsis,
                                             style: TextStyle(
                                               fontSize: 12.5,
                                               color: Colors.grey.shade600,
@@ -1124,18 +1226,34 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
                                       child: PopupMenuButton<String>(
                                         padding: EdgeInsets.zero,
                                         tooltip: 'Actions',
-                                        icon: Icon(Icons.more_vert, size: 20, color: Colors.grey.shade600),
+                                        icon: Icon(
+                                          Icons.more_vert,
+                                          size: 20,
+                                          color: Colors.grey.shade600,
+                                        ),
                                         onSelected: (val) {
                                           if (val == 'view') {
                                             _openQuotationPreview(data);
                                           } else if (val == 'edit') {
-                                            _openQuotationForEdit(doc.id, data);
+                                            _openQuotationForEdit(
+                                              doc.id,
+                                              data,
+                                            );
                                           } else if (val == 'approve') {
-                                            _updateApproval(doc.id, 'Approved');
+                                            _updateApproval(
+                                              doc.id,
+                                              'Approved',
+                                            );
                                           } else if (val == 'reject') {
-                                            _updateApproval(doc.id, 'Rejected');
+                                            _updateApproval(
+                                              doc.id,
+                                              'Rejected',
+                                            );
                                           } else if (val == 'convert') {
-                                            _convertToSalesOrder(doc.id, data);
+                                            _convertToSalesOrder(
+                                              doc.id,
+                                              data,
+                                            );
                                           } else if (val == 'revision') {
                                             _createRevision(doc.id, data);
                                           } else if (val == 'cancel') {
@@ -1143,10 +1261,13 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
                                           }
                                         },
                                         itemBuilder: (context) {
-                                          List<PopupMenuEntry<String>> items = [
+                                          List<PopupMenuEntry<String>>
+                                          items = [
                                             const PopupMenuItem(
                                               value: 'view',
-                                              child: Text('View Quotation'),
+                                              child: Text(
+                                                'View Quotation',
+                                              ),
                                             ),
                                           ];
 
@@ -1154,15 +1275,22 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
                                             items.add(
                                               const PopupMenuItem(
                                                 value: 'edit',
-                                                child: Text('Edit Quotation'),
+                                                child: Text(
+                                                  'Edit Quotation',
+                                                ),
                                               ),
                                             );
                                           }
 
                                           if (!isCancelled) {
-                                            items.add(const PopupMenuDivider());
+                                            items.add(
+                                              const PopupMenuDivider(),
+                                            );
 
-                                            if (approval.toLowerCase() != 'approved' && approval.toLowerCase() != 'rejected') {
+                                            if (approval.toLowerCase() !=
+                                                'approved' &&
+                                                approval.toLowerCase() !=
+                                                    'rejected') {
                                               items.add(
                                                 const PopupMenuItem(
                                                   value: 'approve',
@@ -1177,11 +1305,15 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
                                               );
                                             }
 
-                                            if (!isConverted && isApproved && !isConverting) {
+                                            if (!isConverted &&
+                                                isApproved &&
+                                                !isConverting) {
                                               items.add(
                                                 const PopupMenuItem(
                                                   value: 'convert',
-                                                  child: Text('Convert to Sales Order'),
+                                                  child: Text(
+                                                    'Convert to Sales Order',
+                                                  ),
                                                 ),
                                               );
                                             }
@@ -1190,16 +1322,25 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
                                               items.add(
                                                 const PopupMenuItem(
                                                   value: 'revision',
-                                                  child: Text('Create Revision'),
+                                                  child: Text(
+                                                    'Create Revision',
+                                                  ),
                                                 ),
                                               );
                                             }
 
-                                            items.add(const PopupMenuDivider());
+                                            items.add(
+                                              const PopupMenuDivider(),
+                                            );
                                             items.add(
                                               const PopupMenuItem(
                                                 value: 'cancel',
-                                                child: Text('Cancel', style: TextStyle(color: Colors.red)),
+                                                child: Text(
+                                                  'Cancel',
+                                                  style: TextStyle(
+                                                    color: Colors.red,
+                                                  ),
+                                                ),
                                               ),
                                             );
                                           }
@@ -1217,20 +1358,38 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
                                   children: [
                                     _InfoChip(
                                       label: status,
-                                      backgroundColor: _getQuotationStatusBg(status),
-                                      textColor: _getQuotationStatusFg(status),
+                                      backgroundColor:
+                                      _getQuotationStatusBg(status),
+                                      textColor: _getQuotationStatusFg(
+                                        status,
+                                      ),
                                     ),
                                     if (approval != 'Pending')
                                       _InfoChip(
                                         label: approval,
-                                        backgroundColor: _getQuotationStatusBg(approval, isApproval: true),
-                                        textColor: _getQuotationStatusFg(approval, isApproval: true),
+                                        backgroundColor:
+                                        _getQuotationStatusBg(
+                                          approval,
+                                          isApproval: true,
+                                        ),
+                                        textColor: _getQuotationStatusFg(
+                                          approval,
+                                          isApproval: true,
+                                        ),
                                       ),
-                                    if (status.toLowerCase() == 'converted')
+                                    if (status.toLowerCase() ==
+                                        'converted')
                                       _InfoChip(
                                         label: paymentStat,
-                                        backgroundColor: _getQuotationStatusBg(paymentStat, isPayment: true),
-                                        textColor: _getQuotationStatusFg(paymentStat, isPayment: true),
+                                        backgroundColor:
+                                        _getQuotationStatusBg(
+                                          paymentStat,
+                                          isPayment: true,
+                                        ),
+                                        textColor: _getQuotationStatusFg(
+                                          paymentStat,
+                                          isPayment: true,
+                                        ),
                                       ),
                                   ],
                                 ),
@@ -1238,7 +1397,8 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
                                 Wrap(
                                   spacing: 12,
                                   runSpacing: 6,
-                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  crossAxisAlignment:
+                                  WrapCrossAlignment.center,
                                   children: [
                                     if (inqRef.isNotEmpty)
                                       _InlineInfo(
@@ -1252,7 +1412,9 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
                                       )
                                     else
                                       FutureBuilder<String>(
-                                        future: _getUserName(createdByUid),
+                                        future: _getUserName(
+                                          createdByUid,
+                                        ),
                                         builder: (context, snapshot) {
                                           return _InlineInfo(
                                             icon: Icons.person_outline,
@@ -1266,12 +1428,14 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
                                     ),
                                     _InlineInfo(
                                       icon: Icons.add_circle_outline,
-                                      text: 'Created: ${_formatCompactDate(createdAtRaw?.toDate())}',
+                                      text:
+                                      'Created: ${_formatCompactDate(createdAtRaw?.toDate())}',
                                     ),
                                     if (nextFollowUpRaw != null)
                                       _InlineInfo(
                                         icon: Icons.event_repeat_outlined,
-                                        text: 'Next: ${_formatCompactDate(nextFollowUpRaw.toDate())}',
+                                        text:
+                                        'Next: ${_formatCompactDate(nextFollowUpRaw.toDate())}',
                                       ),
                                   ],
                                 ),
@@ -1291,7 +1455,11 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
     );
   }
 
-  Color _getQuotationStatusBg(String status, {bool isApproval = false, bool isPayment = false}) {
+  Color _getQuotationStatusBg(
+      String status, {
+        bool isApproval = false,
+        bool isPayment = false,
+      }) {
     String s = status.toLowerCase();
     if (isPayment) {
       if (s == 'paid') return Colors.green.shade50;
@@ -1308,7 +1476,11 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
     }
   }
 
-  Color _getQuotationStatusFg(String status, {bool isApproval = false, bool isPayment = false}) {
+  Color _getQuotationStatusFg(
+      String status, {
+        bool isApproval = false,
+        bool isPayment = false,
+      }) {
     String s = status.toLowerCase();
     if (isPayment) {
       if (s == 'paid') return Colors.green.shade800;

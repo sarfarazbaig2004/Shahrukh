@@ -47,6 +47,7 @@ class QuotationScreenLocal extends StatefulWidget {
 class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final ScrollController _scrollController = ScrollController();
+  final FocusNode _customerNameFocusNode = FocusNode();
 
   String? _companyId;
   String? _currentUserUid;
@@ -65,6 +66,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   String _companyLogoUrl = '';
   String _companyState = '';
   String _quotationPrefix = quotationSeriesPrefix;
+  String _quotationType = 'domestic';
+  Map<String, dynamic> _quotationSettings = {};
 
   bool _isLoading = false;
   bool _isRestoring = false;
@@ -83,7 +86,6 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     'super_admin',
   ].contains(_currentUserRole.toLowerCase());
 
-
   bool get _hasLinkedInquiry =>
       (_linkedInquiryId?.trim().isNotEmpty ?? false) ||
           (_linkedInquiryNumber?.trim().isNotEmpty ?? false);
@@ -98,11 +100,17 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   String _paymentStatus = 'Pending';
 
   String? _selectedCustomerId;
+  String _selectedCustomerLabel = '';
   final TextEditingController _clientNameController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _mobileController = TextEditingController();
-  final TextEditingController _contactPersonController = TextEditingController();
+  final TextEditingController _contactPersonController =
+  TextEditingController();
+  final TextEditingController _contactDepartmentController =
+  TextEditingController();
+  final TextEditingController _contactDesignationController =
+  TextEditingController();
   final TextEditingController _gstController = TextEditingController();
   String _customerState = '';
   Map<String, dynamic>? _customerInsights;
@@ -120,25 +128,35 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   String _contactPersonSnapshot = '';
   String _contactEmailSnapshot = '';
   String _contactMobileSnapshot = '';
+  String _contactDepartmentSnapshot = '';
+  String _contactDesignationSnapshot = '';
 
-  final TextEditingController _quotationSequenceController = TextEditingController();
+  final TextEditingController _quotationSequenceController =
+  TextEditingController();
   final TextEditingController _subjectController = TextEditingController();
   String? _linkedInquiryId;
   String? _linkedInquiryNumber;
-  final TextEditingController _inquiryRefNoteController = TextEditingController();
+  final TextEditingController _inquiryRefNoteController =
+  TextEditingController();
 
   DateTime _inquiryDate = DateTime.now().toUtc();
   DateTime _quoteDate = DateTime.now().toUtc();
   DateTime? _nextFollowUpDate;
-  final TextEditingController _followUpNotesController = TextEditingController();
-
-
+  final TextEditingController _followUpNotesController =
+  TextEditingController();
 
   final TextEditingController _poNumberController = TextEditingController();
   DateTime? _poDate;
-  final List<String> _poReferenceSources = const ['Mail', 'WhatsApp', 'Verbal', 'Other'];
+  final List<String> _poReferenceSources = const [
+    'Mail',
+    'WhatsApp',
+    'Verbal',
+    'Other',
+  ];
   String _selectedPoReferenceSource = 'Mail';
-  final TextEditingController _poReferenceOtherController = TextEditingController();
+  final TextEditingController _poReferenceOtherController =
+  TextEditingController();
+
   final List<String> _inquirySources = const [
     'Verbal',
     'Phone Call',
@@ -173,10 +191,13 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   bool _packingChargesExtra = true;
 
   final TextEditingController _signNameController = TextEditingController();
-  final TextEditingController _signDesignationController = TextEditingController();
+  final TextEditingController _signDesignationController =
+  TextEditingController();
   final TextEditingController _signPhoneController = TextEditingController();
 
-  CollectionReference<Map<String, dynamic>> _companyContactsRef(String customerId) {
+  CollectionReference<Map<String, dynamic>> _companyContactsRef(
+      String customerId,
+      ) {
     return FirebaseFirestore.instance
         .collection('companies')
         .doc(_companyId)
@@ -185,8 +206,451 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         .collection('contacts');
   }
 
+  String _quotationContactDigits(dynamic value) {
+    return (value ?? '').toString().replaceAll(RegExp(r'[^0-9]'), '');
+  }
+
+  String _quotationContactKey(Map<String, dynamic> contact) {
+    final name = (contact['name'] ?? contact['contactName'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+
+    final phone = _quotationContactDigits(
+      contact['mobile'] ?? contact['phone'] ?? contact['contactPhone'],
+    );
+
+    final email = (contact['email'] ?? contact['contactEmail'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+
+    if (phone.isNotEmpty) return 'p:$phone';
+    if (email.isNotEmpty) return 'e:$email';
+    return 'n:$name';
+  }
+
+  Map<String, dynamic> _normalizeQuotationContact(
+      Map<dynamic, dynamic> raw, {
+        required String id,
+        required String source,
+      }) {
+    final name =
+    (raw['name'] ??
+        raw['contactName'] ??
+        raw['contactPerson'] ??
+        raw['personName'] ??
+        raw['fullName'] ??
+        '')
+        .toString()
+        .trim();
+
+    final mobile =
+    (raw['mobile'] ??
+        raw['phone'] ??
+        raw['contactPhone'] ??
+        raw['contactMobile'] ??
+        raw['phoneNumber'] ??
+        '')
+        .toString()
+        .trim();
+
+    final email =
+    (raw['email'] ??
+        raw['contactEmail'] ??
+        raw['emailId'] ??
+        raw['mail'] ??
+        '')
+        .toString()
+        .trim();
+
+    final designation =
+    (raw['designation'] ??
+        raw['jobTitle'] ??
+        raw['title'] ??
+        raw['position'] ??
+        '')
+        .toString()
+        .trim();
+
+    final department =
+    (raw['department'] ?? raw['dept'] ?? raw['division'] ?? '')
+        .toString()
+        .trim();
+
+    return {
+      'id': id,
+      'name': name,
+      'contactName': name,
+      'mobile': mobile,
+      'phone': mobile,
+      'phoneNormalized': mobile,
+      'email': email,
+      'emailNormalized': email,
+      'designation': designation,
+      'department': department,
+      'source': source,
+      'isActive': raw['isActive'] ?? true,
+      'isDeleted': raw['isDeleted'] ?? false,
+    };
+  }
+
+  List<Map<String, dynamic>> _extractQuotationContactsFromCustomer(
+      Map<String, dynamic> customer,
+      ) {
+    final contacts = <Map<String, dynamic>>[];
+
+    void addContact(Map<dynamic, dynamic> raw, String id, String source) {
+      final contact = _normalizeQuotationContact(raw, id: id, source: source);
+
+      final hasData =
+          (contact['name'] ?? '').toString().trim().isNotEmpty ||
+              (contact['mobile'] ?? '').toString().trim().isNotEmpty ||
+              (contact['email'] ?? '').toString().trim().isNotEmpty;
+
+      if (hasData) contacts.add(contact);
+    }
+
+    addContact(customer, 'customer_main_contact', 'customer');
+
+    for (final key in [
+      'contacts',
+      'contactPersons',
+      'contactPeople',
+      'customerContacts',
+      'persons',
+    ]) {
+      final value = customer[key];
+      if (value is List) {
+        for (var i = 0; i < value.length; i++) {
+          final item = value[i];
+          if (item is Map) addContact(item, '${key}_$i', key);
+        }
+      }
+    }
+
+    final addresses = customer['addresses'];
+    if (addresses is List) {
+      for (var i = 0; i < addresses.length; i++) {
+        final address = addresses[i];
+        if (address is Map) {
+          addContact(address, 'address_contact_$i', 'address');
+        }
+      }
+    }
+
+    return contacts;
+  }
+
+  Future<List<Map<String, dynamic>>>
+  _loadAllCustomerContactsForQuotation() async {
+    final customerId = _selectedCustomerId;
+
+    if (_companyId == null ||
+        _companyId!.isEmpty ||
+        customerId == null ||
+        customerId.isEmpty) {
+      return [];
+    }
+
+    final contacts = <Map<String, dynamic>>[];
+    final seen = <String>{};
+
+    void addContact(Map<String, dynamic> contact) {
+      if (contact['isDeleted'] == true) return;
+      if (contact['isActive'] == false) return;
+
+      final hasData =
+          (contact['name'] ?? '').toString().trim().isNotEmpty ||
+              (contact['mobile'] ?? '').toString().trim().isNotEmpty ||
+              (contact['email'] ?? '').toString().trim().isNotEmpty;
+
+      if (!hasData) return;
+
+      final key = _quotationContactKey(contact);
+      if (key.trim().isEmpty || seen.contains(key)) return;
+
+      seen.add(key);
+      contacts.add(contact);
+    }
+
+    try {
+      final customerDoc = await FirebaseFirestore.instance
+          .collection('companies')
+          .doc(_companyId)
+          .collection('customers')
+          .doc(customerId)
+          .get();
+
+      if (customerDoc.exists && customerDoc.data() != null) {
+        for (final contact in _extractQuotationContactsFromCustomer(
+          customerDoc.data()!,
+        )) {
+          addContact(contact);
+        }
+      }
+    } catch (e, st) {
+      developer.log(
+        'Failed to load embedded customer contacts',
+        name: 'QuotationScreen',
+        error: e,
+        stackTrace: st,
+      );
+    }
+
+    try {
+      final subContacts = await _companyContactsRef(customerId).get();
+      for (final doc in subContacts.docs) {
+        addContact(
+          _normalizeQuotationContact(
+            doc.data(),
+            id: doc.id,
+            source: 'customer_contacts_subcollection',
+          ),
+        );
+      }
+    } catch (e, st) {
+      developer.log(
+        'Failed to load customer subcollection contacts',
+        name: 'QuotationScreen',
+        error: e,
+        stackTrace: st,
+      );
+    }
+
+    try {
+      final companyContacts = await FirebaseFirestore.instance
+          .collection('companies')
+          .doc(_companyId)
+          .collection('contacts')
+          .where('customerId', isEqualTo: customerId)
+          .get();
+
+      for (final doc in companyContacts.docs) {
+        addContact(
+          _normalizeQuotationContact(
+            doc.data(),
+            id: doc.id,
+            source: 'company_contacts',
+          ),
+        );
+      }
+    } catch (_) {}
+
+    contacts.sort((a, b) {
+      final aName = (a['name'] ?? '').toString().toLowerCase();
+      final bName = (b['name'] ?? '').toString().toLowerCase();
+      return aName.compareTo(bName);
+    });
+
+    return contacts;
+  }
+
+  String _quotationContactLabel(Map<String, dynamic> contact) {
+    return (contact['name'] ?? contact['contactName'] ?? '').toString().trim();
+  }
+
+  String _quotationContactSubtitle(Map<String, dynamic> contact) {
+    return [
+      contact['mobile'] ?? contact['phone'],
+      contact['email'],
+      contact['designation'],
+      contact['department'],
+    ]
+        .where((e) => e != null && e.toString().trim().isNotEmpty)
+        .map((e) => e.toString().trim())
+        .join(' • ');
+  }
+
+  Widget _buildQuotationContactSelector() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      key: ValueKey('quotation_contacts_${_selectedCustomerId ?? ''}'),
+      future: _loadAllCustomerContactsForQuotation(),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.only(bottom: 12),
+            child: LinearProgressIndicator(),
+          );
+        }
+
+        final contacts = snap.data ?? [];
+
+        if (contacts.isEmpty) {
+          return _buildLegacyContactFields();
+        }
+
+        final validContactId =
+        contacts.any((d) => d['id']?.toString() == _selectedContactId)
+            ? _selectedContactId
+            : null;
+
+        String selectedContactLabel = _contactPersonController.text.trim();
+
+        if (validContactId != null) {
+          final selectedMatches = contacts
+              .where((d) => d['id']?.toString() == validContactId)
+              .toList();
+
+          if (selectedMatches.isNotEmpty) {
+            selectedContactLabel = _quotationContactLabel(
+              selectedMatches.first,
+            );
+          }
+        }
+
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: RawAutocomplete<Map<String, dynamic>>(
+                key: ValueKey(
+                  '${_selectedCustomerId}_${contacts.length}_${validContactId ?? ''}',
+                ),
+                initialValue: TextEditingValue(text: selectedContactLabel),
+                displayStringForOption: _quotationContactLabel,
+                optionsBuilder: (TextEditingValue value) {
+                  final query = value.text.trim().toLowerCase();
+
+                  if (query.isEmpty ||
+                      query == selectedContactLabel.toLowerCase()) {
+                    return contacts;
+                  }
+
+                  return contacts.where((contact) {
+                    final searchable = [
+                      _quotationContactLabel(contact),
+                      _quotationContactSubtitle(contact),
+                    ].join(' ').toLowerCase();
+
+                    return searchable.contains(query);
+                  });
+                },
+                onSelected: (Map<String, dynamic> contact) {
+                  setState(() {
+                    _selectedContactId = contact['id']?.toString();
+                    _selectedContactData = contact;
+                    _updateContactSnapshots(contact);
+                    developer.log(
+                      'Contact Changed By User',
+                      name: 'QuotationScreen',
+                    );
+                  });
+                },
+                fieldViewBuilder:
+                    (context, textController, focusNode, onFieldSubmitted) {
+                  return TextFormField(
+                    controller: textController,
+                    focusNode: focusNode,
+                    readOnly: _isReadOnly,
+                    decoration: InputDecoration(
+                      labelText: 'Search Contact Person',
+                      hintText: 'Type name, mobile, email, designation',
+                      prefixIcon: const Icon(Icons.person_search),
+                      suffixIcon: IconButton(
+                        tooltip: 'Show all contacts',
+                        icon: const Icon(Icons.search),
+                        onPressed: () {
+                          textController.clear();
+                          focusNode.requestFocus();
+                        },
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey.shade50,
+                      isDense: true,
+                    ),
+                  );
+                },
+                optionsViewBuilder: (context, onSelected, options) {
+                  final optionList = options.toList(growable: false);
+
+                  return Align(
+                    alignment: Alignment.topLeft,
+                    child: Material(
+                      elevation: 6,
+                      borderRadius: BorderRadius.circular(8),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxHeight: 300,
+                          maxWidth: 620,
+                        ),
+                        child: ListView.builder(
+                          padding: EdgeInsets.zero,
+                          shrinkWrap: true,
+                          itemCount: optionList.length,
+                          itemBuilder: (context, index) {
+                            final contact = optionList[index];
+                            final title = _quotationContactLabel(contact);
+                            final subtitle = _quotationContactSubtitle(contact);
+
+                            return ListTile(
+                              dense: true,
+                              leading: const Icon(Icons.person_outline),
+                              title: Text(
+                                title.isEmpty ? 'Unnamed Contact' : title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: subtitle.isEmpty
+                                  ? null
+                                  : Text(
+                                subtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              onTap: () => onSelected(contact),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildItemTextField(_mobileController, 'Mobile'),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _buildItemTextField(_emailController, 'Email ID'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildItemTextField(
+                    _contactDesignationController,
+                    'Designation',
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _buildItemTextField(
+                    _contactDepartmentController,
+                    'Department',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildItemTextField(_gstController, 'Customer GSTIN'),
+          ],
+        );
+      },
+    );
+  }
+
   Future<Map<String, dynamic>?> _getProductData(String productId) async {
-    if (_companyId == null || _companyId!.isEmpty || productId.isEmpty) return null;
+    if (_companyId == null || _companyId!.isEmpty || productId.isEmpty)
+      return null;
     if (_productCache.containsKey(productId)) return _productCache[productId];
     try {
       final doc = await FirebaseFirestore.instance
@@ -205,10 +669,17 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     return null;
   }
 
-  Future<List<Map<String, dynamic>>> _getCompatibleProducts(QuotationLineItem machine, Map<String, dynamic> extras) async {
+  Future<List<Map<String, dynamic>>> _getCompatibleProducts(
+      QuotationLineItem machine,
+      Map<String, dynamic> extras,
+      ) async {
     if (_companyId == null || _companyId!.isEmpty) return [];
     List<Map<String, dynamic>> results = [];
-    final ref = FirebaseFirestore.instance.collection('companies').doc(_companyId).collection('products').where('isActive', isEqualTo: true);
+    final ref = FirebaseFirestore.instance
+        .collection('companies')
+        .doc(_companyId)
+        .collection('products')
+        .where('isActive', isEqualTo: true);
 
     String mType = (extras['machineType'] ?? '').toString();
     String pId = machine.productId;
@@ -216,22 +687,28 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
     try {
       if (mType.isNotEmpty) {
-        final snap1 = await ref.where('compatibleMachineType', isEqualTo: mType).get();
-        for(var d in snap1.docs) {
+        final snap1 = await ref
+            .where('compatibleMachineType', isEqualTo: mType)
+            .get();
+        for (var d in snap1.docs) {
           _productCache[d.id] = {'id': d.id, ...d.data()};
           results.add(_productCache[d.id]!);
         }
       }
       if (pId.isNotEmpty) {
-        final snap2 = await ref.where('compatibleProductIds', arrayContains: pId).get();
-        for(var d in snap2.docs) {
+        final snap2 = await ref
+            .where('compatibleProductIds', arrayContains: pId)
+            .get();
+        for (var d in snap2.docs) {
           _productCache[d.id] = {'id': d.id, ...d.data()};
           results.add(_productCache[d.id]!);
         }
       }
       if (subId.isNotEmpty) {
-        final snap3 = await ref.where('compatibleSubcategories', arrayContains: subId).get();
-        for(var d in snap3.docs) {
+        final snap3 = await ref
+            .where('compatibleSubcategories', arrayContains: subId)
+            .get();
+        for (var d in snap3.docs) {
           _productCache[d.id] = {'id': d.id, ...d.data()};
           results.add(_productCache[d.id]!);
         }
@@ -266,12 +743,14 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     await _loadUserContext();
     await _loadCompanyProfile();
     await _loadUserSettings();
+    await _loadQuotationSettings();
 
     if (widget.existingQuotation != null) {
       developer.log('Existing Quotation Restored', name: 'QuotationScreen');
       await _loadExistingQuotation(widget.existingQuotation!);
     } else {
       await _applyInquirySeedIfNeeded();
+      _applyQuotationSettingsDefaultTerms(force: true);
     }
 
     _calculateTotals();
@@ -283,6 +762,92 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     }
   }
 
+  String _normalizeQuotationType(dynamic value) {
+    final text = (value ?? '').toString().trim().toLowerCase();
+    return text.contains('export') ? 'export' : 'domestic';
+  }
+
+  Future<void> _loadQuotationSettings() async {
+    final companyId = _companyId;
+    if (companyId == null || companyId.isEmpty) return;
+
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('companies')
+          .doc(companyId)
+          .collection('settings')
+          .doc('letterhead_settings')
+          .get();
+
+      _quotationSettings = snap.data() ?? <String, dynamic>{};
+
+      if (_quotationSettings.isEmpty) {
+        final oldSnap = await FirebaseFirestore.instance
+            .collection('companies')
+            .doc(companyId)
+            .collection('settings')
+            .doc('quotation_settings')
+            .get();
+        _quotationSettings = oldSnap.data() ?? <String, dynamic>{};
+      }
+    } catch (e) {
+      developer.log(
+        'Unable to load quotation settings: $e',
+        name: 'QuotationScreen',
+      );
+    }
+  }
+
+  List<TermRow> _settingsTermsForType(String type) {
+    final normalizedType = _normalizeQuotationType(type);
+    final rawSettings = _quotationSettings[normalizedType];
+
+    if (rawSettings is! Map) return [];
+
+    final settings = Map<String, dynamic>.from(rawSettings);
+    final rawTerms = settings['terms'];
+
+    if (rawTerms is! List) return [];
+
+    final rows = <TermRow>[];
+
+    for (final item in rawTerms) {
+      if (item is Map) {
+        final title = (item['title'] ?? '').toString().trim();
+        final value = (item['value'] ?? '').toString().trim();
+
+        if (title.isNotEmpty || value.isNotEmpty) {
+          rows.add(TermRow(title: title, value: value));
+        }
+      } else {
+        final value = item.toString().trim();
+        if (value.isNotEmpty) {
+          rows.add(TermRow(title: 'Term', value: value));
+        }
+      }
+    }
+
+    return rows;
+  }
+
+  void _applyQuotationSettingsDefaultTerms({bool force = false}) {
+    final hasExistingTerms = _dynamicTerms.any((term) {
+      return term.titleCtrl.text.trim().isNotEmpty ||
+          term.valueCtrl.text.trim().isNotEmpty;
+    });
+
+    if (!force && hasExistingTerms) return;
+
+    final settingTerms = _settingsTermsForType(_quotationType);
+    if (settingTerms.isEmpty) return;
+
+    for (final term in _dynamicTerms) {
+      term.dispose();
+    }
+
+    _dynamicTerms = settingTerms;
+  }
+
   void _applyProfessionalDefaultTerms() {
     for (var t in _dynamicTerms) {
       t.dispose();
@@ -290,20 +855,33 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     _dynamicTerms.clear();
     _dynamicTerms = [
       TermRow(
-          title: 'Payment',
-          value: '100% payment against Proforma Invoice before dispatch.'),
+        title: 'Payment',
+        value: '100% payment against Proforma Invoice before dispatch.',
+      ),
       TermRow(
-          title: 'Delivery Time',
-          value: '4 to 6 weeks from the date of receipt of technically and commercially clear PO along with advance.'),
-      TermRow(title: 'Validity', value: '30 Days from the date of this quotation.'),
+        title: 'Delivery Time',
+        value:
+        '4 to 6 weeks from the date of receipt of technically and commercially clear PO along with advance.',
+      ),
       TermRow(
-          title: 'Warranty',
-          value: '12 months from the date of dispatch or 18 months from the date of commissioning, whichever is earlier.'),
+        title: 'Validity',
+        value: '30 Days from the date of this quotation.',
+      ),
+      TermRow(
+        title: 'Warranty',
+        value:
+        '12 months from the date of dispatch or 18 months from the date of commissioning, whichever is earlier.',
+      ),
       TermRow(title: 'Price Basis', value: 'Ex-Works.'),
-      TermRow(title: 'Freight & Insurance', value: 'Extra at actuals. To be borne by the buyer.'),
       TermRow(
-          title: 'Installation',
-          value: 'Extra as applicable. Boarding, lodging and local transport of engineer to be arranged by the buyer.'),
+        title: 'Freight & Insurance',
+        value: 'Extra at actuals. To be borne by the buyer.',
+      ),
+      TermRow(
+        title: 'Installation',
+        value:
+        'Extra as applicable. Boarding, lodging and local transport of engineer to be arranged by the buyer.',
+      ),
     ];
   }
 
@@ -312,12 +890,16 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     _quotationStatus = data['status']?.toString() ?? 'Sent';
     _paymentStatus = data['paymentStatus']?.toString() ?? 'Pending';
     _currentVersion = data['version'] ?? 1;
+    _quotationType = _normalizeQuotationType(data['quotationType']);
 
-    if ((_approvalStatus == 'Approved' || _quotationStatus == 'Converted') && !_isAdminOrManager) {
+    if ((_approvalStatus == 'Approved' || _quotationStatus == 'Converted') &&
+        !_isAdminOrManager) {
       _isReadOnly = !widget.prepareSalesOrderMode;
     }
 
-    _quoteDate = (data['quoteDate'] as Timestamp?)?.toDate().toUtc() ?? DateTime.now().toUtc();
+    _quoteDate =
+        (data['quoteDate'] as Timestamp?)?.toDate().toUtc() ??
+            DateTime.now().toUtc();
 
     String rawNo = data['quoteNumber']?.toString() ?? '';
     if (rawNo.isNotEmpty) {
@@ -332,40 +914,89 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     _subjectController.text = data['subject']?.toString() ?? '';
 
     _selectedCustomerId = data['customerId']?.toString();
-    _selectedAddressId = data['addressId']?.toString() ?? data['customerAddressId']?.toString();
-    _selectedContactId = data['contactId']?.toString() ?? data['customerContactId']?.toString();
+    _selectedAddressId =
+        data['addressId']?.toString() ?? data['customerAddressId']?.toString();
+    _selectedContactId =
+        data['contactId']?.toString() ?? data['customerContactId']?.toString();
 
-    if (data['addressSnapshot'] != null && data['addressSnapshot'] is Map && (data['addressSnapshot'] as Map).isNotEmpty) {
+    if (data['addressSnapshot'] != null &&
+        data['addressSnapshot'] is Map &&
+        (data['addressSnapshot'] as Map).isNotEmpty) {
       _selectedAddressData = Map<String, dynamic>.from(data['addressSnapshot']);
       _updateAddressSnapshots(_selectedAddressData, restoreMode: true);
     } else {
-      _customerPrimaryAddressSnapshot = data['addressLine']?.toString() ?? data['clientAddress']?.toString() ?? '';
+      _customerPrimaryAddressSnapshot =
+          data['addressLine']?.toString() ??
+              data['clientAddress']?.toString() ??
+              '';
       _customerPrimaryCitySnapshot = data['city']?.toString() ?? '';
-      _customerPrimaryStateSnapshot = data['state']?.toString() ?? data['customerState']?.toString() ?? '';
+      _customerPrimaryStateSnapshot =
+          data['state']?.toString() ?? data['customerState']?.toString() ?? '';
       _customerPrimaryPincodeSnapshot = data['pincode']?.toString() ?? '';
       _addressController.text = _customerPrimaryAddressSnapshot;
       _customerState = _customerPrimaryStateSnapshot.toLowerCase();
       _checkInterState();
     }
 
-    if (data['contactSnapshot'] != null && data['contactSnapshot'] is Map && (data['contactSnapshot'] as Map).isNotEmpty) {
+    if (data['contactSnapshot'] != null &&
+        data['contactSnapshot'] is Map &&
+        (data['contactSnapshot'] as Map).isNotEmpty) {
       _selectedContactData = Map<String, dynamic>.from(data['contactSnapshot']);
       _updateContactSnapshots(_selectedContactData, restoreMode: true);
     } else {
       _contactPersonSnapshot = data['contactPerson']?.toString() ?? '';
-      _contactEmailSnapshot = data['contactEmail']?.toString() ?? data['clientEmail']?.toString() ?? '';
-      _contactMobileSnapshot = data['contactMobile']?.toString() ?? data['clientMobile']?.toString() ?? '';
+      _contactEmailSnapshot =
+          data['contactEmail']?.toString() ??
+              data['clientEmail']?.toString() ??
+              '';
+      _contactMobileSnapshot =
+          data['contactMobile']?.toString() ??
+              data['clientMobile']?.toString() ??
+              '';
+      _contactDepartmentSnapshot =
+          (data['contactDepartment'] ?? data['department'] ?? '').toString();
+      _contactDesignationSnapshot =
+          (data['contactDesignation'] ?? data['designation'] ?? '').toString();
       _contactPersonController.text = _contactPersonSnapshot;
+      _contactDepartmentController.text = _contactDepartmentSnapshot;
+      _contactDesignationController.text = _contactDesignationSnapshot;
+
+      final existingCustomerGstin =
+      (data['customerGstin'] ??
+          data['customerGSTIN'] ??
+          data['customerGstNo'] ??
+          data['partyGstin'] ??
+          data['billingGstin'] ??
+          '')
+          .toString()
+          .trim();
+
+      if (existingCustomerGstin.isNotEmpty) {
+        _gstController.text = existingCustomerGstin;
+      }
+      _gstController.text =
+          (data['customerGstin'] ??
+              data['customerGSTIN'] ??
+              data['customerGstNo'] ??
+              data['billingGstin'] ??
+              data['partyGstin'] ??
+              data['gstin'] ??
+              data['gstNo'] ??
+              '')
+              .toString();
       _emailController.text = _contactEmailSnapshot;
       _mobileController.text = _contactMobileSnapshot;
     }
 
     _clientNameController.text = data['clientName']?.toString() ?? '';
+    _selectedCustomerLabel = _clientNameController.text.trim();
     _gstController.text = data['gstNo']?.toString() ?? '';
     _isInterState = data['isInterState'] as bool? ?? false;
 
     _linkedInquiryId = _cleanOptionalString(data['inquiryId']);
-    _linkedInquiryNumber = _cleanOptionalString(data['inquiryNumber'] ?? data['inquiryRefNo']);
+    _linkedInquiryNumber = _cleanOptionalString(
+      data['inquiryNumber'] ?? data['inquiryRefNo'],
+    );
     _selectedInquirySource = data['inquirySource']?.toString() ?? 'Verbal';
     final restoredInquiryDate = data['inquiryDate'];
     if (_hasLinkedInquiry && restoredInquiryDate is Timestamp) {
@@ -377,8 +1008,25 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     }
     _inquiryRefNoteController.text = data['inquiryReference']?.toString() ?? '';
 
-    _nextFollowUpDate = (data['nextFollowUpDate'] as Timestamp?)?.toDate().toUtc();
+    _nextFollowUpDate = (data['nextFollowUpDate'] as Timestamp?)
+        ?.toDate()
+        .toUtc();
     _followUpNotesController.text = data['followUpNotes']?.toString() ?? '';
+
+    _poNumberController.text =
+        (data['poNumber'] ?? data['purchaseOrderNumber'] ?? '').toString();
+    final restoredPoDate = data['poDate'] ?? data['purchaseOrderDate'];
+    if (restoredPoDate is Timestamp) {
+      _poDate = restoredPoDate.toDate().toUtc();
+    }
+    final restoredPoRef =
+    (data['poReferenceSource'] ?? data['poRef'] ?? 'Mail').toString();
+    if (_poReferenceSources.contains(restoredPoRef)) {
+      _selectedPoReferenceSource = restoredPoRef;
+    }
+    _poReferenceOtherController.text =
+        (data['poReferenceOtherDescription'] ?? data['poReferenceOther'] ?? '')
+            .toString();
 
     if (data['items'] != null && data['items'] is List) {
       final rawItems = data['items'] as List;
@@ -393,14 +1041,17 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       _recalculateTaxes();
     }
 
-    _globalDiscountPercent = double.tryParse(data['globalDiscountPercent']?.toString() ?? '0') ?? 0.0;
+    _globalDiscountPercent =
+        double.tryParse(data['globalDiscountPercent']?.toString() ?? '0') ??
+            0.0;
     _packingChargesExtra = data['packingChargesExtra'] as bool? ?? true;
 
     final existingName = data['signatureName']?.toString().trim() ?? '';
     if (existingName.isNotEmpty) _signNameController.text = existingName;
 
     final existingDesig = data['signatureDesignation']?.toString().trim() ?? '';
-    if (existingDesig.isNotEmpty) _signDesignationController.text = existingDesig;
+    if (existingDesig.isNotEmpty)
+      _signDesignationController.text = existingDesig;
 
     final existingPhone = data['signaturePhone']?.toString().trim() ?? '';
     if (existingPhone.isNotEmpty) _signPhoneController.text = existingPhone;
@@ -412,10 +1063,12 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
     if (data['dynamicTerms'] != null && data['dynamicTerms'] is List) {
       _dynamicTerms = (data['dynamicTerms'] as List)
-          .map((e) => TermRow(
-        title: e['title']?.toString() ?? '',
-        value: e['value']?.toString() ?? '',
-      ))
+          .map(
+            (e) => TermRow(
+          title: e['title']?.toString() ?? '',
+          value: e['value']?.toString() ?? '',
+        ),
+      )
           .toList();
     } else {
       void addIfValid(String title, String? val) {
@@ -443,7 +1096,11 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       _fetchCustomerInsights(_selectedCustomerId!);
       await _loadCustomerFromFirestore(_selectedCustomerId!, restoreMode: true);
       if (_selectedContactId != null && _selectedContactId!.isNotEmpty) {
-        await _loadContactData(_selectedCustomerId!, _selectedContactId!, restoreMode: true);
+        await _loadContactData(
+          _selectedCustomerId!,
+          _selectedContactId!,
+          restoreMode: true,
+        );
       }
     }
 
@@ -453,11 +1110,14 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _customerNameFocusNode.dispose();
     _clientNameController.dispose();
     _addressController.dispose();
     _emailController.dispose();
     _mobileController.dispose();
     _contactPersonController.dispose();
+    _contactDepartmentController.dispose();
+    _contactDesignationController.dispose();
     _gstController.dispose();
     _quotationSequenceController.dispose();
     _subjectController.dispose();
@@ -479,19 +1139,27 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('No logged-in user.');
 
-      final rootUserDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final rootUserDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
       final rootData = rootUserDoc.data() ?? {};
 
       _currentUserUid = user.uid;
       _companyId = widget.companyId?.trim().isNotEmpty == true
           ? widget.companyId!.trim()
-          : (rootData['activeCompanyId'] ?? rootData['companyId'] ?? '').toString().trim();
+          : (rootData['activeCompanyId'] ?? rootData['companyId'] ?? '')
+          .toString()
+          .trim();
 
       _currentUserRole = (rootData['role'] ?? 'sales').toString().trim();
 
       Map<String, dynamic>? membershipData;
-      if (_companyId != null && _companyId!.isNotEmpty && rootData['memberships'] != null) {
-        membershipData = rootData['memberships'][_companyId] as Map<String, dynamic>?;
+      if (_companyId != null &&
+          _companyId!.isNotEmpty &&
+          rootData['memberships'] != null) {
+        membershipData =
+        rootData['memberships'][_companyId] as Map<String, dynamic>?;
         if (membershipData != null && membershipData['role'] != null) {
           _currentUserRole = membershipData['role'].toString().trim();
         }
@@ -510,30 +1178,34 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         }
       }
 
-      _currentUserName = (compData['name'] ??
-          compData['fullName'] ??
-          membershipData?['name'] ??
-          rootData['name'] ??
-          rootData['fullName'] ??
-          '')
-          .toString()
-          .trim();
+      _currentUserName =
+          (compData['name'] ??
+              compData['fullName'] ??
+              membershipData?['name'] ??
+              rootData['name'] ??
+              rootData['fullName'] ??
+              '')
+              .toString()
+              .trim();
 
-      String userDesignation = (compData['designation'] ??
+      String userDesignation =
+      (compData['designation'] ??
           membershipData?['designation'] ??
           rootData['designation'] ??
           '')
           .toString()
           .trim();
 
-      String userDepartment = (compData['department'] ??
+      String userDepartment =
+      (compData['department'] ??
           membershipData?['department'] ??
           rootData['department'] ??
           '')
           .toString()
           .trim();
 
-      String userPhone = (compData['phone'] ??
+      String userPhone =
+      (compData['phone'] ??
           compData['mobile'] ??
           membershipData?['phone'] ??
           membershipData?['mobile'] ??
@@ -545,7 +1217,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
           .trim();
 
       if (widget.existingQuotation == null) {
-        if (_currentUserName.isNotEmpty) _signNameController.text = _currentUserName;
+        if (_currentUserName.isNotEmpty)
+          _signNameController.text = _currentUserName;
         if (userPhone.isNotEmpty) _signPhoneController.text = userPhone;
 
         if (userDesignation.isNotEmpty) {
@@ -553,7 +1226,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         } else if (userDepartment.isNotEmpty) {
           _signDesignationController.text = userDepartment;
         } else {
-          _signDesignationController.text = _currentUserRole.toUpperCase();
+          _signDesignationController.text = '';
         }
       }
     } catch (e) {
@@ -564,19 +1237,28 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   Future<void> _loadCompanyProfile() async {
     if (_companyId == null || _companyId!.isEmpty) return;
     try {
-      final doc = await FirebaseFirestore.instance.collection('companies').doc(_companyId).get();
+      final doc = await FirebaseFirestore.instance
+          .collection('companies')
+          .doc(_companyId)
+          .get();
       if (!doc.exists) return;
       final data = doc.data() ?? {};
 
-      _companyName = (data['companyName'] ?? data['name'] ?? data['entityName'] ?? '').toString();
+      _companyName =
+          (data['companyName'] ?? data['name'] ?? data['entityName'] ?? '')
+              .toString();
 
       List<String> addressLines = [];
-      final street = (data['streetAddress'] ?? data['address'] ?? '').toString().trim();
+      final street = (data['streetAddress'] ?? data['address'] ?? '')
+          .toString()
+          .trim();
       if (street.isNotEmpty) addressLines.add(street);
 
       final city = (data['city'] ?? data['district'] ?? '').toString().trim();
       final state = (data['state'] ?? '').toString().trim();
-      final zip = (data['postalCode'] ?? data['pincode'] ?? data['zip'] ?? '').toString().trim();
+      final zip = (data['postalCode'] ?? data['pincode'] ?? data['zip'] ?? '')
+          .toString()
+          .trim();
 
       List<String> localityParts = [];
       if (city.isNotEmpty) localityParts.add(city);
@@ -596,23 +1278,32 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       _companyPhone = (data['phone'] ?? data['mobile'] ?? '').toString();
       _companyEmail = (data['email'] ?? '').toString();
       _companyWebsite = (data['website'] ?? '').toString();
-      _companyGst = (data['gstin'] ?? data['gstNo'] ?? data['gst'] ?? '').toString();
+      _companyGst = (data['gstin'] ?? data['gstNo'] ?? data['gst'] ?? '')
+          .toString();
       _companyCin = (data['cin'] ?? '').toString();
       _companyPan = (data['pan'] ?? '').toString();
       _companyBankDetails = (data['bankDetails'] ?? '').toString();
       _companyLogoUrl = (data['logoUrl'] ?? '').toString();
       _companyState = (data['state'] ?? '').toString().trim().toLowerCase();
 
-      final configuredPrefix = (data['quotationPrefix'] ?? data['quotePrefix'] ?? '').toString().trim();
+      final configuredPrefix =
+      (data['quotationPrefix'] ?? data['quotePrefix'] ?? '')
+          .toString()
+          .trim();
       if (configuredPrefix.isNotEmpty) {
         _quotationPrefix = configuredPrefix.toUpperCase();
       }
     } catch (_) {}
   }
 
-  void _updateAddressSnapshots(Map<String, dynamic>? address, {bool restoreMode = false}) {
+  void _updateAddressSnapshots(
+      Map<String, dynamic>? address, {
+        bool restoreMode = false,
+      }) {
     if (address == null) return;
-    final addr = (address['combinedAddress'] ?? address['address'] ?? '').toString().trim();
+    final addr = (address['combinedAddress'] ?? address['address'] ?? '')
+        .toString()
+        .trim();
     final city = (address['city'] ?? '').toString().trim();
     final state = (address['state'] ?? '').toString().trim();
     final pincode = (address['pincode'] ?? '').toString().trim();
@@ -636,29 +1327,59 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         _customerState = state.toLowerCase();
         _customerPrimaryStateSnapshot = state;
       }
-      if (_customerPrimaryPincodeSnapshot.trim().isEmpty && pincode.isNotEmpty) {
+      if (_customerPrimaryPincodeSnapshot.trim().isEmpty &&
+          pincode.isNotEmpty) {
         _customerPrimaryPincodeSnapshot = pincode;
       }
     }
     _checkInterState();
   }
 
-  void _updateContactSnapshots(Map<String, dynamic>? contactData, {bool restoreMode = false}) {
+  void _updateContactSnapshots(
+      Map<String, dynamic>? contactData, {
+        bool restoreMode = false,
+      }) {
     if (contactData == null) {
       if (!restoreMode) {
         _contactEmailSnapshot = '';
         _contactMobileSnapshot = '';
         _contactPersonSnapshot = '';
+        _contactDepartmentSnapshot = '';
+        _contactDesignationSnapshot = '';
         _contactPersonController.clear();
+        _contactDepartmentController.clear();
+        _contactDesignationController.clear();
         _emailController.clear();
         _mobileController.clear();
       }
       return;
     }
 
-    final cName = (contactData['name'] ?? contactData['contactName'] ?? '').toString().trim();
-    final cEmail = (contactData['emailNormalized'] ?? contactData['email'] ?? '').toString().trim();
-    final cPhone = (contactData['phoneNormalized'] ?? contactData['phone'] ?? contactData['mobile'] ?? '').toString().trim();
+    final cName = (contactData['name'] ?? contactData['contactName'] ?? '')
+        .toString()
+        .trim();
+    final cEmail =
+    (contactData['emailNormalized'] ?? contactData['email'] ?? '')
+        .toString()
+        .trim();
+    final cPhone =
+    (contactData['phoneNormalized'] ??
+        contactData['phone'] ??
+        contactData['mobile'] ??
+        '')
+        .toString()
+        .trim();
+    final cDepartment = (contactData['department'] ?? contactData['dept'] ?? '')
+        .toString()
+        .trim();
+    final cDesignation =
+    (contactData['designation'] ??
+        contactData['jobTitle'] ??
+        contactData['title'] ??
+        contactData['position'] ??
+        '')
+        .toString()
+        .trim();
 
     if (!restoreMode) {
       _contactPersonController.text = cName;
@@ -667,6 +1388,10 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       _contactEmailSnapshot = cEmail;
       _mobileController.text = cPhone;
       _contactMobileSnapshot = cPhone;
+      _contactDepartmentController.text = cDepartment;
+      _contactDepartmentSnapshot = cDepartment;
+      _contactDesignationController.text = cDesignation;
+      _contactDesignationSnapshot = cDesignation;
     } else {
       if (_contactPersonController.text.trim().isEmpty && cName.isNotEmpty) {
         _contactPersonController.text = cName;
@@ -680,18 +1405,38 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         _mobileController.text = cPhone;
         _contactMobileSnapshot = cPhone;
       }
+      if (_contactDepartmentController.text.trim().isEmpty &&
+          cDepartment.isNotEmpty) {
+        _contactDepartmentController.text = cDepartment;
+        _contactDepartmentSnapshot = cDepartment;
+      }
+      if (_contactDesignationController.text.trim().isEmpty &&
+          cDesignation.isNotEmpty) {
+        _contactDesignationController.text = cDesignation;
+        _contactDesignationSnapshot = cDesignation;
+      }
     }
   }
 
-  Future<void> _loadContactData(String customerId, String contactId, {bool restoreMode = false}) async {
+  Future<void> _loadContactData(
+      String customerId,
+      String contactId, {
+        bool restoreMode = false,
+      }) async {
     try {
       final doc = await _companyContactsRef(customerId).doc(contactId).get();
       if (mounted) {
         setState(() {
           _selectedContactData = doc.exists ? doc.data() : null;
           if (_selectedContactData != null) {
-            _updateContactSnapshots(_selectedContactData, restoreMode: restoreMode);
-            developer.log('Contact Restored: $contactId', name: 'QuotationScreen');
+            _updateContactSnapshots(
+              _selectedContactData,
+              restoreMode: restoreMode,
+            );
+            developer.log(
+              'Contact Restored: $contactId',
+              name: 'QuotationScreen',
+            );
           }
         });
       }
@@ -700,7 +1445,10 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     }
   }
 
-  Future<void> _loadCustomerFromFirestore(String customerId, {bool restoreMode = false}) async {
+  Future<void> _loadCustomerFromFirestore(
+      String customerId, {
+        bool restoreMode = false,
+      }) async {
     if (_companyId == null || _companyId!.isEmpty) return;
     try {
       final doc = await FirebaseFirestore.instance
@@ -712,44 +1460,89 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       if (doc.exists && doc.data() != null) {
         developer.log('Customer Loaded', name: 'QuotationScreen');
         final data = doc.data()!;
+
+        final loadedCustomerGstin =
+        (data['customerGstin'] ??
+            data['customerGSTIN'] ??
+            data['customerGstNo'] ??
+            data['gstin'] ??
+            data['gstNo'] ??
+            data['gst'] ??
+            '')
+            .toString()
+            .trim();
+        if (loadedCustomerGstin.isNotEmpty) {
+          _gstController.text = loadedCustomerGstin;
+        }
+
         _selectedCustomerId = customerId;
 
         if (!restoreMode || _clientNameController.text.trim().isEmpty) {
-          _clientNameController.text = (data['companyName'] ?? data['name'] ?? '').toString();
+          _clientNameController.text =
+              (data['companyName'] ?? data['name'] ?? '').toString();
         }
+        _selectedCustomerLabel = _clientNameController.text.trim();
         if (!restoreMode || _gstController.text.trim().isEmpty) {
-          _gstController.text = (data['gstNo'] ?? data['gst'] ?? '').toString();
+          _gstController.text =
+              (data['customerGstin'] ??
+                  data['customerGSTIN'] ??
+                  data['customerGstNo'] ??
+                  data['gstin'] ??
+                  data['gstNo'] ??
+                  data['gst'] ??
+                  '')
+                  .toString();
         }
 
         _customerAddresses = [];
         if (data['addresses'] != null && data['addresses'] is List) {
-          _customerAddresses = List<Map<String, dynamic>>.from(data['addresses']);
+          _customerAddresses = List<Map<String, dynamic>>.from(
+            data['addresses'],
+          );
         }
 
         if (_selectedAddressId != null && _selectedAddressId!.isNotEmpty) {
-          final matches = _customerAddresses.where((a) => a['id'] == _selectedAddressId);
+          final matches = _customerAddresses.where(
+                (a) => a['id'] == _selectedAddressId,
+          );
           if (matches.isNotEmpty) {
             _selectedAddressData = matches.first;
-            _updateAddressSnapshots(_selectedAddressData, restoreMode: restoreMode);
+            _updateAddressSnapshots(
+              _selectedAddressData,
+              restoreMode: restoreMode,
+            );
             developer.log('Address Restored', name: 'QuotationScreen');
           }
         } else if (!restoreMode) {
-          final primaryBillingMatches = _customerAddresses.where((a) => a['isBillingAddress'] == true && a['isPrimary'] == true);
-          final primaryMatches = _customerAddresses.where((a) => a['isPrimary'] == true);
+          final primaryBillingMatches = _customerAddresses.where(
+                (a) => a['isBillingAddress'] == true && a['isPrimary'] == true,
+          );
+          final primaryMatches = _customerAddresses.where(
+                (a) => a['isPrimary'] == true,
+          );
 
           _selectedAddressData = primaryBillingMatches.isNotEmpty
               ? primaryBillingMatches.first
-              : (primaryMatches.isNotEmpty ? primaryMatches.first : (_customerAddresses.isNotEmpty ? _customerAddresses.first : null));
+              : (primaryMatches.isNotEmpty
+              ? primaryMatches.first
+              : (_customerAddresses.isNotEmpty
+              ? _customerAddresses.first
+              : null));
 
           _selectedAddressId = _selectedAddressData?['id'];
-          _updateAddressSnapshots(_selectedAddressData, restoreMode: restoreMode);
+          _updateAddressSnapshots(
+            _selectedAddressData,
+            restoreMode: restoreMode,
+          );
         }
 
         if (!restoreMode) {
           if (_selectedContactId == null) {
             _emailController.text = (data['email'] ?? '').toString();
-            _mobileController.text = (data['mobile'] ?? data['phone'] ?? '').toString();
-            _contactPersonController.text = (data['contactPerson'] ?? data['contactName'] ?? '').toString();
+            _mobileController.text = (data['mobile'] ?? data['phone'] ?? '')
+                .toString();
+            _contactPersonController.text =
+                (data['contactPerson'] ?? data['contactName'] ?? '').toString();
 
             _contactEmailSnapshot = _emailController.text.trim();
             _contactMobileSnapshot = _mobileController.text.trim();
@@ -762,11 +1555,14 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
               _contactEmailSnapshot = _emailController.text.trim();
             }
             if (_mobileController.text.trim().isEmpty) {
-              _mobileController.text = (data['mobile'] ?? data['phone'] ?? '').toString();
+              _mobileController.text = (data['mobile'] ?? data['phone'] ?? '')
+                  .toString();
               _contactMobileSnapshot = _mobileController.text.trim();
             }
             if (_contactPersonController.text.trim().isEmpty) {
-              _contactPersonController.text = (data['contactPerson'] ?? data['contactName'] ?? '').toString();
+              _contactPersonController.text =
+                  (data['contactPerson'] ?? data['contactName'] ?? '')
+                      .toString();
               _contactPersonSnapshot = _contactPersonController.text.trim();
             }
           }
@@ -780,25 +1576,55 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     } catch (_) {}
   }
 
-  Future<QuotationLineItem?> _hydrateProductItem(Map<String, dynamic> rawItem) async {
+  Future<QuotationLineItem?> _hydrateProductItem(
+      Map<String, dynamic> rawItem,
+      ) async {
     final Map<String, dynamic> i = Map<String, dynamic>.from(rawItem);
     String productId = (i['productId'] ?? i['itemId'] ?? '').toString();
-    String name = (i['name'] ?? i['productName'] ?? i['itemName'] ?? '').toString();
+    String name = (i['name'] ?? i['productName'] ?? i['itemName'] ?? '')
+        .toString();
     String desc = (i['description'] ?? i['details'] ?? '').toString();
+    String scopeOfSupply =
+    (i['scopeOfSupply'] ?? i['scope_of_supply'] ?? i['supplyScope'] ?? '')
+        .toString();
     String hsn = (i['hsnCode'] ?? '').toString();
     double qty = double.tryParse(i['quantity']?.toString() ?? '1') ?? 1.0;
     String uom = (i['uom'] ?? i['unit'] ?? 'Nos').toString();
-    double price = double.tryParse(i['unitPrice']?.toString() ?? i['price']?.toString() ?? i['rate']?.toString() ?? '0') ?? 0.0;
-    double disc = double.tryParse(i['discountPercent']?.toString() ?? i['discount']?.toString() ?? '0') ?? 0.0;
+    double price =
+        double.tryParse(
+          i['unitPrice']?.toString() ??
+              i['price']?.toString() ??
+              i['rate']?.toString() ??
+              '0',
+        ) ??
+            0.0;
+    double disc =
+        double.tryParse(
+          i['discountPercent']?.toString() ?? i['discount']?.toString() ?? '0',
+        ) ??
+            0.0;
 
-    double totalGst = double.tryParse(i['gstPercentage']?.toString() ?? i['tax']?.toString() ?? '0') ?? 0.0;
+    double totalGst =
+        double.tryParse(
+          i['gstPercentage']?.toString() ?? i['tax']?.toString() ?? '0',
+        ) ??
+            0.0;
     if (totalGst == 0) {
-      totalGst = (double.tryParse(i['cgstPercent']?.toString() ?? '0') ?? 0.0) +
-          (double.tryParse(i['sgstPercent']?.toString() ?? '0') ?? 0.0) +
-          (double.tryParse(i['igstPercent']?.toString() ?? '0') ?? 0.0);
+      totalGst =
+          (double.tryParse(i['cgstPercent']?.toString() ?? '0') ?? 0.0) +
+              (double.tryParse(i['sgstPercent']?.toString() ?? '0') ?? 0.0) +
+              (double.tryParse(i['igstPercent']?.toString() ?? '0') ?? 0.0);
     }
 
-    double stock = double.tryParse(i['stockOnHand']?.toString() ?? i['availableStock']?.toString() ?? i['qty']?.toString() ?? i['stock']?.toString() ?? '0') ?? 0.0;
+    double stock =
+        double.tryParse(
+          i['stockOnHand']?.toString() ??
+              i['availableStock']?.toString() ??
+              i['qty']?.toString() ??
+              i['stock']?.toString() ??
+              '0',
+        ) ??
+            0.0;
 
     String sku = (i['sku'] ?? '').toString();
     String brand = (i['brand'] ?? i['make'] ?? '').toString();
@@ -808,13 +1634,27 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     List includedProducts = i['includedProducts'] as List? ?? [];
     List catalogs = i['catalogs'] as List? ?? [];
     List images = i['images'] as List? ?? [];
-    String compatibleMachineType = (i['compatibleMachineType'] ?? '').toString();
+    String compatibleMachineType = (i['compatibleMachineType'] ?? '')
+        .toString();
     List compatibleProductIds = i['compatibleProductIds'] as List? ?? [];
     List compatibleProductNames = i['compatibleProductNames'] as List? ?? [];
     List compatibleSubcategories = i['compatibleSubcategories'] as List? ?? [];
-    String itemCode = (i['itemCode'] ?? '').toString();
+    String itemCode =
+    (i['itemCode'] ??
+        i['productCode'] ??
+        i['item_code'] ??
+        i['code'] ??
+        i['materialCode'] ??
+        i['partNo'] ??
+        i['partNumber'] ??
+        i['catalogNo'] ??
+        '')
+        .toString()
+        .trim();
     String sellingPrice = (i['sellingPrice'] ?? '').toString();
-    double baseGst = double.tryParse(i['baseGst']?.toString() ?? totalGst.toString()) ?? totalGst;
+    double baseGst =
+        double.tryParse(i['baseGst']?.toString() ?? totalGst.toString()) ??
+            totalGst;
 
     bool isScopeItem = (i['isScopeItem'] == true) || (i['parentId'] != null);
     String? parentId = i['parentId']?.toString();
@@ -826,34 +1666,88 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         final pData = await _getProductData(productId);
         if (pData != null) {
           if (name.isEmpty) name = (pData['name'] ?? '').toString();
-          if (desc.isEmpty) desc = (pData['description'] ?? pData['details'] ?? '').toString();
-          if (hsn.isEmpty) hsn = (pData['hsnCode'] ?? pData['hsn'] ?? '').toString();
-          if (totalGst == 0) totalGst = double.tryParse(pData['gstPercentage']?.toString() ?? pData['tax']?.toString() ?? '18') ?? 18.0;
-          if (price == 0 && pricingMode != 'Included') price = double.tryParse(pData['sellingPrice']?.toString() ?? pData['price']?.toString() ?? pData['unitPrice']?.toString() ?? '0') ?? 0.0;
-          if (uom == 'Nos' || uom.isEmpty) uom = (pData['uom'] ?? 'Nos').toString();
-          stock = double.tryParse(pData['stockOnHand']?.toString() ?? pData['availableStock']?.toString() ?? pData['stockQuantity']?.toString() ?? pData['qty']?.toString() ?? stock.toString()) ?? 0.0;
+          if (desc.isEmpty)
+            desc = (pData['description'] ?? pData['details'] ?? '').toString();
+          if (scopeOfSupply.isEmpty) {
+            scopeOfSupply = _productScopeOfSupplyText(pData);
+          }
+          if (hsn.isEmpty)
+            hsn = (pData['hsnCode'] ?? pData['hsn'] ?? '').toString();
+          if (totalGst == 0)
+            totalGst =
+                double.tryParse(
+                  pData['gstPercentage']?.toString() ??
+                      pData['tax']?.toString() ??
+                      '18',
+                ) ??
+                    18.0;
+          if (price == 0 && pricingMode != 'Included')
+            price =
+                double.tryParse(
+                  pData['sellingPrice']?.toString() ??
+                      pData['price']?.toString() ??
+                      pData['unitPrice']?.toString() ??
+                      '0',
+                ) ??
+                    0.0;
+          if (uom == 'Nos' || uom.isEmpty)
+            uom = (pData['uom'] ?? 'Nos').toString();
+          stock =
+              double.tryParse(
+                pData['stockOnHand']?.toString() ??
+                    pData['availableStock']?.toString() ??
+                    pData['stockQuantity']?.toString() ??
+                    pData['qty']?.toString() ??
+                    stock.toString(),
+              ) ??
+                  0.0;
 
-          if (sku.isEmpty) sku = (pData['sku'] ?? pData['itemCode'] ?? '').toString();
-          if (brand.isEmpty) brand = (pData['brand'] ?? pData['make'] ?? '').toString();
+          if (sku.isEmpty)
+            sku = (pData['sku'] ?? pData['itemCode'] ?? '').toString();
+          if (brand.isEmpty)
+            brand = (pData['brand'] ?? pData['make'] ?? '').toString();
           if (model.isEmpty) model = (pData['model'] ?? '').toString();
-          if (productNature == 'General') productNature = (pData['productNature'] ?? 'General').toString();
+          if (productNature == 'General')
+            productNature = (pData['productNature'] ?? 'General').toString();
 
           machineType = (pData['machineType'] ?? machineType).toString();
-          includedProducts = pData['includedProducts'] as List? ?? includedProducts;
+          includedProducts =
+              pData['includedProducts'] as List? ?? includedProducts;
           catalogs = pData['catalogs'] as List? ?? catalogs;
           images = pData['images'] as List? ?? images;
-          compatibleMachineType = (pData['compatibleMachineType'] ?? compatibleMachineType).toString();
-          compatibleProductIds = pData['compatibleProductIds'] as List? ?? compatibleProductIds;
-          compatibleProductNames = pData['compatibleProductNames'] as List? ?? compatibleProductNames;
-          compatibleSubcategories = pData['compatibleSubcategories'] as List? ?? compatibleSubcategories;
-          itemCode = (pData['itemCode'] ?? itemCode).toString();
-          sellingPrice = (pData['sellingPrice'] ?? pData['price'] ?? sellingPrice).toString();
+          compatibleMachineType =
+              (pData['compatibleMachineType'] ?? compatibleMachineType)
+                  .toString();
+          compatibleProductIds =
+              pData['compatibleProductIds'] as List? ?? compatibleProductIds;
+          compatibleProductNames =
+              pData['compatibleProductNames'] as List? ??
+                  compatibleProductNames;
+          compatibleSubcategories =
+              pData['compatibleSubcategories'] as List? ??
+                  compatibleSubcategories;
+          itemCode =
+              (pData['itemCode'] ??
+                  pData['productCode'] ??
+                  pData['item_code'] ??
+                  pData['code'] ??
+                  pData['materialCode'] ??
+                  pData['partNo'] ??
+                  pData['partNumber'] ??
+                  pData['catalogNo'] ??
+                  itemCode)
+                  .toString()
+                  .trim();
+          sellingPrice =
+              (pData['sellingPrice'] ?? pData['price'] ?? sellingPrice)
+                  .toString();
           if (baseGst == 0) baseGst = totalGst;
         }
       } catch (_) {}
     }
 
-    final id = (i['id'] ?? DateTime.now().millisecondsSinceEpoch.toString()).toString();
+    final id = (i['id'] ?? DateTime.now().millisecondsSinceEpoch.toString())
+        .toString();
 
     _itemExtras[id] = {
       'sku': sku,
@@ -883,8 +1777,10 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     return QuotationLineItem(
       id: id,
       productId: productId,
+      itemCode: itemCode,
       name: name,
       description: desc,
+      scopeOfSupply: scopeOfSupply,
       hsnCode: hsn,
       quantity: qty,
       uom: uom,
@@ -904,7 +1800,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     developer.log('Inquiry Loaded', name: 'QuotationScreen');
 
     _linkedInquiryId = _cleanOptionalString(seed['id'] ?? seed['inquiryId']);
-    _linkedInquiryNumber = _cleanOptionalString(seed['inquiryNumber'] ?? seed['inquiryCode']);
+    _linkedInquiryNumber = _cleanOptionalString(
+      seed['inquiryNumber'] ?? seed['inquiryCode'],
+    );
 
     if (seed['inquiryDate'] != null && seed['inquiryDate'] is Timestamp) {
       _inquiryDate = (seed['inquiryDate'] as Timestamp).toDate().toUtc();
@@ -912,39 +1810,100 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       _inquiryDate = (seed['createdAt'] as Timestamp).toDate().toUtc();
     }
 
-    final incomingName = (seed['customerName'] ?? seed['companyName'] ?? seed['clientName'] ?? '').toString().trim();
-    final incomingPerson = (seed['contactPerson'] ?? seed['contactName'] ?? '').toString().trim();
-    final incomingEmail = (seed['email'] ?? seed['contactEmail'] ?? seed['clientEmail'] ?? '').toString().trim();
-    final incomingMobile = (seed['mobile'] ?? seed['contactPhone'] ?? seed['contactMobile'] ?? seed['clientMobile'] ?? '').toString().trim();
-    final incomingAddress = (seed['address'] ?? seed['location'] ?? seed['customerPrimaryAddress'] ?? seed['clientAddress'] ?? '').toString().trim();
-    final incomingCity = (seed['city'] ?? seed['customerPrimaryCity'] ?? '').toString().trim();
-    final incomingStateRaw = (seed['state'] ?? seed['customerPrimaryState'] ?? seed['customerState'] ?? '').toString().trim();
-    final incomingPincode = (seed['pincode'] ?? seed['customerPrimaryPincode'] ?? '').toString().trim();
-    final incomingGst = (seed['gstNo'] ?? seed['gst'] ?? seed['customerGST'] ?? '').toString().trim();
+    final incomingName =
+    (seed['customerName'] ??
+        seed['companyName'] ??
+        seed['clientName'] ??
+        '')
+        .toString()
+        .trim();
+    final incomingPerson = (seed['contactPerson'] ?? seed['contactName'] ?? '')
+        .toString()
+        .trim();
+    final incomingGstin =
+    (seed['customerGstin'] ??
+        seed['customerGSTIN'] ??
+        seed['customerGstNo'] ??
+        seed['gstin'] ??
+        seed['gstNo'] ??
+        seed['gst'] ??
+        '')
+        .toString()
+        .trim();
+    final incomingEmail =
+    (seed['email'] ?? seed['contactEmail'] ?? seed['clientEmail'] ?? '')
+        .toString()
+        .trim();
+    final incomingMobile =
+    (seed['mobile'] ??
+        seed['contactPhone'] ??
+        seed['contactMobile'] ??
+        seed['clientMobile'] ??
+        '')
+        .toString()
+        .trim();
+    final incomingAddress =
+    (seed['address'] ??
+        seed['location'] ??
+        seed['customerPrimaryAddress'] ??
+        seed['clientAddress'] ??
+        '')
+        .toString()
+        .trim();
+    final incomingCity = (seed['city'] ?? seed['customerPrimaryCity'] ?? '')
+        .toString()
+        .trim();
+    final incomingStateRaw =
+    (seed['state'] ??
+        seed['customerPrimaryState'] ??
+        seed['customerState'] ??
+        '')
+        .toString()
+        .trim();
+    final incomingPincode =
+    (seed['pincode'] ?? seed['customerPrimaryPincode'] ?? '')
+        .toString()
+        .trim();
+    final incomingGst =
+    (seed['gstNo'] ?? seed['gst'] ?? seed['customerGST'] ?? '')
+        .toString()
+        .trim();
 
     if (incomingName.isNotEmpty) _clientNameController.text = incomingName;
-    if (incomingPerson.isNotEmpty) _contactPersonController.text = incomingPerson;
+    if (incomingPerson.isNotEmpty)
+      _contactPersonController.text = incomingPerson;
+    if (incomingGstin.isNotEmpty) _gstController.text = incomingGstin;
     if (incomingEmail.isNotEmpty) _emailController.text = incomingEmail;
     if (incomingMobile.isNotEmpty) _mobileController.text = incomingMobile;
     if (incomingAddress.isNotEmpty) _addressController.text = incomingAddress;
     if (incomingGst.isNotEmpty) _gstController.text = incomingGst;
 
-    if (incomingStateRaw.isNotEmpty) _customerState = incomingStateRaw.toLowerCase();
+    if (incomingStateRaw.isNotEmpty)
+      _customerState = incomingStateRaw.toLowerCase();
 
     if (incomingPerson.isNotEmpty) _contactPersonSnapshot = incomingPerson;
     if (incomingEmail.isNotEmpty) _contactEmailSnapshot = incomingEmail;
     if (incomingMobile.isNotEmpty) _contactMobileSnapshot = incomingMobile;
 
-    if (incomingAddress.isNotEmpty) _customerPrimaryAddressSnapshot = incomingAddress;
+    if (incomingAddress.isNotEmpty)
+      _customerPrimaryAddressSnapshot = incomingAddress;
     if (incomingCity.isNotEmpty) _customerPrimaryCitySnapshot = incomingCity;
-    if (incomingStateRaw.isNotEmpty) _customerPrimaryStateSnapshot = incomingStateRaw;
-    if (incomingPincode.isNotEmpty) _customerPrimaryPincodeSnapshot = incomingPincode;
+    if (incomingStateRaw.isNotEmpty)
+      _customerPrimaryStateSnapshot = incomingStateRaw;
+    if (incomingPincode.isNotEmpty)
+      _customerPrimaryPincodeSnapshot = incomingPincode;
 
-    final seededAddressId = (seed['addressId'] ?? seed['customerAddressId'] ?? '').toString().trim();
+    final seededAddressId =
+    (seed['addressId'] ?? seed['customerAddressId'] ?? '')
+        .toString()
+        .trim();
     if (seededAddressId.isNotEmpty) {
       _selectedAddressId = seededAddressId;
     }
-    final seededContactId = (seed['contactId'] ?? seed['customerContactId'] ?? '').toString().trim();
+    final seededContactId =
+    (seed['contactId'] ?? seed['customerContactId'] ?? '')
+        .toString()
+        .trim();
     if (seededContactId.isNotEmpty) {
       _selectedContactId = seededContactId;
     }
@@ -954,18 +1913,32 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       _selectedCustomerId = seededCustomerId;
       await _loadCustomerFromFirestore(seededCustomerId, restoreMode: true);
       if (_selectedContactId != null && _selectedContactId!.isNotEmpty) {
-        await _loadContactData(seededCustomerId, _selectedContactId!, restoreMode: true);
-        developer.log('Inquiry Contact Restored: $_selectedContactId', name: 'QuotationScreen');
+        await _loadContactData(
+          seededCustomerId,
+          _selectedContactId!,
+          restoreMode: true,
+        );
+        developer.log(
+          'Inquiry Contact Restored: $_selectedContactId',
+          name: 'QuotationScreen',
+        );
       }
     } else {
       _checkInterState();
     }
 
-    final subject = (seed['subject'] ?? seed['inquirySubject'] ?? '').toString().trim();
+    final subject = (seed['subject'] ?? seed['inquirySubject'] ?? '')
+        .toString()
+        .trim();
     if (subject.isNotEmpty) _subjectController.text = subject;
 
-    final notes = (seed['notes'] ?? seed['description'] ?? seed['inquiryReference'] ?? '').toString().trim();
-    final loc = (seed['location'] ?? seed['customerPrimaryCity'] ?? '').toString().trim();
+    final notes =
+    (seed['notes'] ?? seed['description'] ?? seed['inquiryReference'] ?? '')
+        .toString()
+        .trim();
+    final loc = (seed['location'] ?? seed['customerPrimaryCity'] ?? '')
+        .toString()
+        .trim();
 
     List<String> combinedNotes = [];
     if (loc.isNotEmpty) combinedNotes.add("Location: $loc");
@@ -985,7 +1958,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       List<Future<QuotationLineItem?>> tasks = [];
       for (var rawItem in rawItems) {
         if (rawItem == null || rawItem is! Map) continue;
-        tasks.add(_hydrateProductItem(Map<String, dynamic>.from(rawItem as Map)));
+        tasks.add(
+          _hydrateProductItem(Map<String, dynamic>.from(rawItem as Map)),
+        );
       }
 
       final results = await Future.wait(tasks);
@@ -1010,19 +1985,21 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       double totalVal = 0;
       double lastQuote = 0;
       if (snaps.docs.isNotEmpty) {
-        lastQuote = double.tryParse(
-          snaps.docs.first.data()['finalTotal']?.toString() ??
-              snaps.docs.first.data()['grandTotal']?.toString() ??
-              '0',
-        ) ??
-            0.0;
+        lastQuote =
+            double.tryParse(
+              snaps.docs.first.data()['finalTotal']?.toString() ??
+                  snaps.docs.first.data()['grandTotal']?.toString() ??
+                  '0',
+            ) ??
+                0.0;
         for (var d in snaps.docs) {
-          totalVal += double.tryParse(
-            d.data()['finalTotal']?.toString() ??
-                d.data()['grandTotal']?.toString() ??
-                '0',
-          ) ??
-              0.0;
+          totalVal +=
+              double.tryParse(
+                d.data()['finalTotal']?.toString() ??
+                    d.data()['grandTotal']?.toString() ??
+                    '0',
+              ) ??
+                  0.0;
         }
       }
 
@@ -1046,23 +2023,31 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     if (_currentUserUid == null) return;
 
     try {
-      final doc = await FirebaseFirestore.instance.collection('quotationSettings').doc(_currentUserUid).get();
+      final doc = await FirebaseFirestore.instance
+          .collection('quotationSettings')
+          .doc(_currentUserUid)
+          .get();
 
       if (doc.exists && doc.data() != null) {
         final data = doc.data()!;
 
-        _packingChargesExtra = data['packingChargesExtra'] as bool? ?? _packingChargesExtra;
+        _packingChargesExtra =
+            data['packingChargesExtra'] as bool? ?? _packingChargesExtra;
 
         if (widget.existingQuotation == null) {
-          if (data['dynamicTerms'] != null && data['dynamicTerms'] is List && (data['dynamicTerms'] as List).isNotEmpty) {
+          if (data['dynamicTerms'] != null &&
+              data['dynamicTerms'] is List &&
+              (data['dynamicTerms'] as List).isNotEmpty) {
             for (var t in _dynamicTerms) {
               t.dispose();
             }
             _dynamicTerms = (data['dynamicTerms'] as List)
-                .map((e) => TermRow(
-              title: e['title']?.toString() ?? '',
-              value: e['value']?.toString() ?? '',
-            ))
+                .map(
+                  (e) => TermRow(
+                title: e['title']?.toString() ?? '',
+                value: e['value']?.toString() ?? '',
+              ),
+            )
                 .toList();
           }
         }
@@ -1074,7 +2059,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     if (_companyState.isEmpty || _customerState.isEmpty) {
       _isInterState = false;
     } else {
-      _isInterState = _companyState.toLowerCase().trim() != _customerState.toLowerCase().trim();
+      _isInterState =
+          _companyState.toLowerCase().trim() !=
+              _customerState.toLowerCase().trim();
     }
     _recalculateTaxes();
   }
@@ -1126,9 +2113,13 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       _cachedIgst += item.igstAmount;
     }
 
-    _cachedGlobalDiscountAmount = (_cachedSubtotal - _cachedItemDiscount) * (_globalDiscountPercent / 100);
-    _cachedTaxableAmount = _cachedSubtotal - _cachedItemDiscount - _cachedGlobalDiscountAmount;
-    _cachedGrandTotal = _cachedTaxableAmount + _cachedCgst + _cachedSgst + _cachedIgst;
+    _cachedGlobalDiscountAmount =
+        (_cachedSubtotal - _cachedItemDiscount) *
+            (_globalDiscountPercent / 100);
+    _cachedTaxableAmount =
+        _cachedSubtotal - _cachedItemDiscount - _cachedGlobalDiscountAmount;
+    _cachedGrandTotal =
+        _cachedTaxableAmount + _cachedCgst + _cachedSgst + _cachedIgst;
 
     _cachedFinalTotal = _cachedGrandTotal.roundToDouble();
     _cachedRoundOff = _cachedFinalTotal - _cachedGrandTotal;
@@ -1140,7 +2131,11 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     if (!mounted) return;
     setState(() => _errorMessage = message);
     if (_scrollController.hasClients) {
-      _scrollController.animateTo(0, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
     }
   }
 
@@ -1157,7 +2152,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
   String _getFinancialYearFromDate(DateTime date) {
     final localDate = date.toLocal();
-    final startYear = localDate.month >= 4 ? localDate.year : localDate.year - 1;
+    final startYear = localDate.month >= 4
+        ? localDate.year
+        : localDate.year - 1;
     return '$startYear-${(startYear + 1).toString().substring(2)}';
   }
 
@@ -1167,11 +2164,16 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
   bool _isAutoQuoteNumberPlaceholder(String value) {
     final normalized = value.trim().toLowerCase();
-    return normalized.isEmpty || normalized.contains('auto-generated') || normalized.contains('auto generated') || normalized.contains('auto');
+    return normalized.isEmpty ||
+        normalized.contains('auto-generated') ||
+        normalized.contains('auto generated') ||
+        normalized.contains('auto');
   }
 
   int? _extractQuoteSequence(String quoteNumber) {
-    final match = RegExp(r'^[A-Z]+/(\d+)/\d{4}-\d{2}$').firstMatch(quoteNumber.trim().toUpperCase());
+    final match = RegExp(
+      r'^[A-Z]+/(\d+)/\d{4}-\d{2}$',
+    ).firstMatch(quoteNumber.trim().toUpperCase());
     return match == null ? null : int.tryParse(match.group(1)!);
   }
 
@@ -1180,7 +2182,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   }
 
   String _quoteNumberRegistryId(String quoteNumber) {
-    return quoteNumber.replaceAll('/', '_').replaceAll(RegExp(r'[^A-Z0-9_-]'), '');
+    return quoteNumber
+        .replaceAll('/', '_')
+        .replaceAll(RegExp(r'[^A-Z0-9_-]'), '');
   }
 
   Future<void> _ensureExistingQuoteNumberIsUnique(String quoteNumber) async {
@@ -1192,9 +2196,13 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         .limit(2)
         .get();
 
-    final duplicateExists = snap.docs.any((doc) => doc.id != widget.quotationId);
+    final duplicateExists = snap.docs.any(
+          (doc) => doc.id != widget.quotationId,
+    );
     if (duplicateExists) {
-      throw Exception('Quotation number $quoteNumber already exists. Use a unique quotation number.');
+      throw Exception(
+        'Quotation number $quoteNumber already exists. Use a unique quotation number.',
+      );
     }
   }
 
@@ -1210,9 +2218,15 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
     final qDate = DateTime(_quoteDate.year, _quoteDate.month, _quoteDate.day);
     if (_hasLinkedInquiry) {
-      final iqDate = DateTime(_inquiryDate.year, _inquiryDate.month, _inquiryDate.day);
+      final iqDate = DateTime(
+        _inquiryDate.year,
+        _inquiryDate.month,
+        _inquiryDate.day,
+      );
       if (qDate.isBefore(iqDate)) {
-        _setError('Quotation date (${DateFormat('dd/MM/yyyy').format(qDate)}) cannot be earlier than the Inquiry date (${DateFormat('dd/MM/yyyy').format(iqDate)}).');
+        _setError(
+          'Quotation date (${DateFormat('dd/MM/yyyy').format(qDate)}) cannot be earlier than the Inquiry date (${DateFormat('dd/MM/yyyy').format(iqDate)}).',
+        );
         return;
       }
     }
@@ -1231,7 +2245,12 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
     try {
       final bool isUpdate = widget.quotationId != null;
-      final bool isRevision = widget.existingQuotation?['_createRevisionOnSave'] == true;
+
+      // Editing an existing quotation updates the same Firestore document.
+      // A revision is created only when the caller explicitly passes
+      // _createRevisionOnSave in existingQuotation.
+      final bool isRevision =
+          widget.existingQuotation?['_createRevisionOnSave'] == true;
 
       final quoteRef = (isUpdate && !isRevision)
           ? FirebaseFirestore.instance
@@ -1250,31 +2269,41 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       String manualSequenceStr = _quotationSequenceController.text.trim();
       int? manualSequence;
 
-      if (manualSequenceStr.isNotEmpty && !_isAutoQuoteNumberPlaceholder(manualSequenceStr)) {
+      if (manualSequenceStr.isNotEmpty &&
+          !_isAutoQuoteNumberPlaceholder(manualSequenceStr)) {
         manualSequence = int.tryParse(manualSequenceStr);
         if (manualSequence == null) {
-          _setError('Invalid sequence number format. Please enter a valid number.');
+          _setError(
+            'Invalid sequence number format. Please enter a valid number.',
+          );
           setState(() => _isLoading = false);
           return;
         }
-        final testNumber = '$_quotationPrefix/${manualSequence.toString().padLeft(3, '0')}/$financialYear';
+        final testNumber =
+            '$_quotationPrefix/${manualSequence.toString().padLeft(3, '0')}/$financialYear';
         await _ensureExistingQuoteNumberIsUnique(testNumber);
       }
 
       final activityLog = {
-        'type': isRevision ? 'Revision Created' : (isUpdate ? 'Updated' : 'Created'),
+        'type': isRevision
+            ? 'Revision Created'
+            : (isUpdate ? 'Updated' : 'Created'),
         'status': _quotationStatus,
         'timestamp': Timestamp.now(),
         'byUid': _currentUserUid,
         'byName': _currentUserName,
-        'note': isRevision ? 'Revision created from ${widget.quotationId}' : 'Quotation saved.',
+        'note': isRevision
+            ? 'Revision created from ${widget.quotationId}'
+            : 'Quotation saved.',
       };
 
       final mappedTerms = _dynamicTerms
-          .map((e) => {
-        'title': e.titleCtrl.text.trim(),
-        'value': e.valueCtrl.text.trim(),
-      })
+          .map(
+            (e) => {
+          'title': e.titleCtrl.text.trim(),
+          'value': e.valueCtrl.text.trim(),
+        },
+      )
           .toList();
 
       final mappedItems = _items.map((e) {
@@ -1285,31 +2314,54 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       }).toList();
 
       String? finalAddressId = _selectedAddressId;
-      if ((finalAddressId == null || finalAddressId.isEmpty) && _linkedInquiryId != null && _linkedInquiryId!.isNotEmpty) {
+      if ((finalAddressId == null || finalAddressId.isEmpty) &&
+          _linkedInquiryId != null &&
+          _linkedInquiryId!.isNotEmpty) {
         finalAddressId = 'INQUIRY_ADDRESS';
       }
 
       String? finalContactId = _selectedContactId;
-      if ((finalContactId == null || finalContactId.isEmpty) && _linkedInquiryId != null && _linkedInquiryId!.isNotEmpty) {
+      if ((finalContactId == null || finalContactId.isEmpty) &&
+          _linkedInquiryId != null &&
+          _linkedInquiryId!.isNotEmpty) {
         finalContactId = 'INQUIRY_CONTACT';
       }
 
-      final effectiveAddressSnapshot = _selectedAddressData ?? {
-        'address': _addressController.text.trim().isNotEmpty ? _addressController.text.trim() : _customerPrimaryAddressSnapshot,
-        'city': _customerPrimaryCitySnapshot,
-        'state': _customerPrimaryStateSnapshot,
-        'pincode': _customerPrimaryPincodeSnapshot,
-      };
+      final effectiveAddressSnapshot =
+          _selectedAddressData ??
+              {
+                'address': _addressController.text.trim().isNotEmpty
+                    ? _addressController.text.trim()
+                    : _customerPrimaryAddressSnapshot,
+                'city': _customerPrimaryCitySnapshot,
+                'state': _customerPrimaryStateSnapshot,
+                'pincode': _customerPrimaryPincodeSnapshot,
+              };
 
-      final effectiveContactSnapshot = _selectedContactData ?? {
-        'name': _contactPersonController.text.trim().isNotEmpty ? _contactPersonController.text.trim() : _contactPersonSnapshot,
-        'email': _emailController.text.trim().isNotEmpty ? _emailController.text.trim() : _contactEmailSnapshot,
-        'mobile': _mobileController.text.trim().isNotEmpty ? _mobileController.text.trim() : _contactMobileSnapshot,
-      };
+      final effectiveContactSnapshot =
+          _selectedContactData ??
+              {
+                'name': _contactPersonController.text.trim().isNotEmpty
+                    ? _contactPersonController.text.trim()
+                    : _contactPersonSnapshot,
+                'email': _emailController.text.trim().isNotEmpty
+                    ? _emailController.text.trim()
+                    : _contactEmailSnapshot,
+                'mobile': _mobileController.text.trim().isNotEmpty
+                    ? _mobileController.text.trim()
+                    : _contactMobileSnapshot,
+                'designation': _contactDesignationController.text.trim().isNotEmpty
+                    ? _contactDesignationController.text.trim()
+                    : _contactDesignationSnapshot,
+                'department': _contactDepartmentController.text.trim().isNotEmpty
+                    ? _contactDepartmentController.text.trim()
+                    : _contactDepartmentSnapshot,
+              };
 
       final payload = {
         'id': quoteRef.id,
         'companyId': _companyId,
+        'quotationType': _quotationType,
         'subject': _subjectController.text.trim(),
         'quoteDate': Timestamp.fromDate(_quoteDate),
         'status': _quotationStatus,
@@ -1322,15 +2374,32 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         'contactSnapshot': effectiveContactSnapshot,
         'clientName': _clientNameController.text.trim(),
         'clientAddress': _addressController.text.trim(),
-        'addressLine': _addressController.text.trim().isNotEmpty ? _addressController.text.trim() : _customerPrimaryAddressSnapshot,
+        'addressLine': _addressController.text.trim().isNotEmpty
+            ? _addressController.text.trim()
+            : _customerPrimaryAddressSnapshot,
         'city': _customerPrimaryCitySnapshot,
         'state': _customerPrimaryStateSnapshot,
         'pincode': _customerPrimaryPincodeSnapshot,
         'clientEmail': _emailController.text.trim(),
         'clientMobile': _mobileController.text.trim(),
-        'contactPerson': _contactPersonController.text.trim().isNotEmpty ? _contactPersonController.text.trim() : _contactPersonSnapshot,
-        'contactEmail': _emailController.text.trim().isNotEmpty ? _emailController.text.trim() : _contactEmailSnapshot,
-        'contactMobile': _mobileController.text.trim().isNotEmpty ? _mobileController.text.trim() : _contactMobileSnapshot,
+        'contactPerson': _contactPersonController.text.trim().isNotEmpty
+            ? _contactPersonController.text.trim()
+            : _contactPersonSnapshot,
+        'contactDesignation': _contactDesignationController.text.trim().isNotEmpty
+            ? _contactDesignationController.text.trim()
+            : _contactDesignationSnapshot,
+        'contactDepartment': _contactDepartmentController.text.trim().isNotEmpty
+            ? _contactDepartmentController.text.trim()
+            : _contactDepartmentSnapshot,
+        'customerGstin': _gstController.text.trim(),
+        'customerGSTIN': _gstController.text.trim(),
+        'customerGstNo': _gstController.text.trim(),
+        'contactEmail': _emailController.text.trim().isNotEmpty
+            ? _emailController.text.trim()
+            : _contactEmailSnapshot,
+        'contactMobile': _mobileController.text.trim().isNotEmpty
+            ? _mobileController.text.trim()
+            : _contactMobileSnapshot,
         'gstNo': _gstController.text.trim(),
         'isInterState': _isInterState,
         'customerState': _customerState,
@@ -1338,9 +2407,13 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         'inquiryNumber': _hasLinkedInquiry ? (_linkedInquiryNumber ?? '') : '',
         'inquiryRefNo': _hasLinkedInquiry ? (_linkedInquiryNumber ?? '') : '',
         'inquirySource': _hasLinkedInquiry ? _selectedInquirySource : '',
-        'inquiryDate': _hasLinkedInquiry ? Timestamp.fromDate(_inquiryDate) : null,
+        'inquiryDate': _hasLinkedInquiry
+            ? Timestamp.fromDate(_inquiryDate)
+            : null,
         'inquiryReference': _inquiryRefNoteController.text.trim(),
-        'nextFollowUpDate': _nextFollowUpDate != null ? Timestamp.fromDate(_nextFollowUpDate!) : null,
+        'nextFollowUpDate': _nextFollowUpDate != null
+            ? Timestamp.fromDate(_nextFollowUpDate!)
+            : null,
         'followUpNotes': _followUpNotesController.text.trim(),
         'totalSubtotal': _cachedSubtotal,
         'totalItemDiscount': _cachedItemDiscount,
@@ -1383,7 +2456,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         payload['parentQuotationId'] = isRevision ? widget.quotationId : null;
       }
 
-      await FirebaseFirestore.instance.runTransaction((tx) async {
+      await FirebaseFirestore.instance
+          .runTransaction((tx) async {
         int? sequenceToSync;
         final counterRef = FirebaseFirestore.instance
             .collection('companies')
@@ -1392,18 +2466,24 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
             .doc('quotation_counter_$financialYear');
 
         final counterDoc = await tx.get(counterRef);
-        final currentSequence = ((counterDoc.data()?['sequence'] as num?)?.toInt() ?? 0);
+        final currentSequence =
+        ((counterDoc.data()?['sequence'] as num?)?.toInt() ?? 0);
 
         String safeQuoteNumber = '';
 
         if (manualSequence == null) {
           final nextSequence = currentSequence + 1;
-          String formattedSequence = nextSequence.toString().padLeft(3, '0');
-          safeQuoteNumber = '$_quotationPrefix/$formattedSequence/$financialYear';
+          String formattedSequence = nextSequence.toString().padLeft(
+            3,
+            '0',
+          );
+          safeQuoteNumber =
+          '$_quotationPrefix/$formattedSequence/$financialYear';
           sequenceToSync = nextSequence;
         } else {
           String paddedManual = manualSequence.toString().padLeft(3, '0');
-          safeQuoteNumber = '$_quotationPrefix/$paddedManual/$financialYear';
+          safeQuoteNumber =
+          '$_quotationPrefix/$paddedManual/$financialYear';
           if (manualSequence > currentSequence) {
             sequenceToSync = manualSequence;
           }
@@ -1426,7 +2506,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
             reservedFor != null &&
             reservedFor.isNotEmpty &&
             !allowedExistingReservations.contains(reservedFor)) {
-          throw Exception('Quotation number $safeQuoteNumber is already reserved.');
+          throw Exception(
+            'Quotation number $safeQuoteNumber is already reserved.',
+          );
         }
 
         final payloadWithNumber = {
@@ -1435,30 +2517,24 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
           'financialYear': safeQuoteNumber.split('/').last,
         };
 
-        tx.set(
-            numberRef,
-            {
-              'quoteNumber': safeQuoteNumber,
-              'quotationId': quoteRef.id,
-              'companyId': _companyId,
-              'sequence': _extractQuoteSequence(safeQuoteNumber),
-              'financialYear': safeQuoteNumber.split('/').last,
-              'prefix': safeQuoteNumber.split('/').first,
-              'updatedAt': FieldValue.serverTimestamp(),
-              if (!numberDoc.exists) 'createdAt': FieldValue.serverTimestamp(),
-            },
-            SetOptions(merge: true));
+        tx.set(numberRef, {
+          'quoteNumber': safeQuoteNumber,
+          'quotationId': quoteRef.id,
+          'companyId': _companyId,
+          'sequence': _extractQuoteSequence(safeQuoteNumber),
+          'financialYear': safeQuoteNumber.split('/').last,
+          'prefix': safeQuoteNumber.split('/').first,
+          'updatedAt': FieldValue.serverTimestamp(),
+          if (!numberDoc.exists) 'createdAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
 
         if (sequenceToSync != null) {
-          tx.set(
-              counterRef,
-              {
-                'sequence': sequenceToSync,
-                'prefix': _quotationPrefix,
-                'financialYear': financialYear,
-                'updatedAt': FieldValue.serverTimestamp(),
-              },
-              SetOptions(merge: true));
+          tx.set(counterRef, {
+            'sequence': sequenceToSync,
+            'prefix': _quotationPrefix,
+            'financialYear': financialYear,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
         }
 
         if (isRevision) {
@@ -1467,41 +2543,42 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
               .doc(_companyId)
               .collection('quotations')
               .doc(widget.quotationId);
-          tx.set(
-              oldRef,
-              {
-                'isLatest': false,
-                'updatedAt': FieldValue.serverTimestamp(),
-                'updatedBy': _currentUserUid,
-              },
-              SetOptions(merge: true));
+          tx.set(oldRef, {
+            'isLatest': false,
+            'updatedAt': FieldValue.serverTimestamp(),
+            'updatedBy': _currentUserUid,
+          }, SetOptions(merge: true));
         }
 
         tx.set(quoteRef, payloadWithNumber, SetOptions(merge: true));
 
-        if (_linkedInquiryId != null && _linkedInquiryId!.trim().isNotEmpty) {
+        if (_linkedInquiryId != null &&
+            _linkedInquiryId!.trim().isNotEmpty) {
           final inqRef = FirebaseFirestore.instance
               .collection('companies')
               .doc(_companyId)
               .collection('inquiries')
               .doc(_linkedInquiryId);
-          tx.set(
-              inqRef,
-              {
-                'status': 'Quoted',
-                'quotationId': quoteRef.id,
-                'updatedAt': FieldValue.serverTimestamp(),
-                'updatedBy': _currentUserUid,
-              },
-              SetOptions(merge: true));
+          tx.set(inqRef, {
+            'status': 'Quoted',
+            'quotationId': quoteRef.id,
+            'updatedAt': FieldValue.serverTimestamp(),
+            'updatedBy': _currentUserUid,
+          }, SetOptions(merge: true));
         }
-      }).timeout(
+      })
+          .timeout(
         const Duration(seconds: 15),
-        onTimeout: () => throw Exception('Network timeout: Failed to save quotation safely.'),
+        onTimeout: () => throw Exception(
+          'Network timeout: Failed to save quotation safely.',
+        ),
       );
 
       if (!_isReadOnly) {
-        await FirebaseFirestore.instance.collection('quotationSettings').doc(_currentUserUid).set({
+        await FirebaseFirestore.instance
+            .collection('quotationSettings')
+            .doc(_currentUserUid)
+            .set({
           'dynamicTerms': mappedTerms,
           'packingChargesExtra': _packingChargesExtra,
         }, SetOptions(merge: true));
@@ -1509,12 +2586,18 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
       developer.log('Quotation Save Success', name: 'QuotationScreen');
       if (!mounted) return;
-      _showSnack(isRevision
-          ? 'Revision Created Successfully!'
-          : (isUpdate ? 'Quotation Updated!' : 'Quotation Created!'));
+      _showSnack(
+        isRevision
+            ? 'Revision Created Successfully!'
+            : (isUpdate ? 'Quotation Updated!' : 'Quotation Created!'),
+      );
       Navigator.pop(context, true);
     } catch (e) {
-      developer.log('Quotation Save Failed: $e', name: 'QuotationScreen', error: e);
+      developer.log(
+        'Quotation Save Failed: $e',
+        name: 'QuotationScreen',
+        error: e,
+      );
       _setError('Save Failed: ${e.toString().replaceAll('Exception: ', '')}');
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -1539,6 +2622,11 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
     if (_items.isEmpty) {
       _setError('Add at least one item before converting to SO.');
+      return;
+    }
+
+    if (_companyId == null || _companyId!.isEmpty || _currentUserUid == null) {
+      _setError('System Error: Context missing.');
       return;
     }
 
@@ -1572,27 +2660,119 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         if (_isAutoQuoteNumberPlaceholder(currentNo)) {
           currentNo = 'Auto';
         } else {
-          currentNo = '$_quotationPrefix/$currentNo/${_getFinancialYearFromDate(_quoteDate)}';
+          currentNo =
+          '$_quotationPrefix/$currentNo/${_getFinancialYearFromDate(_quoteDate)}';
         }
       }
+
+      final mappedItems = _items.map((e) {
+        final map = e.toMap();
+        final extras = _itemExtras[e.id] ?? {};
+        map.addAll(extras);
+        return map;
+      }).toList();
+
+      String? finalAddressId = _selectedAddressId;
+      if ((finalAddressId == null || finalAddressId.isEmpty) &&
+          _linkedInquiryId != null &&
+          _linkedInquiryId!.isNotEmpty) {
+        finalAddressId = 'INQUIRY_ADDRESS';
+      }
+
+      String? finalContactId = _selectedContactId;
+      if ((finalContactId == null || finalContactId.isEmpty) &&
+          _linkedInquiryId != null &&
+          _linkedInquiryId!.isNotEmpty) {
+        finalContactId = 'INQUIRY_CONTACT';
+      }
+
+      final effectiveAddressSnapshot =
+          _selectedAddressData ??
+              {
+                'address': _addressController.text.trim().isNotEmpty
+                    ? _addressController.text.trim()
+                    : _customerPrimaryAddressSnapshot,
+                'city': _customerPrimaryCitySnapshot,
+                'state': _customerPrimaryStateSnapshot,
+                'pincode': _customerPrimaryPincodeSnapshot,
+              };
+
+      final effectiveContactSnapshot =
+          _selectedContactData ??
+              {
+                'name': _contactPersonController.text.trim().isNotEmpty
+                    ? _contactPersonController.text.trim()
+                    : _contactPersonSnapshot,
+                'email': _emailController.text.trim().isNotEmpty
+                    ? _emailController.text.trim()
+                    : _contactEmailSnapshot,
+                'mobile': _mobileController.text.trim().isNotEmpty
+                    ? _mobileController.text.trim()
+                    : _contactMobileSnapshot,
+                'designation': _contactDesignationController.text.trim().isNotEmpty
+                    ? _contactDesignationController.text.trim()
+                    : _contactDesignationSnapshot,
+                'department': _contactDepartmentController.text.trim().isNotEmpty
+                    ? _contactDepartmentController.text.trim()
+                    : _contactDepartmentSnapshot,
+              };
 
       final salesOrderData = {
         ...(widget.existingQuotation ?? {}),
         'id': soRef.id,
         'companyId': _companyId,
+        'documentType': 'sales_order',
+        'quotationType': _quotationType,
         'sourceQuotationId': widget.quotationId,
         'referenceQuotationId': widget.quotationId,
         'referenceQuotationNumber': currentNo,
         'quotationNumber': currentNo,
         'quoteNumber': currentNo,
         'customerId': _selectedCustomerId,
+        'addressId': finalAddressId,
+        'addressSnapshot': effectiveAddressSnapshot,
+        'contactId': finalContactId,
+        'contactSnapshot': effectiveContactSnapshot,
         'customerName': _clientNameController.text.trim(),
         'clientName': _clientNameController.text.trim(),
         'clientAddress': _addressController.text.trim(),
+        'addressLine': _addressController.text.trim().isNotEmpty
+            ? _addressController.text.trim()
+            : _customerPrimaryAddressSnapshot,
+        'city': _customerPrimaryCitySnapshot,
+        'state': _customerPrimaryStateSnapshot,
+        'pincode': _customerPrimaryPincodeSnapshot,
         'clientEmail': _emailController.text.trim(),
         'clientMobile': _mobileController.text.trim(),
-        'contactPerson': _contactPersonController.text.trim(),
+        'contactPerson': _contactPersonController.text.trim().isNotEmpty
+            ? _contactPersonController.text.trim()
+            : _contactPersonSnapshot,
+        'contactEmail': _emailController.text.trim().isNotEmpty
+            ? _emailController.text.trim()
+            : _contactEmailSnapshot,
+        'contactMobile': _mobileController.text.trim().isNotEmpty
+            ? _mobileController.text.trim()
+            : _contactMobileSnapshot,
+        'contactDesignation': _contactDesignationController.text.trim().isNotEmpty
+            ? _contactDesignationController.text.trim()
+            : _contactDesignationSnapshot,
+        'contactDepartment': _contactDepartmentController.text.trim().isNotEmpty
+            ? _contactDepartmentController.text.trim()
+            : _contactDepartmentSnapshot,
         'gstNo': _gstController.text.trim(),
+        'customerGstin': _gstController.text.trim(),
+        'customerGSTIN': _gstController.text.trim(),
+        'customerGstNo': _gstController.text.trim(),
+        'isInterState': _isInterState,
+        'customerState': _customerState,
+        'inquiryId': _hasLinkedInquiry ? (_linkedInquiryId ?? '') : '',
+        'inquiryNumber': _hasLinkedInquiry ? (_linkedInquiryNumber ?? '') : '',
+        'inquiryRefNo': _hasLinkedInquiry ? (_linkedInquiryNumber ?? '') : '',
+        'inquirySource': _hasLinkedInquiry ? _selectedInquirySource : '',
+        'inquiryDate': _hasLinkedInquiry
+            ? Timestamp.fromDate(_inquiryDate)
+            : null,
+        'inquiryReference': _inquiryRefNoteController.text.trim(),
         'poNumber': _poNumberController.text.trim(),
         'poDate': _poDate != null ? Timestamp.fromDate(_poDate!) : null,
         'poRef': _selectedPoReferenceSource,
@@ -1600,16 +2780,12 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         'poReferenceOtherDescription': _selectedPoReferenceSource == 'Other'
             ? _poReferenceOtherController.text.trim()
             : '',
-        'items': _items.map((e) {
-          final map = e.toMap();
-          final extras = _itemExtras[e.id] ?? {};
-          map.addAll(extras);
-          return map;
-        }).toList(),
+        'items': mappedItems,
         'totalSubtotal': _cachedSubtotal,
         'totalItemDiscount': _cachedItemDiscount,
         'totalGlobalDiscount': _cachedGlobalDiscountAmount,
         'globalDiscountPercent': _globalDiscountPercent,
+        'globalDiscountAmount': _cachedGlobalDiscountAmount,
         'totalTaxableAmount': _cachedTaxableAmount,
         'totalCgst': _cachedCgst,
         'totalSgst': _cachedSgst,
@@ -1617,10 +2793,26 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         'grandTotal': _cachedGrandTotal,
         'roundOff': _cachedRoundOff,
         'finalTotal': _cachedFinalTotal,
+        'deliveryTime': _extractLegacyTerm('delivery'),
+        'validity': _extractLegacyTerm('validity'),
+        'priceBasis': _extractLegacyTerm('price basis'),
+        'paymentTerms': _extractLegacyTerm('payment'),
+        'warranty': _extractLegacyTerm('warranty'),
+        'freight': _extractLegacyTerm('freight'),
+        'installation': _extractLegacyTerm('installation'),
+        'dynamicTerms': _dynamicTerms
+            .map((term) => {
+          'title': term.titleCtrl.text.trim(),
+          'value': term.valueCtrl.text.trim(),
+        })
+            .toList(),
+        'packingChargesExtra': _packingChargesExtra,
+        'signatureName': _signNameController.text.trim(),
+        'signatureDesignation': _signDesignationController.text.trim(),
+        'signaturePhone': _signPhoneController.text.trim(),
         'status': 'draft',
         'approvalStatus': 'pending',
         'dispatchStatus': 'pending',
-        'documentType': 'sales_order',
         'salesOrderNumber':
         'SO-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}',
         'createdAt': FieldValue.serverTimestamp(),
@@ -1680,6 +2872,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       _showSnack('Successfully converted to Sales Order!');
       Navigator.pop(context, true);
     } catch (e) {
+      developer.log('Sales Order conversion failed: $e',
+          name: 'QuotationScreen', error: e);
       if (mounted) _showSnack('Error converting: $e', isError: true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -1701,23 +2895,60 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       previewQuoteNo = '$_quotationPrefix/$previewQuoteNo/$fy';
     }
 
+    final termsForPreview = _dynamicTerms
+        .map(
+          (term) => {
+        'title': term.titleCtrl.text.trim(),
+        'value': term.valueCtrl.text.trim(),
+      },
+    )
+        .where(
+          (term) =>
+      (term['title'] ?? '').toString().trim().isNotEmpty ||
+          (term['value'] ?? '').toString().trim().isNotEmpty,
+    )
+        .toList();
+
     return {
       'quoteNumber': previewQuoteNo,
+      'companyId': _companyId,
+      'quotationType': _quotationType,
       'quoteDateStr':
       '${_quoteDate.day.toString().padLeft(2, '0')}/${_quoteDate.month.toString().padLeft(2, '0')}/${_quoteDate.year}',
       'revisionNo': _currentVersion.toString(),
       'inquiryRefNo': _linkedInquiryNumber ?? '',
+      'inquiryNumber': _linkedInquiryNumber ?? '',
+      'inquiryId': _linkedInquiryId ?? '',
       'subject': _subjectController.text.trim(),
       'clientName': _clientNameController.text.trim(),
       'clientAddress': _addressController.text.trim(),
+      'addressLine': _addressController.text.trim().isNotEmpty
+          ? _addressController.text.trim()
+          : _customerPrimaryAddressSnapshot,
+      'city': _customerPrimaryCitySnapshot,
+      'state': _customerPrimaryStateSnapshot,
+      'pincode': _customerPrimaryPincodeSnapshot,
       'clientEmail': _emailController.text.trim(),
       'clientMobile': _mobileController.text.trim(),
       'contactPerson': _contactPersonController.text.trim(),
+      'contactEmail': _emailController.text.trim(),
+      'contactMobile': _mobileController.text.trim(),
+      'contactDepartment': _contactDepartmentController.text.trim(),
+      'contactDesignation': _contactDesignationController.text.trim(),
+      'terms': termsForPreview,
+      'dynamicTerms': termsForPreview,
+      'customerGstin': _gstController.text.trim(),
+      'customerGSTIN': _gstController.text.trim(),
+      'customerGstNo': _gstController.text.trim(),
       'gstNo': _gstController.text.trim(),
-      'customerState': _customerPrimaryStateSnapshot.isNotEmpty ? _customerPrimaryStateSnapshot : _customerState,
+      'customerState': _customerPrimaryStateSnapshot.isNotEmpty
+          ? _customerPrimaryStateSnapshot
+          : _customerState,
       'isInterState': _isInterState,
       'totalSubtotal': _cachedSubtotal,
       'totalItemDiscount': _cachedItemDiscount,
+      'globalDiscountPercent': _globalDiscountPercent,
+      'globalDiscountAmount': _cachedGlobalDiscountAmount,
       'totalTaxableAmount': _cachedTaxableAmount,
       'totalCgst': _cachedCgst,
       'totalSgst': _cachedSgst,
@@ -1725,12 +2956,6 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       'grandTotal': _cachedGrandTotal,
       'roundOff': _cachedRoundOff,
       'finalTotal': _cachedFinalTotal,
-      'dynamicTerms': _dynamicTerms
-          .map((e) => {
-        'title': e.titleCtrl.text.trim(),
-        'value': e.valueCtrl.text.trim(),
-      })
-          .toList(),
       'packingChargesExtra': _packingChargesExtra,
       'companyName': _companyName,
       'companyAddress': _companyAddress,
@@ -1759,23 +2984,32 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       return;
     }
 
-    final Map<String, dynamic> safeData = Map<String, dynamic>.from(_buildPreviewData());
+    final Map<String, dynamic> safeData = Map<String, dynamic>.from(
+      _buildPreviewData(),
+    );
 
-    final List<QuotationLineItem> safeItems = _items.where((e) {
+    final List<QuotationLineItem> safeItems = _items
+        .where((e) {
       final extras = _itemExtras[e.id] ?? {};
       final isScopeItem = extras['isScopeItem'] == true;
       final isIncluded = extras['isIncluded'] != false;
       if (isScopeItem && !isIncluded) return false;
       return true;
-    }).map((e) => QuotationLineItem.fromMap(Map<String, dynamic>.from(e.toMap()..addAll(_itemExtras[e.id] ?? {})))).toList();
+    })
+        .map(
+          (e) => QuotationLineItem.fromMap(
+        Map<String, dynamic>.from(
+          e.toMap()..addAll(_itemExtras[e.id] ?? {}),
+        ),
+      ),
+    )
+        .toList();
 
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => QuotationPreviewScreen(
-          quotation: safeData,
-          items: safeItems,
-        ),
+        builder: (_) =>
+            QuotationPreviewScreen(quotation: safeData, items: safeItems),
       ),
     );
   }
@@ -1785,7 +3019,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: isError ? Colors.red : (isInfo ? Colors.blue : Colors.green),
+        backgroundColor: isError
+            ? Colors.red
+            : (isInfo ? Colors.blue : Colors.green),
       ),
     );
   }
@@ -1803,7 +3039,12 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     ],
   );
 
-  InputDecoration _dec(String label, {String? hint, Widget? prefixIcon, Widget? suffixIcon}) {
+  InputDecoration _dec(
+      String label, {
+        String? hint,
+        Widget? prefixIcon,
+        Widget? suffixIcon,
+      }) {
     return InputDecoration(
       labelText: label,
       hintText: hint,
@@ -1830,18 +3071,23 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
   void _openImage(String url) {
     showDialog(
-        context: context,
-        builder: (ctx) => Dialog(
-            child: Stack(children: [
-              InteractiveViewer(child: Image.network(url, fit: BoxFit.contain)),
-              Positioned(
-                  right: 8,
-                  top: 8,
-                  child: IconButton(
-                    icon: const Icon(Icons.close, color: Colors.black, size: 30),
-                    onPressed: () => Navigator.pop(ctx),
-                  ))
-            ])));
+      context: context,
+      builder: (ctx) => Dialog(
+        child: Stack(
+          children: [
+            InteractiveViewer(child: Image.network(url, fit: BoxFit.contain)),
+            Positioned(
+              right: 8,
+              top: 8,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.black, size: 30),
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildSegmentedQuotationNumber() {
@@ -1850,28 +3096,58 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       controller: _quotationSequenceController,
       keyboardType: TextInputType.text,
       maxLength: 6,
-      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9-]'))],
+      inputFormatters: [
+        FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9-]')),
+      ],
       textAlign: TextAlign.center,
       readOnly: _isReadOnly || widget.prepareSalesOrderMode,
-      style: const TextStyle(fontWeight: FontWeight.w700, letterSpacing: 2.0, fontSize: 15, color: Color(0xFF0F172A)),
+      style: const TextStyle(
+        fontWeight: FontWeight.w700,
+        letterSpacing: 2.0,
+        fontSize: 15,
+        color: Color(0xFF0F172A),
+      ),
       decoration: _dec('Quotation No.', hint: 'Auto').copyWith(
         floatingLabelBehavior: FloatingLabelBehavior.always,
         counterText: "",
         contentPadding: const EdgeInsets.symmetric(vertical: 16),
-        prefixIconConstraints: const BoxConstraints(minWidth: 70, minHeight: 54),
+        prefixIconConstraints: const BoxConstraints(
+          minWidth: 70,
+          minHeight: 54,
+        ),
         prefixIcon: Container(
           width: 70,
           alignment: Alignment.center,
-          decoration: const BoxDecoration(border: Border(right: BorderSide(color: Color(0xFFE2E8F0)))),
-          child: Text(_quotationPrefix,
-              style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF64748B), fontSize: 14)),
+          decoration: const BoxDecoration(
+            border: Border(right: BorderSide(color: Color(0xFFE2E8F0))),
+          ),
+          child: Text(
+            _quotationPrefix,
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF64748B),
+              fontSize: 14,
+            ),
+          ),
         ),
-        suffixIconConstraints: const BoxConstraints(minWidth: 80, minHeight: 54),
+        suffixIconConstraints: const BoxConstraints(
+          minWidth: 80,
+          minHeight: 54,
+        ),
         suffixIcon: Container(
           width: 80,
           alignment: Alignment.center,
-          decoration: const BoxDecoration(border: Border(left: BorderSide(color: Color(0xFFE2E8F0)))),
-          child: Text(fy, style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF64748B), fontSize: 14)),
+          decoration: const BoxDecoration(
+            border: Border(left: BorderSide(color: Color(0xFFE2E8F0))),
+          ),
+          child: Text(
+            fy,
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF64748B),
+              fontSize: 14,
+            ),
+          ),
         ),
       ),
     );
@@ -1906,6 +3182,279 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         ],
       ),
     );
+  }
+
+  Query<Map<String, dynamic>> _customerAutocompleteQuery() {
+    Query<Map<String, dynamic>> query = FirebaseFirestore.instance
+        .collection('companies')
+        .doc(_companyId)
+        .collection('customers');
+
+    if (!_isAdminOrManager && _currentUserUid != null) {
+      query = query.where('createdBy', isEqualTo: _currentUserUid);
+    }
+
+    return query;
+  }
+
+  bool _isSelectableCustomer(Map<String, dynamic> data) {
+    if (data['isActive'] == false) return false;
+    if (data['isDeleted'] == true) return false;
+    if (data['archived'] == true) return false;
+    if (data['mergedInto'] != null) return false;
+
+    final status = (data['status'] ?? '').toString().toLowerCase();
+    if (status == 'deleted' || status == 'inactive') return false;
+
+    return true;
+  }
+
+  String _customerDisplayName(Map<String, dynamic> customer) {
+    return (customer['companyName'] ??
+        customer['customerName'] ??
+        customer['name'] ??
+        customer['clientName'] ??
+        '')
+        .toString()
+        .trim();
+  }
+
+  String _customerSubtitle(Map<String, dynamic> customer) {
+    final contact = (customer['contactPerson'] ?? customer['contactName'] ?? '')
+        .toString()
+        .trim();
+    final mobile = (customer['mobile'] ?? customer['phone'] ?? '')
+        .toString()
+        .trim();
+    final gst =
+    (customer['customerGstin'] ??
+        customer['customerGSTIN'] ??
+        customer['customerGstNo'] ??
+        customer['gstin'] ??
+        customer['gstNo'] ??
+        '')
+        .toString()
+        .trim();
+
+    return [contact, mobile, gst].where((e) => e.isNotEmpty).join(' | ');
+  }
+
+  void _clearSelectedCustomerIfTyping(String value) {
+    if (_isRestoring || _isReadOnly || _hasLinkedInquiry) return;
+
+    final typed = value.trim();
+    if (_selectedCustomerId == null || typed == _selectedCustomerLabel) return;
+
+    setState(() {
+      _selectedCustomerId = null;
+      _selectedCustomerLabel = '';
+      _selectedAddressId = null;
+      _selectedAddressData = null;
+      _customerAddresses = [];
+      _selectedContactId = null;
+      _selectedContactData = null;
+      _customerInsights = null;
+      _customerPrimaryAddressSnapshot = '';
+      _customerPrimaryCitySnapshot = '';
+      _customerPrimaryStateSnapshot = '';
+      _customerPrimaryPincodeSnapshot = '';
+      _customerState = '';
+      _addressController.clear();
+      _updateContactSnapshots(null);
+      _gstController.clear();
+      _isInterState = false;
+    });
+  }
+
+  Widget _buildCustomerNameAutocomplete({
+    String? Function(String?)? validator,
+  }) {
+    if (_companyId == null || _companyId!.isEmpty) {
+      return _buildItemTextField(
+        _clientNameController,
+        'Customer Name *',
+        validator: validator,
+      );
+    }
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _customerAutocompleteQuery().snapshots(),
+      builder: (context, snapshot) {
+        final docs =
+            snapshot.data?.docs ??
+                <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+
+        return RawAutocomplete<Map<String, dynamic>>(
+          textEditingController: _clientNameController,
+          focusNode: _customerNameFocusNode,
+          displayStringForOption: _customerDisplayName,
+          optionsBuilder: (TextEditingValue value) {
+            final text = value.text.trim().toLowerCase();
+            if (text.isEmpty)
+              return const Iterable<Map<String, dynamic>>.empty();
+
+            final customers = docs
+                .map((doc) => {'id': doc.id, ...doc.data()})
+                .where(_isSelectableCustomer)
+                .toList();
+
+            final matches = customers.where((customer) {
+              final searchText = [
+                customer['companyName'],
+                customer['customerName'],
+                customer['name'],
+                customer['clientName'],
+                customer['contactPerson'],
+                customer['contactName'],
+                customer['mobile'],
+                customer['phone'],
+              ].where((e) => e != null).join(' ').toLowerCase();
+
+              return searchText.contains(text);
+            }).toList();
+
+            matches.sort((a, b) {
+              final aName = _customerDisplayName(a).toLowerCase();
+              final bName = _customerDisplayName(b).toLowerCase();
+
+              final aStarts = aName.startsWith(text);
+              final bStarts = bName.startsWith(text);
+
+              if (aStarts && !bStarts) return -1;
+              if (!aStarts && bStarts) return 1;
+
+              return aName.compareTo(bName);
+            });
+
+            return matches.take(30);
+          },
+          onSelected: (customer) {
+            _selectedCustomerLabel = _customerDisplayName(customer);
+            _applyCustomer(customer);
+          },
+          fieldViewBuilder:
+              (context, textController, focusNode, onFieldSubmitted) {
+            return TextFormField(
+              controller: textController,
+              focusNode: focusNode,
+              validator: validator,
+              readOnly: _isReadOnly || _hasLinkedInquiry,
+              onChanged: _clearSelectedCustomerIfTyping,
+              decoration: _dec(
+                'Customer Name *',
+                hint: 'Type customer or company name',
+                prefixIcon: const Icon(Icons.search),
+              ),
+            );
+          },
+          optionsViewBuilder: (context, onSelected, options) {
+            final optionList = options.toList();
+
+            return Align(
+              alignment: Alignment.topLeft,
+              child: Material(
+                elevation: 6,
+                borderRadius: BorderRadius.circular(12),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxHeight: 280,
+                    maxWidth: 620,
+                  ),
+                  child: ListView.separated(
+                    padding: EdgeInsets.zero,
+                    shrinkWrap: true,
+                    itemCount: optionList.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final customer = optionList[index];
+                      final title = _customerDisplayName(customer);
+                      final subtitle = _customerSubtitle(customer);
+
+                      return ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.business_outlined),
+                        title: Text(
+                          title.isEmpty ? 'Unnamed Customer' : title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: subtitle.isEmpty
+                            ? null
+                            : Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        onTap: () => onSelected(customer),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  String _productScopeOfSupplyText(Map<String, dynamic> product) {
+    for (final key in [
+      'scopeOfSupply',
+      'scope_of_supply',
+      'supplyScope',
+      'scope',
+      'scopeDescription',
+      'scopeDetails',
+    ]) {
+      final text = product[key]?.toString().trim() ?? '';
+      if (text.isNotEmpty && text.toLowerCase() != 'null') return text;
+    }
+
+    final included = product['includedProducts'];
+    if (included is! List || included.isEmpty) return '';
+
+    final lines = <String>[];
+
+    for (final entry in included) {
+      if (entry is String) {
+        final text = entry.trim();
+        if (text.isNotEmpty) lines.add('- $text');
+        continue;
+      }
+
+      if (entry is Map) {
+        final name =
+        (entry['name'] ??
+            entry['productName'] ??
+            entry['itemName'] ??
+            entry['description'] ??
+            '')
+            .toString()
+            .trim();
+
+        final qty = (entry['quantity'] ?? entry['qty'] ?? '').toString().trim();
+        final uom = (entry['uom'] ?? entry['unit'] ?? '').toString().trim();
+        final details = (entry['details'] ?? '').toString().trim();
+
+        final qtyText = [
+          qty,
+          uom,
+        ].where((e) => e.trim().isNotEmpty && e.trim() != 'null').join(' ');
+
+        final parts = <String>[];
+        if (name.isNotEmpty && name.toLowerCase() != 'null') parts.add(name);
+        if (qtyText.isNotEmpty) parts.add(qtyText);
+        if (details.isNotEmpty && details.toLowerCase() != 'null') {
+          parts.add(details);
+        }
+
+        if (parts.isNotEmpty) lines.add('- ${parts.join(' | ')}');
+      }
+    }
+
+    return lines.join('\n');
   }
 
   Future<Map<String, dynamic>?> _selectCustomerDialog() async {
@@ -1964,12 +3513,17 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                         if (data['isDeleted'] == true) return false;
                         if (data['archived'] == true) return false;
                         if (data['mergedInto'] != null) return false;
-                        final status = (data['status'] ?? '').toString().toLowerCase();
-                        if (status == 'deleted' || status == 'inactive') return false;
+                        final status = (data['status'] ?? '')
+                            .toString()
+                            .toLowerCase();
+                        if (status == 'deleted' || status == 'inactive')
+                          return false;
 
                         final searchStr =
-                        '${data['companyName']} ${data['contactPerson']} ${data['mobile']}'.toLowerCase();
-                        return searchText.isEmpty || searchStr.contains(searchText);
+                        '${data['companyName']} ${data['contactPerson']} ${data['mobile']}'
+                            .toLowerCase();
+                        return searchText.isEmpty ||
+                            searchStr.contains(searchText);
                       }).toList();
 
                       if (filtered.isEmpty) {
@@ -1984,9 +3538,13 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                           return ListTile(
                             title: Text(
                               data['companyName'] ?? 'Unknown',
-                              style: const TextStyle(fontWeight: FontWeight.w600),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                            subtitle: Text('${data['contactPerson'] ?? ''} | ${data['mobile'] ?? ''}'),
+                            subtitle: Text(
+                              '${data['contactPerson'] ?? ''} | ${data['mobile'] ?? ''}',
+                            ),
                             onTap: () => Navigator.pop(context, {
                               'id': filtered[index].id,
                               ...data,
@@ -2059,23 +3617,33 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                 ),
                 const SizedBox(height: 12),
                 SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                        children: [
-                          'All',
-                          'Machines',
-                          'Accessories',
-                          'Spares',
-                          'Consumables',
-                          'Raw Materials'
-                        ].map((f) => Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: ChoiceChip(
-                                label: Text(f),
-                                selected: _productFilter == f,
-                                onSelected: (val) {
-                                  if (val) setDialogState(() => _productFilter = f);
-                                }))).toList())),
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children:
+                    [
+                      'All',
+                      'Machines',
+                      'Accessories',
+                      'Spares',
+                      'Consumables',
+                      'Raw Materials',
+                    ]
+                        .map(
+                          (f) => Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: Text(f),
+                          selected: _productFilter == f,
+                          onSelected: (val) {
+                            if (val)
+                              setDialogState(() => _productFilter = f);
+                          },
+                        ),
+                      ),
+                    )
+                        .toList(),
+                  ),
+                ),
                 const SizedBox(height: 12),
                 Expanded(
                   child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -2088,25 +3656,42 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                       final filtered = docs.where((doc) {
                         final data = doc.data();
                         final searchStr =
-                        '${data['name']} ${data['sku']} ${data['itemCode']} ${data['description']}'.toLowerCase();
-                        if (searchText.isNotEmpty && !searchStr.contains(searchText)) return false;
+                        '${data['name']} ${data['sku']} ${data['itemCode']} ${data['description']}'
+                            .toLowerCase();
+                        if (searchText.isNotEmpty &&
+                            !searchStr.contains(searchText))
+                          return false;
 
                         if (_productFilter != 'All') {
-                          String pNature = (data['productNatureLower'] ?? data['productNature'] ?? '').toString().toLowerCase();
+                          String pNature =
+                          (data['productNatureLower'] ??
+                              data['productNature'] ??
+                              '')
+                              .toString()
+                              .toLowerCase();
                           String filterLower = _productFilter.toLowerCase();
-                          if (filterLower == 'machines') filterLower = 'machine';
-                          else if (filterLower == 'accessories') filterLower = 'accessory';
-                          else if (filterLower == 'spares') filterLower = 'spare';
-                          else if (filterLower == 'consumables') filterLower = 'consumable';
-                          else if (filterLower == 'raw materials') filterLower = 'raw material';
+                          if (filterLower == 'machines')
+                            filterLower = 'machine';
+                          else if (filterLower == 'accessories')
+                            filterLower = 'accessory';
+                          else if (filterLower == 'spares')
+                            filterLower = 'spare';
+                          else if (filterLower == 'consumables')
+                            filterLower = 'consumable';
+                          else if (filterLower == 'raw materials')
+                            filterLower = 'raw material';
 
-                          if (pNature != filterLower && pNature != filterLower.replaceAll(' ', '_')) return false;
+                          if (pNature != filterLower &&
+                              pNature != filterLower.replaceAll(' ', '_'))
+                            return false;
                         }
                         return true;
                       }).toList();
 
                       if (filtered.isEmpty) {
-                        return const Center(child: Text('No products found matching criteria.'));
+                        return const Center(
+                          child: Text('No products found matching criteria.'),
+                        );
                       }
 
                       return ListView.separated(
@@ -2114,81 +3699,160 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                         separatorBuilder: (_, __) => const Divider(height: 1),
                         itemBuilder: (context, index) {
                           final data = filtered[index].data();
-                          final stock = double.tryParse(data['stockOnHand']?.toString() ??
-                              data['availableStock']?.toString() ??
-                              data['qty']?.toString() ??
-                              '0') ??
-                              0;
+                          final stock =
+                              double.tryParse(
+                                data['stockOnHand']?.toString() ??
+                                    data['availableStock']?.toString() ??
+                                    data['qty']?.toString() ??
+                                    '0',
+                              ) ??
+                                  0;
 
-                          final nature = (data['productNature'] ?? 'General').toString();
+                          final nature = (data['productNature'] ?? 'General')
+                              .toString();
                           final itemCode = (data['itemCode'] ?? '').toString();
                           final sku = (data['sku'] ?? '').toString();
-                          final brand = (data['brand'] ?? data['make'] ?? '').toString();
+                          final brand = (data['brand'] ?? data['make'] ?? '')
+                              .toString();
                           final model = (data['model'] ?? '').toString();
-                          final machineType = (data['machineType'] ?? '').toString();
+                          final machineType = (data['machineType'] ?? '')
+                              .toString();
 
-                          final sellingPrice = double.tryParse(data['sellingPrice']?.toString() ?? '') ??
-                              double.tryParse(data['price']?.toString() ?? '') ??
-                              double.tryParse(data['unitPrice']?.toString() ?? '') ??
-                              double.tryParse(data['rate']?.toString() ?? '') ??
-                              0.0;
+                          final sellingPrice =
+                              double.tryParse(
+                                data['sellingPrice']?.toString() ?? '',
+                              ) ??
+                                  double.tryParse(
+                                    data['price']?.toString() ?? '',
+                                  ) ??
+                                  double.tryParse(
+                                    data['unitPrice']?.toString() ?? '',
+                                  ) ??
+                                  double.tryParse(data['rate']?.toString() ?? '') ??
+                                  0.0;
 
-                          final gst = data['gstPercentage']?.toString() ?? data['tax']?.toString() ?? '18';
+                          final gst =
+                              data['gstPercentage']?.toString() ??
+                                  data['tax']?.toString() ??
+                                  '18';
                           final uom = (data['uom'] ?? 'Nos').toString();
                           final images = data['images'] as List? ?? [];
-                          final imageUrl = images.isNotEmpty ? images.first.toString() : (data['imageUrl']?.toString() ?? '');
+                          final imageUrl = images.isNotEmpty
+                              ? images.first.toString()
+                              : (data['imageUrl']?.toString() ?? '');
 
                           Color natureColor = Colors.grey;
-                          if (nature.toLowerCase() == 'machine') natureColor = Colors.purple;
-                          else if (nature.toLowerCase() == 'accessory') natureColor = Colors.orange;
-                          else if (nature.toLowerCase() == 'spare') natureColor = Colors.blue;
-                          else if (nature.toLowerCase() == 'consumable') natureColor = Colors.teal;
-                          else if (nature.toLowerCase() == 'raw material') natureColor = Colors.brown;
+                          if (nature.toLowerCase() == 'machine')
+                            natureColor = Colors.purple;
+                          else if (nature.toLowerCase() == 'accessory')
+                            natureColor = Colors.orange;
+                          else if (nature.toLowerCase() == 'spare')
+                            natureColor = Colors.blue;
+                          else if (nature.toLowerCase() == 'consumable')
+                            natureColor = Colors.teal;
+                          else if (nature.toLowerCase() == 'raw material')
+                            natureColor = Colors.brown;
 
                           return ListTile(
                             leading: imageUrl.isNotEmpty
                                 ? ClipRRect(
-                                borderRadius: BorderRadius.circular(4),
-                                child: Image.network(imageUrl, width: 40, height: 40, fit: BoxFit.cover))
+                              borderRadius: BorderRadius.circular(4),
+                              child: Image.network(
+                                imageUrl,
+                                width: 40,
+                                height: 40,
+                                fit: BoxFit.cover,
+                              ),
+                            )
                                 : Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                    color: natureColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                                child: Icon(Icons.inventory_2, color: natureColor, size: 20)),
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: natureColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.inventory_2,
+                                color: natureColor,
+                                size: 20,
+                              ),
+                            ),
                             title: Row(
                               children: [
                                 Expanded(
-                                    child: Text(data['name'] ?? 'Unknown',
-                                        style: const TextStyle(fontWeight: FontWeight.w600))),
+                                  child: Text(
+                                    data['name'] ?? 'Unknown',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
                                 const SizedBox(width: 8),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
                                   decoration: BoxDecoration(
-                                      color: natureColor.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(4),
-                                      border: Border.all(color: natureColor.withOpacity(0.3))),
-                                  child: Text(nature,
-                                      style: TextStyle(fontSize: 10, color: natureColor, fontWeight: FontWeight.bold)),
+                                    color: natureColor.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(
+                                      color: natureColor.withOpacity(0.3),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    nature,
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: natureColor,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
-                            subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                              const SizedBox(height: 4),
-                              Text('SKU: $sku | Code: $itemCode | Brand: $brand'),
-                              if (machineType.isNotEmpty)
-                                Text('Machine Type: $machineType',
-                                    style: TextStyle(color: Colors.purple.shade700, fontSize: 11)),
-                              const SizedBox(height: 2),
-                              Text('Price: ₹$sellingPrice | Tax: $gst% | Stock: $stock $uom',
-                                  style: const TextStyle(fontWeight: FontWeight.w500)),
-                            ]),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const SizedBox(height: 4),
+                                Text(
+                                  'SKU: $sku | Code: $itemCode | Brand: $brand',
+                                ),
+                                if (machineType.isNotEmpty)
+                                  Text(
+                                    'Machine Type: $machineType',
+                                    style: TextStyle(
+                                      color: Colors.purple.shade700,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Price: ₹$sellingPrice | Tax: $gst% | Stock: $stock $uom',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
                             isThreeLine: true,
                             trailing: stock <= 0
-                                ? const Icon(Icons.warning, color: Colors.orange)
-                                : const Icon(Icons.check_circle, color: Colors.green),
+                                ? const Icon(
+                              Icons.warning,
+                              color: Colors.orange,
+                            )
+                                : const Icon(
+                              Icons.check_circle,
+                              color: Colors.green,
+                            ),
                             onTap: () {
-                              developer.log('Product Added: ${filtered[index].id}', name: 'QuotationScreen');
-                              _productCache[filtered[index].id] = {'id': filtered[index].id, ...data};
+                              developer.log(
+                                'Product Added: ${filtered[index].id}',
+                                name: 'QuotationScreen',
+                              );
+                              _productCache[filtered[index].id] = {
+                                'id': filtered[index].id,
+                                ...data,
+                              };
                               Navigator.pop(context, {
                                 'id': filtered[index].id,
                                 'stock': stock,
@@ -2215,16 +3879,29 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     );
   }
 
-  Future<bool?> _showScopeOfSupplyDialog(QuotationLineItem machine, List included) {
+  Future<bool?> _showScopeOfSupplyDialog(
+      QuotationLineItem machine,
+      List included,
+      ) {
     return showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-            title: const Text('Scope of Supply Found'),
-            content: Text('This machine contains ${included.length} included items in its scope of supply. Add them to quotation?'),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Skip')),
-              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Add All')),
-            ]));
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Scope of Supply Found'),
+        content: Text(
+          'This machine contains ${included.length} included items in its scope of supply. Add them to quotation?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Skip'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Add All'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _addIncludedProducts(List included, String parentId) async {
@@ -2253,7 +3930,11 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         pId = inc;
       } else if (inc is Map) {
         pId = (inc['productId'] ?? inc['id'] ?? '').toString();
-        incQty = double.tryParse(inc['quantity']?.toString() ?? inc['qty']?.toString() ?? '1') ?? 1.0;
+        incQty =
+            double.tryParse(
+              inc['quantity']?.toString() ?? inc['qty']?.toString() ?? '1',
+            ) ??
+                1.0;
         incName = (inc['name'] ?? inc['productName'] ?? '').toString();
         incUom = (inc['uom'] ?? 'Nos').toString();
         incDesc = (inc['description'] ?? inc['details'] ?? '').toString();
@@ -2281,23 +3962,51 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
       if (alreadyInScope) continue;
 
-      String finalDesc = (pData['description'] ?? pData['details'] ?? incDesc).toString();
+      String finalDesc = (pData['description'] ?? pData['details'] ?? incDesc)
+          .toString();
       String finalHsn = (pData['hsnCode'] ?? pData['hsn'] ?? '').toString();
       String finalUom = (pData['uom'] ?? incUom).toString();
 
-      double finalPrice = double.tryParse(pData['sellingPrice']?.toString() ?? pData['price']?.toString() ?? pData['unitPrice']?.toString() ?? '0') ?? 0.0;
-      double finalGst = double.tryParse(pData['gstPercentage']?.toString() ?? pData['tax']?.toString() ?? '18') ?? 18.0;
+      double finalPrice =
+          double.tryParse(
+            pData['sellingPrice']?.toString() ??
+                pData['price']?.toString() ??
+                pData['unitPrice']?.toString() ??
+                '0',
+          ) ??
+              0.0;
+      double finalGst =
+          double.tryParse(
+            pData['gstPercentage']?.toString() ??
+                pData['tax']?.toString() ??
+                '18',
+          ) ??
+              18.0;
 
       double cgst = 0, sgst = 0, igst = 0;
       if (finalGst > 0) {
-        if (_isInterState) igst = finalGst;
-        else { cgst = finalGst / 2; sgst = finalGst / 2; }
+        if (_isInterState)
+          igst = finalGst;
+        else {
+          cgst = finalGst / 2;
+          sgst = finalGst / 2;
+        }
       }
 
-      double stock = double.tryParse(pData['stockOnHand']?.toString() ?? pData['availableStock']?.toString() ?? pData['qty']?.toString() ?? '0') ?? 0.0;
+      double stock =
+          double.tryParse(
+            pData['stockOnHand']?.toString() ??
+                pData['availableStock']?.toString() ??
+                pData['qty']?.toString() ??
+                '0',
+          ) ??
+              0.0;
 
       final newItem = QuotationLineItem(
-        id: DateTime.now().millisecondsSinceEpoch.toString() + '_' + (pId.isNotEmpty ? pId : 'custom'),
+        id:
+        DateTime.now().millisecondsSinceEpoch.toString() +
+            '_' +
+            (pId.isNotEmpty ? pId : 'custom'),
         productId: pId,
         name: finalName,
         description: finalDesc,
@@ -2338,10 +4047,16 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   void _addRecommendedProduct(String pId, Map<String, dynamic> data) {
     if (_items.any((item) => item.productId == pId)) return;
 
-    double pPrice = double.tryParse(data['sellingPrice']?.toString() ?? '') ??
-        double.tryParse(data['price']?.toString() ?? '') ??
-        double.tryParse(data['unitPrice']?.toString() ?? '') ?? 0.0;
-    double pGst = double.tryParse(data['gstPercentage']?.toString() ?? data['tax']?.toString() ?? '18') ?? 18.0;
+    double pPrice =
+        double.tryParse(data['sellingPrice']?.toString() ?? '') ??
+            double.tryParse(data['price']?.toString() ?? '') ??
+            double.tryParse(data['unitPrice']?.toString() ?? '') ??
+            0.0;
+    double pGst =
+        double.tryParse(
+          data['gstPercentage']?.toString() ?? data['tax']?.toString() ?? '18',
+        ) ??
+            18.0;
     double cgst = 0, sgst = 0, igst = 0;
     if (_isInterState) {
       igst = pGst;
@@ -2350,7 +4065,11 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       sgst = pGst / 2;
     }
 
-    double stock = double.tryParse(data['stockOnHand']?.toString() ?? data['qty']?.toString() ?? '0') ?? 0.0;
+    double stock =
+        double.tryParse(
+          data['stockOnHand']?.toString() ?? data['qty']?.toString() ?? '0',
+        ) ??
+            0.0;
 
     final newItem = QuotationLineItem(
       id: DateTime.now().millisecondsSinceEpoch.toString() + '_' + pId,
@@ -2378,7 +4097,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         'itemCode': data['itemCode'] ?? '',
         'sellingPrice': data['sellingPrice'] ?? '',
         'baseGst': pGst,
-        'productNatureLower': (data['productNature'] ?? '').toString().toLowerCase(),
+        'productNatureLower': (data['productNature'] ?? '')
+            .toString()
+            .toLowerCase(),
         'stockOnHand': stock,
         'qty': stock,
       };
@@ -2387,60 +4108,73 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     });
   }
 
-  Future<void> _showRecommendedSparesDialog(QuotationLineItem machine, Map<String, dynamic> extras) async {
+  Future<void> _showRecommendedSparesDialog(
+      QuotationLineItem machine,
+      Map<String, dynamic> extras,
+      ) async {
     final compatDocs = await _getCompatibleProducts(machine, extras);
-    final filteredDocs = compatDocs.where((d) => !_items.any((i) => i.productId == d['id'])).toList();
+    final filteredDocs = compatDocs
+        .where((d) => !_items.any((i) => i.productId == d['id']))
+        .toList();
     if (filteredDocs.isEmpty) return;
 
     List<String> selectedIds = [];
 
     await showDialog(
-        context: context,
-        builder: (ctx) {
-          return StatefulBuilder(builder: (context, setDialogState) {
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
             return AlertDialog(
-                title: const Text('Compatible Products Found'),
-                content: SizedBox(
-                    width: double.maxFinite,
-                    height: 400,
-                    child: ListView.separated(
-                        itemCount: filteredDocs.length,
-                        separatorBuilder: (_, __) => const Divider(),
-                        itemBuilder: (context, index) {
-                          final data = filteredDocs[index];
-                          final pId = data['id'];
-                          final name = data['name'] ?? 'Unknown';
-                          final price = data['sellingPrice'] ?? data['unitPrice'] ?? 0;
-                          final isChecked = selectedIds.contains(pId);
+              title: const Text('Compatible Products Found'),
+              content: SizedBox(
+                width: double.maxFinite,
+                height: 400,
+                child: ListView.separated(
+                  itemCount: filteredDocs.length,
+                  separatorBuilder: (_, __) => const Divider(),
+                  itemBuilder: (context, index) {
+                    final data = filteredDocs[index];
+                    final pId = data['id'];
+                    final name = data['name'] ?? 'Unknown';
+                    final price =
+                        data['sellingPrice'] ?? data['unitPrice'] ?? 0;
+                    final isChecked = selectedIds.contains(pId);
 
-                          return CheckboxListTile(
-                              title: Text(name),
-                              subtitle: Text('Price: ₹$price'),
-                              value: isChecked,
-                              onChanged: (val) {
-                                setDialogState(() {
-                                  if (val == true) {
-                                    selectedIds.add(pId);
-                                  } else {
-                                    selectedIds.remove(pId);
-                                  }
-                                });
-                              }
-                          );
-                        }
-                    )
-                ),
-                actions: [
-                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Skip')),
-                  FilledButton(
-                      onPressed: () {
-                        Navigator.pop(ctx);
+                    return CheckboxListTile(
+                      title: Text(name),
+                      subtitle: Text('Price: ₹$price'),
+                      value: isChecked,
+                      onChanged: (val) {
+                        setDialogState(() {
+                          if (val == true) {
+                            selectedIds.add(pId);
+                          } else {
+                            selectedIds.remove(pId);
+                          }
+                        });
                       },
-                      child: const Text('Add Selected')
-                  ),
-                ]);
-          });
-        });
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Skip'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text('Add Selected'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
 
     for (String pId in selectedIds) {
       final d = filteredDocs.firstWhere((x) => x['id'] == pId);
@@ -2448,28 +4182,55 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     }
   }
 
-  Future<void> _triggerMachineAutomations(QuotationLineItem machine, Map<String, dynamic> extras) async {
-    final existingMachines = machine.productId.isNotEmpty ? _items.where((i) => i.productId == machine.productId && i.id != machine.id && _itemExtras[i.id]?['parentId'] == null).toList() : <QuotationLineItem>[];
+  Future<void> _triggerMachineAutomations(
+      QuotationLineItem machine,
+      Map<String, dynamic> extras,
+      ) async {
+    final existingMachines = machine.productId.isNotEmpty
+        ? _items
+        .where(
+          (i) =>
+      i.productId == machine.productId &&
+          i.id != machine.id &&
+          _itemExtras[i.id]?['parentId'] == null,
+    )
+        .toList()
+        : <QuotationLineItem>[];
 
     if (existingMachines.isNotEmpty) {
-      final existingScope = _items.where((i) => _itemExtras[i.id]?['parentId'] == existingMachines.first.id).toList();
+      final existingScope = _items
+          .where(
+            (i) => _itemExtras[i.id]?['parentId'] == existingMachines.first.id,
+      )
+          .toList();
       if (existingScope.isNotEmpty) {
         bool? reuse = await showDialog<bool>(
-            context: context,
-            builder: (ctx) => AlertDialog(
-                title: const Text('Duplicate Machine Found'),
-                content: const Text('This machine is already in the quotation. Do you want to reuse its existing Scope of Supply or create a new default one?'),
-                actions: [
-                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Create New')),
-                  FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Reuse Existing')),
-                ]
-            )
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Duplicate Machine Found'),
+            content: const Text(
+              'This machine is already in the quotation. Do you want to reuse its existing Scope of Supply or create a new default one?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Create New'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Reuse Existing'),
+              ),
+            ],
+          ),
         );
         if (reuse == true) {
           int insertIdx = _items.indexOf(machine) + 1;
           for (var child in existingScope) {
             final childExtras = _itemExtras[child.id] ?? {};
-            final newId = DateTime.now().millisecondsSinceEpoch.toString() + '_' + (child.productId.isNotEmpty ? child.productId : 'custom');
+            final newId =
+                DateTime.now().millisecondsSinceEpoch.toString() +
+                    '_' +
+                    (child.productId.isNotEmpty ? child.productId : 'custom');
             final newItem = QuotationLineItem(
               id: newId,
               productId: child.productId,
@@ -2486,7 +4247,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
               availableStock: child.availableStock,
             );
             setState(() {
-              _itemExtras[newId] = Map<String,dynamic>.from(childExtras)..addAll({'parentId': machine.id});
+              _itemExtras[newId] = Map<String, dynamic>.from(childExtras)
+                ..addAll({'parentId': machine.id});
               _items.insert(insertIdx++, newItem);
             });
           }
@@ -2499,10 +4261,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
     List included = extras['includedProducts'] as List? ?? [];
     if (included.isNotEmpty) {
-      bool? addScope = await _showScopeOfSupplyDialog(machine, included);
-      if (addScope == true) {
-        await _addIncludedProducts(included, machine.id);
-      }
+      await _addIncludedProducts(included, machine.id);
     }
     await _showRecommendedSparesDialog(machine, extras);
   }
@@ -2511,35 +4270,58 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     final formKey = GlobalKey<FormState>();
     final nameCtrl = TextEditingController(text: itemToEdit?.name ?? '');
     final descCtrl = TextEditingController(text: itemToEdit?.description ?? '');
+    final scopeCtrl = TextEditingController(
+      text: itemToEdit?.scopeOfSupply ?? '',
+    );
     final hsnCtrl = TextEditingController(text: itemToEdit?.hsnCode ?? '');
-    final qtyCtrl = TextEditingController(text: itemToEdit?.quantity.toString() ?? '1');
-    final priceCtrl = TextEditingController(text: itemToEdit?.unitPrice.toString() ?? '');
+    final qtyCtrl = TextEditingController(
+      text: itemToEdit?.quantity.toString() ?? '1',
+    );
+    final priceCtrl = TextEditingController(
+      text: itemToEdit?.unitPrice.toString() ?? '',
+    );
     final uomCtrl = TextEditingController(text: itemToEdit?.uom ?? 'Nos');
-    final discCtrl = TextEditingController(text: itemToEdit?.discountPercent.toString() ?? '0');
-
-    double totalGst = (itemToEdit?.cgstPercent ?? 0) + (itemToEdit?.sgstPercent ?? 0) + (itemToEdit?.igstPercent ?? 0);
-    final gstCtrl = TextEditingController(
-      text: itemToEdit != null ? (totalGst > 0 ? totalGst.toString() : '18') : '18',
+    final discCtrl = TextEditingController(
+      text: itemToEdit?.discountPercent.toString() ?? '0',
     );
 
-    String currentId = itemToEdit?.id ?? DateTime.now().millisecondsSinceEpoch.toString();
+    double totalGst =
+        (itemToEdit?.cgstPercent ?? 0) +
+            (itemToEdit?.sgstPercent ?? 0) +
+            (itemToEdit?.igstPercent ?? 0);
+    final gstCtrl = TextEditingController(
+      text: itemToEdit != null
+          ? (totalGst > 0 ? totalGst.toString() : '18')
+          : '18',
+    );
+
+    String currentId =
+        itemToEdit?.id ?? DateTime.now().millisecondsSinceEpoch.toString();
     String productId = itemToEdit?.productId ?? '';
     double currentStock = itemToEdit?.availableStock ?? 0;
 
     String sku = _itemExtras[currentId]?['sku']?.toString() ?? '';
     String brand = _itemExtras[currentId]?['brand']?.toString() ?? '';
     String model = _itemExtras[currentId]?['model']?.toString() ?? '';
-    String productNature = _itemExtras[currentId]?['productNature']?.toString() ?? 'General';
-    String machineType = _itemExtras[currentId]?['machineType']?.toString() ?? '';
-    List includedProducts = _itemExtras[currentId]?['includedProducts'] as List? ?? [];
+    String productNature =
+        _itemExtras[currentId]?['productNature']?.toString() ?? 'General';
+    String machineType =
+        _itemExtras[currentId]?['machineType']?.toString() ?? '';
+    List includedProducts =
+        _itemExtras[currentId]?['includedProducts'] as List? ?? [];
     List catalogs = _itemExtras[currentId]?['catalogs'] as List? ?? [];
     List images = _itemExtras[currentId]?['images'] as List? ?? [];
-    String compatibleMachineType = _itemExtras[currentId]?['compatibleMachineType']?.toString() ?? '';
-    List compatibleProductIds = _itemExtras[currentId]?['compatibleProductIds'] as List? ?? [];
-    List compatibleProductNames = _itemExtras[currentId]?['compatibleProductNames'] as List? ?? [];
-    List compatibleSubcategories = _itemExtras[currentId]?['compatibleSubcategories'] as List? ?? [];
+    String compatibleMachineType =
+        _itemExtras[currentId]?['compatibleMachineType']?.toString() ?? '';
+    List compatibleProductIds =
+        _itemExtras[currentId]?['compatibleProductIds'] as List? ?? [];
+    List compatibleProductNames =
+        _itemExtras[currentId]?['compatibleProductNames'] as List? ?? [];
+    List compatibleSubcategories =
+        _itemExtras[currentId]?['compatibleSubcategories'] as List? ?? [];
     String itemCode = _itemExtras[currentId]?['itemCode']?.toString() ?? '';
-    String sellingPrice = _itemExtras[currentId]?['sellingPrice']?.toString() ?? '';
+    String sellingPrice =
+        _itemExtras[currentId]?['sellingPrice']?.toString() ?? '';
 
     showModalBottomSheet(
       context: context,
@@ -2561,7 +4343,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
             child: StatefulBuilder(
               builder: (context, setModalState) {
                 double parsedQty = double.tryParse(qtyCtrl.text.trim()) ?? 1;
-                bool stockWarning = productId.isNotEmpty && parsedQty > currentStock;
+                bool stockWarning =
+                    productId.isNotEmpty && parsedQty > currentStock;
 
                 return SingleChildScrollView(
                   child: Column(
@@ -2573,7 +4356,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Text(
-                            itemToEdit == null ? 'Add Product/Service' : 'Edit Line Item',
+                            itemToEdit == null
+                                ? 'Add Product/Service'
+                                : 'Edit Line Item',
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -2590,20 +4375,47 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                   productId = p['id'];
                                   _productCache[productId] = p;
 
-                                  if (nameCtrl.text.trim().isEmpty) nameCtrl.text = p['name'] ?? '';
-                                  if (descCtrl.text.trim().isEmpty) descCtrl.text = p['description'] ?? p['details'] ?? '';
-                                  if (hsnCtrl.text.trim().isEmpty) hsnCtrl.text = p['hsnCode'] ?? p['hsn'] ?? '';
+                                  if (nameCtrl.text.trim().isEmpty)
+                                    nameCtrl.text = p['name'] ?? '';
+                                  if (descCtrl.text.trim().isEmpty)
+                                    descCtrl.text =
+                                        p['description'] ?? p['details'] ?? '';
 
-                                  double pPrice = double.tryParse(p['sellingPrice']?.toString() ?? '') ??
-                                      double.tryParse(p['price']?.toString() ?? '') ??
-                                      double.tryParse(p['unitPrice']?.toString() ?? '') ??
-                                      double.tryParse(p['rate']?.toString() ?? '') ??
-                                      0.0;
+                                  final productScope =
+                                  _productScopeOfSupplyText(
+                                    Map<String, dynamic>.from(p),
+                                  );
+                                  if (productScope.isNotEmpty &&
+                                      (scopeCtrl.text.trim().isEmpty ||
+                                          itemToEdit == null)) {
+                                    scopeCtrl.text = productScope;
+                                  }
+
+                                  if (hsnCtrl.text.trim().isEmpty)
+                                    hsnCtrl.text =
+                                        p['hsnCode'] ?? p['hsn'] ?? '';
+
+                                  double pPrice =
+                                      double.tryParse(
+                                        p['sellingPrice']?.toString() ?? '',
+                                      ) ??
+                                          double.tryParse(
+                                            p['price']?.toString() ?? '',
+                                          ) ??
+                                          double.tryParse(
+                                            p['unitPrice']?.toString() ?? '',
+                                          ) ??
+                                          double.tryParse(
+                                            p['rate']?.toString() ?? '',
+                                          ) ??
+                                          0.0;
 
                                   if (priceCtrl.text.trim().isEmpty ||
                                       priceCtrl.text == '0' ||
                                       priceCtrl.text == '0.0') {
-                                    priceCtrl.text = pPrice > 0 ? pPrice.toString() : '0';
+                                    priceCtrl.text = pPrice > 0
+                                        ? pPrice.toString()
+                                        : '0';
                                   }
 
                                   uomCtrl.text = p['uom'] ?? 'Nos';
@@ -2613,32 +4425,54 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                       currentGst == '0' ||
                                       currentGst == '18' ||
                                       currentGst == '18.0') {
-                                    double pGst = double.tryParse(
-                                        p['gstPercentage']?.toString() ?? p['tax']?.toString() ?? '18') ??
-                                        18;
+                                    double pGst =
+                                        double.tryParse(
+                                          p['gstPercentage']?.toString() ??
+                                              p['tax']?.toString() ??
+                                              '18',
+                                        ) ??
+                                            18;
                                     gstCtrl.text = pGst.toString();
                                   }
 
-                                  currentStock = double.tryParse(p['stockOnHand']?.toString() ??
-                                      p['qty']?.toString() ??
-                                      p['stock']?.toString() ??
-                                      '0') ??
-                                      0;
+                                  currentStock =
+                                      double.tryParse(
+                                        p['stockOnHand']?.toString() ??
+                                            p['qty']?.toString() ??
+                                            p['stock']?.toString() ??
+                                            '0',
+                                      ) ??
+                                          0;
 
-                                  sku = (p['sku'] ?? p['itemCode'] ?? '').toString();
-                                  brand = (p['brand'] ?? p['make'] ?? '').toString();
+                                  sku = (p['sku'] ?? p['itemCode'] ?? '')
+                                      .toString();
+                                  brand = (p['brand'] ?? p['make'] ?? '')
+                                      .toString();
                                   model = (p['model'] ?? '').toString();
-                                  productNature = (p['productNature'] ?? 'General').toString();
-                                  machineType = (p['machineType'] ?? '').toString();
-                                  includedProducts = p['includedProducts'] as List? ?? [];
+                                  productNature =
+                                      (p['productNature'] ?? 'General')
+                                          .toString();
+                                  machineType = (p['machineType'] ?? '')
+                                      .toString();
+                                  includedProducts =
+                                      p['includedProducts'] as List? ?? [];
                                   catalogs = p['catalogs'] as List? ?? [];
                                   images = p['images'] as List? ?? [];
-                                  compatibleMachineType = (p['compatibleMachineType'] ?? '').toString();
-                                  compatibleProductIds = p['compatibleProductIds'] as List? ?? [];
-                                  compatibleProductNames = p['compatibleProductNames'] as List? ?? [];
-                                  compatibleSubcategories = p['compatibleSubcategories'] as List? ?? [];
+                                  compatibleMachineType =
+                                      (p['compatibleMachineType'] ?? '')
+                                          .toString();
+                                  compatibleProductIds =
+                                      p['compatibleProductIds'] as List? ?? [];
+                                  compatibleProductNames =
+                                      p['compatibleProductNames'] as List? ??
+                                          [];
+                                  compatibleSubcategories =
+                                      p['compatibleSubcategories'] as List? ??
+                                          [];
                                   itemCode = (p['itemCode'] ?? '').toString();
-                                  sellingPrice = (p['sellingPrice'] ?? p['price'] ?? '').toString();
+                                  sellingPrice =
+                                      (p['sellingPrice'] ?? p['price'] ?? '')
+                                          .toString();
                                 });
                               }
                             },
@@ -2651,13 +4485,17 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                           padding: const EdgeInsets.all(8),
                           margin: const EdgeInsets.only(bottom: 12),
                           decoration: BoxDecoration(
-                            color: stockWarning ? Colors.orange.shade50 : Colors.green.shade50,
+                            color: stockWarning
+                                ? Colors.orange.shade50
+                                : Colors.green.shade50,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
                             'Available Stock: $currentStock ${uomCtrl.text}',
                             style: TextStyle(
-                              color: stockWarning ? Colors.orange.shade800 : Colors.green.shade800,
+                              color: stockWarning
+                                  ? Colors.orange.shade800
+                                  : Colors.green.shade800,
                               fontWeight: FontWeight.bold,
                               fontSize: 12,
                             ),
@@ -2673,7 +4511,15 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                         descCtrl,
                         'Specification / Description',
                         maxLines: null,
-                        hint: 'Enter features line by line for bullet points in PDF',
+                        hint:
+                        'Enter features line by line for bullet points in PDF',
+                      ),
+                      _buildItemTextField(
+                        scopeCtrl,
+                        'Scope of Supply',
+                        maxLines: null,
+                        hint:
+                        'Auto-fetched from product master; edit if required',
                       ),
                       Row(
                         children: [
@@ -2682,13 +4528,19 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                               qtyCtrl,
                               'Quantity *',
                               keyboardType: TextInputType.number,
-                              validator: (v) => (double.tryParse(v ?? '') ?? 0) <= 0 ? '> 0 required' : null,
+                              validator: (v) =>
+                              (double.tryParse(v ?? '') ?? 0) <= 0
+                                  ? '> 0 required'
+                                  : null,
                               onChanged: (v) => setModalState(() {}),
                             ),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
-                            child: _buildItemTextField(uomCtrl, 'UOM (e.g., Nos, Kgs)'),
+                            child: _buildItemTextField(
+                              uomCtrl,
+                              'UOM (e.g., Nos, Kgs)',
+                            ),
                           ),
                         ],
                       ),
@@ -2711,7 +4563,10 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                               priceCtrl,
                               'Unit Price *',
                               keyboardType: TextInputType.number,
-                              validator: (v) => (double.tryParse(v ?? '') ?? -1) < 0 ? '>= 0 required' : null,
+                              validator: (v) =>
+                              (double.tryParse(v ?? '') ?? -1) < 0
+                                  ? '>= 0 required'
+                                  : null,
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -2735,7 +4590,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                         onPressed: () {
                           if (!formKey.currentState!.validate()) return;
 
-                          double gstVal = double.tryParse(gstCtrl.text.trim()) ?? 18.0;
+                          double gstVal =
+                              double.tryParse(gstCtrl.text.trim()) ?? 18.0;
                           double cgst = 0, sgst = 0, igst = 0;
                           if (_isInterState) {
                             igst = gstVal;
@@ -2749,11 +4605,16 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                             productId: productId,
                             name: nameCtrl.text.trim(),
                             description: descCtrl.text.trim(),
+                            scopeOfSupply: scopeCtrl.text.trim(),
                             hsnCode: hsnCtrl.text.trim(),
                             quantity: double.tryParse(qtyCtrl.text.trim()) ?? 1,
-                            uom: uomCtrl.text.trim().isEmpty ? 'Nos' : uomCtrl.text.trim(),
-                            unitPrice: double.tryParse(priceCtrl.text.trim()) ?? 0,
-                            discountPercent: double.tryParse(discCtrl.text.trim()) ?? 0,
+                            uom: uomCtrl.text.trim().isEmpty
+                                ? 'Nos'
+                                : uomCtrl.text.trim(),
+                            unitPrice:
+                            double.tryParse(priceCtrl.text.trim()) ?? 0,
+                            discountPercent:
+                            double.tryParse(discCtrl.text.trim()) ?? 0,
                             cgstPercent: cgst,
                             sgstPercent: sgst,
                             igstPercent: igst,
@@ -2773,7 +4634,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                               'compatibleMachineType': compatibleMachineType,
                               'compatibleProductIds': compatibleProductIds,
                               'compatibleProductNames': compatibleProductNames,
-                              'compatibleSubcategories': compatibleSubcategories,
+                              'compatibleSubcategories':
+                              compatibleSubcategories,
                               'itemCode': itemCode,
                               'sellingPrice': sellingPrice,
                               'baseGst': gstVal,
@@ -2786,7 +4648,10 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
                             if (index != null) {
                               _items[index] = newItem;
-                              developer.log('Product Updated: $currentId', name: 'QuotationScreen');
+                              developer.log(
+                                'Product Updated: $currentId',
+                                name: 'QuotationScreen',
+                              );
                             } else {
                               _items.add(newItem);
                             }
@@ -2794,8 +4659,15 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                           });
                           Navigator.pop(context);
 
-                          if (index == null && (productNature.toLowerCase().contains('machine') || includedProducts.isNotEmpty)) {
-                            _triggerMachineAutomations(newItem, _itemExtras[currentId]!);
+                          if (index == null &&
+                              (productNature.toLowerCase().contains(
+                                'machine',
+                              ) ||
+                                  includedProducts.isNotEmpty)) {
+                            _triggerMachineAutomations(
+                              newItem,
+                              _itemExtras[currentId]!,
+                            );
                           }
                         },
                         style: ElevatedButton.styleFrom(
@@ -2805,7 +4677,10 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                         ),
                         child: const Text(
                           'Save Item',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 20),
@@ -2824,158 +4699,271 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     final formKey = GlobalKey<FormState>();
     final nameCtrl = TextEditingController(text: itemToEdit?.name ?? '');
     final descCtrl = TextEditingController(text: itemToEdit?.description ?? '');
-    final qtyCtrl = TextEditingController(text: itemToEdit?.quantity.toString() ?? '1');
+    final scopeCtrl = TextEditingController(
+      text: itemToEdit?.scopeOfSupply ?? '',
+    );
+    final qtyCtrl = TextEditingController(
+      text: itemToEdit?.quantity.toString() ?? '1',
+    );
     final uomCtrl = TextEditingController(text: itemToEdit?.uom ?? 'Nos');
 
-    final childExtras = itemToEdit != null ? (_itemExtras[itemToEdit.id] ?? {}) : {};
+    final childExtras = itemToEdit != null
+        ? (_itemExtras[itemToEdit.id] ?? {})
+        : {};
     bool isIncluded = childExtras['isIncluded'] ?? true;
     String pricingMode = childExtras['pricingMode'] ?? 'Included';
 
-    final priceCtrl = TextEditingController(text: itemToEdit?.unitPrice.toString() ?? '0');
-    final discCtrl = TextEditingController(text: itemToEdit?.discountPercent.toString() ?? '0');
+    final priceCtrl = TextEditingController(
+      text: itemToEdit?.unitPrice.toString() ?? '0',
+    );
+    final discCtrl = TextEditingController(
+      text: itemToEdit?.discountPercent.toString() ?? '0',
+    );
 
-    double totalGst = (itemToEdit?.cgstPercent ?? 0) + (itemToEdit?.sgstPercent ?? 0) + (itemToEdit?.igstPercent ?? 0);
+    double totalGst =
+        (itemToEdit?.cgstPercent ?? 0) +
+            (itemToEdit?.sgstPercent ?? 0) +
+            (itemToEdit?.igstPercent ?? 0);
     if (totalGst == 0 && childExtras['baseGst'] != null) {
       totalGst = double.tryParse(childExtras['baseGst'].toString()) ?? 0.0;
     }
-    final gstCtrl = TextEditingController(text: totalGst > 0 ? totalGst.toString() : '18');
+    final gstCtrl = TextEditingController(
+      text: totalGst > 0 ? totalGst.toString() : '18',
+    );
 
     showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.white,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-        builder: (_) {
-          return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-                top: 20, left: 20, right: 20,
-              ),
-              child: Form(
-                key: formKey,
-                child: StatefulBuilder(
-                    builder: (ctx, setModalState) {
-                      return SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          mainAxisSize: MainAxisSize.min,
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            top: 20,
+            left: 20,
+            right: 20,
+          ),
+          child: Form(
+            key: formKey,
+            child: StatefulBuilder(
+              builder: (ctx, setModalState) {
+                return SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        itemToEdit == null
+                            ? 'Add Scope Item'
+                            : 'Edit Scope Item',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: primaryColor,
+                        ),
+                      ),
+                      const Divider(),
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text(
+                          'Included in Scope of Supply (Print in PDF)',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        value: isIncluded,
+                        onChanged: (v) =>
+                            setModalState(() => isIncluded = v ?? true),
+                      ),
+                      _buildItemTextField(
+                        nameCtrl,
+                        'Item Name *',
+                        validator: (v) => v!.isEmpty ? 'Required' : null,
+                      ),
+                      _buildItemTextField(
+                        descCtrl,
+                        'Description (Optional)',
+                        maxLines: null,
+                      ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildItemTextField(
+                              qtyCtrl,
+                              'Quantity *',
+                              keyboardType: TextInputType.number,
+                              validator: (v) =>
+                              (double.tryParse(v ?? '') ?? 0) <= 0
+                                  ? '> 0 required'
+                                  : null,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _buildItemTextField(
+                              uomCtrl,
+                              'UOM (e.g., Nos, Kgs)',
+                            ),
+                          ),
+                        ],
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: DropdownButtonFormField<String>(
+                          value: pricingMode,
+                          decoration: _dec('Pricing Mode'),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'Included',
+                              child: Text('Included in Machine Price'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'Separate',
+                              child: Text('Charge Separately'),
+                            ),
+                          ],
+                          onChanged: (v) =>
+                              setModalState(() => pricingMode = v!),
+                        ),
+                      ),
+                      if (pricingMode == 'Separate') ...[
+                        Row(
                           children: [
-                            Text(itemToEdit == null ? 'Add Scope Item' : 'Edit Scope Item', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: primaryColor)),
-                            const Divider(),
-                            CheckboxListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: const Text('Included in Scope of Supply (Print in PDF)', style: TextStyle(fontWeight: FontWeight.w600)),
-                              value: isIncluded,
-                              onChanged: (v) => setModalState(() => isIncluded = v ?? true),
-                            ),
-                            _buildItemTextField(nameCtrl, 'Item Name *', validator: (v) => v!.isEmpty ? 'Required' : null),
-                            _buildItemTextField(descCtrl, 'Description (Optional)', maxLines: null),
-                            Row(
-                              children: [
-                                Expanded(child: _buildItemTextField(qtyCtrl, 'Quantity *', keyboardType: TextInputType.number, validator: (v) => (double.tryParse(v ?? '') ?? 0) <= 0 ? '> 0 required' : null)),
-                                const SizedBox(width: 10),
-                                Expanded(child: _buildItemTextField(uomCtrl, 'UOM (e.g., Nos, Kgs)')),
-                              ],
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: DropdownButtonFormField<String>(
-                                value: pricingMode,
-                                decoration: _dec('Pricing Mode'),
-                                items: const [
-                                  DropdownMenuItem(value: 'Included', child: Text('Included in Machine Price')),
-                                  DropdownMenuItem(value: 'Separate', child: Text('Charge Separately')),
-                                ],
-                                onChanged: (v) => setModalState(() => pricingMode = v!),
+                            Expanded(
+                              child: _buildItemTextField(
+                                priceCtrl,
+                                'Unit Price *',
+                                keyboardType: TextInputType.number,
+                                validator: (v) =>
+                                (double.tryParse(v ?? '') ?? -1) < 0
+                                    ? '>= 0 required'
+                                    : null,
                               ),
                             ),
-                            if (pricingMode == 'Separate') ...[
-                              Row(
-                                children: [
-                                  Expanded(child: _buildItemTextField(priceCtrl, 'Unit Price *', keyboardType: TextInputType.number, validator: (v) => (double.tryParse(v ?? '') ?? -1) < 0 ? '>= 0 required' : null)),
-                                  const SizedBox(width: 10),
-                                  Expanded(child: _buildItemTextField(discCtrl, 'Discount (%)', keyboardType: TextInputType.number)),
-                                ],
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _buildItemTextField(
+                                discCtrl,
+                                'Discount (%)',
+                                keyboardType: TextInputType.number,
                               ),
-                              _buildItemTextField(gstCtrl, 'GST (%)', keyboardType: TextInputType.number, hint: 'Default is 18%'),
-                            ],
-                            const SizedBox(height: 20),
-                            ElevatedButton(
-                              onPressed: () {
-                                if (!formKey.currentState!.validate()) return;
-
-                                double gstVal = pricingMode == 'Separate' ? (double.tryParse(gstCtrl.text) ?? 18.0) : (double.tryParse(gstCtrl.text) ?? 18.0);
-                                double cgst = 0, sgst = 0, igst = 0;
-                                if (gstVal > 0) {
-                                  if (_isInterState) igst = gstVal;
-                                  else { cgst = gstVal / 2; sgst = gstVal / 2; }
-                                }
-
-                                final newItem = QuotationLineItem(
-                                  id: itemToEdit?.id ?? DateTime.now().millisecondsSinceEpoch.toString() + '_custom',
-                                  productId: itemToEdit?.productId ?? '',
-                                  name: nameCtrl.text.trim(),
-                                  description: descCtrl.text.trim(),
-                                  hsnCode: itemToEdit?.hsnCode ?? '',
-                                  quantity: double.tryParse(qtyCtrl.text.trim()) ?? 1,
-                                  uom: uomCtrl.text.trim().isEmpty ? 'Nos' : uomCtrl.text.trim(),
-                                  unitPrice: double.tryParse(priceCtrl.text) ?? 0,
-                                  discountPercent: pricingMode == 'Separate' ? (double.tryParse(discCtrl.text) ?? 0) : 0,
-                                  cgstPercent: cgst,
-                                  sgstPercent: sgst,
-                                  igstPercent: igst,
-                                  availableStock: itemToEdit?.availableStock ?? 0,
-                                );
-
-                                setState(() {
-                                  _itemExtras[newItem.id] = {
-                                    ...?_itemExtras[newItem.id],
-                                    'baseGst': gstVal,
-                                    'isScopeItem': true,
-                                    'parentId': parentId,
-                                    'isIncluded': isIncluded,
-                                    'pricingMode': pricingMode,
-                                  };
-
-                                  if (itemToEdit != null) {
-                                    int idx = _items.indexWhere((i) => i.id == itemToEdit.id);
-                                    if (idx >= 0) _items[idx] = newItem;
-                                  } else {
-                                    int parentIdx = _items.indexWhere((i) => i.id == parentId);
-                                    if (parentIdx >= 0) {
-                                      int lastChildIdx = parentIdx;
-                                      for (int k = parentIdx + 1; k < _items.length; k++) {
-                                        if (_itemExtras[_items[k].id]?['parentId'] == parentId) {
-                                          lastChildIdx = k;
-                                        } else {
-                                          break;
-                                        }
-                                      }
-                                      _items.insert(lastChildIdx + 1, newItem);
-                                    } else {
-                                      _items.add(newItem);
-                                    }
-                                  }
-                                  _calculateTotals();
-                                });
-                                Navigator.pop(context);
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: accentColor,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                              ),
-                              child: const Text('Save Scope Item', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                             ),
-                            const SizedBox(height: 20),
                           ],
                         ),
-                      );
-                    }
-                ),
-              )
-          );
-        }
+                        _buildItemTextField(
+                          gstCtrl,
+                          'GST (%)',
+                          keyboardType: TextInputType.number,
+                          hint: 'Default is 18%',
+                        ),
+                      ],
+                      const SizedBox(height: 20),
+                      ElevatedButton(
+                        onPressed: () {
+                          if (!formKey.currentState!.validate()) return;
+
+                          double gstVal = pricingMode == 'Separate'
+                              ? (double.tryParse(gstCtrl.text) ?? 18.0)
+                              : (double.tryParse(gstCtrl.text) ?? 18.0);
+                          double cgst = 0, sgst = 0, igst = 0;
+                          if (gstVal > 0) {
+                            if (_isInterState)
+                              igst = gstVal;
+                            else {
+                              cgst = gstVal / 2;
+                              sgst = gstVal / 2;
+                            }
+                          }
+
+                          final newItem = QuotationLineItem(
+                            id:
+                            itemToEdit?.id ??
+                                DateTime.now().millisecondsSinceEpoch
+                                    .toString() +
+                                    '_custom',
+                            productId: itemToEdit?.productId ?? '',
+                            name: nameCtrl.text.trim(),
+                            description: descCtrl.text.trim(),
+                            hsnCode: itemToEdit?.hsnCode ?? '',
+                            quantity: double.tryParse(qtyCtrl.text.trim()) ?? 1,
+                            uom: uomCtrl.text.trim().isEmpty
+                                ? 'Nos'
+                                : uomCtrl.text.trim(),
+                            unitPrice: double.tryParse(priceCtrl.text) ?? 0,
+                            discountPercent: pricingMode == 'Separate'
+                                ? (double.tryParse(discCtrl.text) ?? 0)
+                                : 0,
+                            cgstPercent: cgst,
+                            sgstPercent: sgst,
+                            igstPercent: igst,
+                            availableStock: itemToEdit?.availableStock ?? 0,
+                          );
+
+                          setState(() {
+                            _itemExtras[newItem.id] = {
+                              ...?_itemExtras[newItem.id],
+                              'baseGst': gstVal,
+                              'isScopeItem': true,
+                              'parentId': parentId,
+                              'isIncluded': isIncluded,
+                              'pricingMode': pricingMode,
+                            };
+
+                            if (itemToEdit != null) {
+                              int idx = _items.indexWhere(
+                                    (i) => i.id == itemToEdit.id,
+                              );
+                              if (idx >= 0) _items[idx] = newItem;
+                            } else {
+                              int parentIdx = _items.indexWhere(
+                                    (i) => i.id == parentId,
+                              );
+                              if (parentIdx >= 0) {
+                                int lastChildIdx = parentIdx;
+                                for (
+                                int k = parentIdx + 1;
+                                k < _items.length;
+                                k++
+                                ) {
+                                  if (_itemExtras[_items[k].id]?['parentId'] ==
+                                      parentId) {
+                                    lastChildIdx = k;
+                                  } else {
+                                    break;
+                                  }
+                                }
+                                _items.insert(lastChildIdx + 1, newItem);
+                              } else {
+                                _items.add(newItem);
+                              }
+                            }
+                            _calculateTotals();
+                          });
+                          Navigator.pop(context);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: accentColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                        child: const Text(
+                          'Save Scope Item',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -2985,8 +4973,10 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
     final child = _items[index];
     final parentId = _itemExtras[childId]?['parentId'];
-    final children = _items.where((i) => _itemExtras[i.id]?['parentId'] == parentId).toList();
-    children.sort((a,b) => _items.indexOf(a).compareTo(_items.indexOf(b)));
+    final children = _items
+        .where((i) => _itemExtras[i.id]?['parentId'] == parentId)
+        .toList();
+    children.sort((a, b) => _items.indexOf(a).compareTo(_items.indexOf(b)));
 
     int childListIndex = children.indexWhere((i) => i.id == childId);
     if (direction == -1 && childListIndex > 0) {
@@ -3007,48 +4997,55 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   }
 
   void _onDeleteTopLevelItem(QuotationLineItem item) {
-    final children = _items.where((i) => _itemExtras[i.id]?['parentId'] == item.id).toList();
+    final children = _items
+        .where((i) => _itemExtras[i.id]?['parentId'] == item.id)
+        .toList();
     if (children.isNotEmpty) {
       showDialog(
-          context: context,
-          builder: (ctx) => AlertDialog(
-              title: const Text('Delete Linked Items?'),
-              content: const Text('This machine has Scope of Supply items. Do you want to delete them as well?'),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-                TextButton(
-                    onPressed: () {
-                      setState(() {
-                        for (var c in children) {
-                          _itemExtras[c.id]?['parentId'] = null;
-                          _itemExtras[c.id]?['isScopeItem'] = false;
-                        }
-                        _itemExtras.remove(item.id);
-                        _items.remove(item);
-                        _calculateTotals();
-                      });
-                      Navigator.pop(ctx);
-                    },
-                    child: const Text('Keep Scope Items')
-                ),
-                FilledButton(
-                    style: FilledButton.styleFrom(backgroundColor: Colors.red),
-                    onPressed: () {
-                      setState(() {
-                        for (var c in children) {
-                          _itemExtras.remove(c.id);
-                          _items.remove(c);
-                        }
-                        _itemExtras.remove(item.id);
-                        _items.remove(item);
-                        _calculateTotals();
-                      });
-                      Navigator.pop(ctx);
-                    },
-                    child: const Text('Delete All')
-                )
-              ]
-          )
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Delete Linked Items?'),
+          content: const Text(
+            'This machine has Scope of Supply items. Do you want to delete them as well?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  for (var c in children) {
+                    _itemExtras[c.id]?['parentId'] = null;
+                    _itemExtras[c.id]?['isScopeItem'] = false;
+                  }
+                  _itemExtras.remove(item.id);
+                  _items.remove(item);
+                  _calculateTotals();
+                });
+                Navigator.pop(ctx);
+              },
+              child: const Text('Keep Scope Items'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () {
+                setState(() {
+                  for (var c in children) {
+                    _itemExtras.remove(c.id);
+                    _items.remove(c);
+                  }
+                  _itemExtras.remove(item.id);
+                  _items.remove(item);
+                  _calculateTotals();
+                });
+                Navigator.pop(ctx);
+              },
+              child: const Text('Delete All'),
+            ),
+          ],
+        ),
       );
     } else {
       setState(() {
@@ -3085,7 +5082,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
           isDense: true,
           filled: true,
-          fillColor: effectiveReadOnly ? Colors.grey.shade100 : Colors.grey.shade50,
+          fillColor: effectiveReadOnly
+              ? Colors.grey.shade100
+              : Colors.grey.shade50,
         ),
       ),
     );
@@ -3096,7 +5095,12 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       children: [
         Row(
           children: [
-            Expanded(child: _buildItemTextField(_contactPersonController, 'Contact Person')),
+            Expanded(
+              child: _buildItemTextField(
+                _contactPersonController,
+                'Contact Person',
+              ),
+            ),
             const SizedBox(width: 10),
             Expanded(child: _buildItemTextField(_mobileController, 'Mobile')),
           ],
@@ -3105,7 +5109,26 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
           children: [
             Expanded(child: _buildItemTextField(_emailController, 'Email ID')),
             const SizedBox(width: 10),
-            Expanded(child: _buildItemTextField(_gstController, 'GSTIN')),
+            Expanded(
+              child: _buildItemTextField(
+                _contactDesignationController,
+                'Designation',
+              ),
+            ),
+          ],
+        ),
+        Row(
+          children: [
+            Expanded(
+              child: _buildItemTextField(
+                _contactDepartmentController,
+                'Department',
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _buildItemTextField(_gstController, 'Customer GSTIN'),
+            ),
           ],
         ),
       ],
@@ -3152,12 +5175,16 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     }
 
     final bool showAddressDropdown =
-        _customerAddresses.isNotEmpty && _selectedAddressId != null && _selectedAddressId!.isNotEmpty;
+        _customerAddresses.isNotEmpty &&
+            _selectedAddressId != null &&
+            _selectedAddressId!.isNotEmpty;
 
     final bool showContactDropdown =
-        _selectedCustomerId != null && _selectedContactId != null && _selectedContactId!.isNotEmpty;
+        _selectedCustomerId != null && _selectedCustomerId!.isNotEmpty;
 
-    List<QuotationLineItem> topLevelItems = _items.where((i) => _itemExtras[i.id]?['parentId'] == null).toList();
+    List<QuotationLineItem> topLevelItems = _items
+        .where((i) => _itemExtras[i.id]?['parentId'] == null)
+        .toList();
 
     return Scaffold(
       backgroundColor: backgroundLight,
@@ -3166,7 +5193,11 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         foregroundColor: const Color(0xFF1E293B),
         elevation: 1,
         title: Text(
-          widget.prepareSalesOrderMode ? 'Prepare Sales Order' : (widget.quotationId != null ? 'Edit Quotation' : 'Create Quotation'),
+          widget.prepareSalesOrderMode
+              ? 'Prepare Sales Order'
+              : (widget.quotationId != null
+              ? 'Edit Quotation'
+              : 'Create Quotation'),
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         actions: [
@@ -3202,7 +5233,11 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                           ),
                           child: Row(
                             children: [
-                              Icon(Icons.lock, color: Colors.green.shade800, size: 20),
+                              Icon(
+                                Icons.lock,
+                                color: Colors.green.shade800,
+                                size: 20,
+                              ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
@@ -3244,22 +5279,6 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                             _buildSectionHeader(
                               'Customer Details',
                               Icons.business,
-                              trailing: (_isReadOnly || _hasLinkedInquiry)
-                                  ? null
-                                  : OutlinedButton.icon(
-                                onPressed: () async {
-                                  final c = await _selectCustomerDialog();
-                                  if (c != null) _applyCustomer(c);
-                                },
-                                icon: const Icon(Icons.search, size: 18),
-                                label: const Text('CRM Lookup'),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: accentColor,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                              ),
                             ),
                             if (_customerInsights != null)
                               Container(
@@ -3268,80 +5287,147 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                 decoration: BoxDecoration(
                                   color: Colors.blue.shade50,
                                   borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.blue.shade100),
+                                  border: Border.all(
+                                    color: Colors.blue.shade100,
+                                  ),
                                 ),
                                 child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                  mainAxisAlignment:
+                                  MainAxisAlignment.spaceAround,
                                   children: [
                                     Column(
                                       children: [
-                                        Text('Total Quotes',
-                                            style: TextStyle(fontSize: 10, color: Colors.blue.shade800)),
-                                        Text('${_customerInsights!['count']}',
-                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                        Text(
+                                          'Total Quotes',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color: Colors.blue.shade800,
+                                          ),
+                                        ),
+                                        Text(
+                                          '${_customerInsights!['count']}',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
+                                        ),
                                       ],
                                     ),
                                     Column(
                                       children: [
-                                        Text('Last Quote',
-                                            style: TextStyle(fontSize: 10, color: Colors.blue.shade800)),
-                                        Text('₹${_customerInsights!['lastQuoteAmount']}',
-                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                        Text(
+                                          'Last Quote',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color: Colors.blue.shade800,
+                                          ),
+                                        ),
+                                        Text(
+                                          '₹${_customerInsights!['lastQuoteAmount']}',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
+                                        ),
                                       ],
                                     ),
                                     Column(
                                       children: [
-                                        Text('Lifetime Value',
-                                            style: TextStyle(fontSize: 10, color: Colors.blue.shade800)),
-                                        Text('₹${_customerInsights!['totalValue']}',
-                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                        Text(
+                                          'Lifetime Value',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color: Colors.blue.shade800,
+                                          ),
+                                        ),
+                                        Text(
+                                          '₹${_customerInsights!['totalValue']}',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ],
                                 ),
                               ),
-                            _buildItemTextField(
-                              _clientNameController,
-                              'Company Name *',
-                              validator: (v) => v!.isEmpty ? 'Required' : null,
+                            _buildCustomerNameAutocomplete(
+                              validator: (v) =>
+                              v!.trim().isEmpty ? 'Required' : null,
                             ),
+                            const SizedBox(height: 12),
                             if (showAddressDropdown) ...[
                               DropdownButtonFormField<String>(
                                 isExpanded: true,
-                                value: _customerAddresses.any((a) => a['id'] == _selectedAddressId)
+                                value:
+                                _customerAddresses.any(
+                                      (a) => a['id'] == _selectedAddressId,
+                                )
                                     ? _selectedAddressId
                                     : null,
                                 decoration: InputDecoration(
                                   labelText: 'Select Billing Address',
-                                  prefixIcon: const Icon(Icons.location_on_outlined),
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                  prefixIcon: const Icon(
+                                    Icons.location_on_outlined,
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
                                   filled: true,
                                   fillColor: Colors.grey.shade50,
                                   isDense: true,
                                 ),
-                                items: _customerAddresses.map<DropdownMenuItem<String>>((addr) {
-                                  final type = (addr['type'] ?? 'Address').toString();
-                                  final isPrimary = addr['isPrimary'] == true ? ' (Primary)' : '';
-                                  final isBilling = addr['isBillingAddress'] == true ? ' (Billing)' : '';
-                                  final shortAddr = (addr['combinedAddress'] ?? addr['address'] ?? '')
+                                items: _customerAddresses
+                                    .map<DropdownMenuItem<String>>((addr) {
+                                  final type = (addr['type'] ?? 'Address')
+                                      .toString();
+                                  final isPrimary =
+                                  addr['isPrimary'] == true
+                                      ? ' (Primary)'
+                                      : '';
+                                  final isBilling =
+                                  addr['isBillingAddress'] == true
+                                      ? ' (Billing)'
+                                      : '';
+                                  final shortAddr =
+                                  (addr['combinedAddress'] ??
+                                      addr['address'] ??
+                                      '')
                                       .toString()
                                       .replaceAll('\n', ', ');
                                   return DropdownMenuItem<String>(
                                     value: addr['id']?.toString(),
-                                    child: Text('$type$isPrimary$isBilling - $shortAddr',
-                                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                                    child: Text(
+                                      '$type$isPrimary$isBilling - $shortAddr',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   );
-                                }).toList(),
+                                })
+                                    .toList(),
                                 selectedItemBuilder: (BuildContext context) {
                                   return _customerAddresses.map<Widget>((addr) {
-                                    final type = (addr['type'] ?? 'Address').toString();
-                                    final isPrimary = addr['isPrimary'] == true ? ' (Primary)' : '';
-                                    final isBilling = addr['isBillingAddress'] == true ? ' (Billing)' : '';
-                                    final shortAddr = (addr['combinedAddress'] ?? addr['address'] ?? '')
+                                    final type = (addr['type'] ?? 'Address')
+                                        .toString();
+                                    final isPrimary = addr['isPrimary'] == true
+                                        ? ' (Primary)'
+                                        : '';
+                                    final isBilling =
+                                    addr['isBillingAddress'] == true
+                                        ? ' (Billing)'
+                                        : '';
+                                    final shortAddr =
+                                    (addr['combinedAddress'] ??
+                                        addr['address'] ??
+                                        '')
                                         .toString()
                                         .replaceAll('\n', ', ');
-                                    return Text('$type$isPrimary$isBilling - $shortAddr',
-                                        maxLines: 1, overflow: TextOverflow.ellipsis);
+                                    return Text(
+                                      '$type$isPrimary$isBilling - $shortAddr',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    );
                                   }).toList();
                                 },
                                 onChanged: _isReadOnly
@@ -3355,138 +5441,36 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                       _selectedContactId = null;
                                       _selectedContactData = null;
                                       _updateContactSnapshots(null);
-                                      developer.log('Address Changed By User', name: 'QuotationScreen');
+                                      developer.log(
+                                        'Address Changed By User',
+                                        name: 'QuotationScreen',
+                                      );
                                     }
 
                                     if (v != null) {
-                                      final matches = _customerAddresses.where((a) => a['id'] == v);
-                                      _selectedAddressData = matches.isNotEmpty ? matches.first : null;
-                                      _updateAddressSnapshots(_selectedAddressData);
+                                      final matches = _customerAddresses
+                                          .where((a) => a['id'] == v);
+                                      _selectedAddressData =
+                                      matches.isNotEmpty
+                                          ? matches.first
+                                          : null;
+                                      _updateAddressSnapshots(
+                                        _selectedAddressData,
+                                      );
                                     }
                                   });
                                 },
                               ),
                               const SizedBox(height: 12),
                             ] else ...[
-                              _buildItemTextField(_addressController, 'Billing Address', maxLines: 2),
+                              _buildItemTextField(
+                                _addressController,
+                                'Billing Address',
+                                maxLines: 2,
+                              ),
                             ],
                             if (showContactDropdown) ...[
-                              StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                                stream: _companyContactsRef(_selectedCustomerId!)
-                                    .where('isActive', isEqualTo: true)
-                                    .snapshots(),
-                                builder: (context, snap) {
-                                  if (!snap.hasData) return _buildLegacyContactFields();
-
-                                  var contacts = snap.data!.docs
-                                      .where((d) => d.data()['isDeleted'] != true || d.id == _selectedContactId)
-                                      .toList();
-                                  if (contacts.isEmpty) return _buildLegacyContactFields();
-
-                                  if (_selectedAddressId != null) {
-                                    bool anyContactHasAddress = contacts.any((d) {
-                                      final data = d.data();
-                                      final addrId = data['addressId'];
-                                      final linked = data['linkedAddressIds'] as List?;
-                                      final assigned = data['assignedAddressId'];
-                                      return addrId != null ||
-                                          (linked != null && linked.isNotEmpty) ||
-                                          assigned != null;
-                                    });
-
-                                    if (anyContactHasAddress) {
-                                      contacts = contacts.where((d) {
-                                        if (d.id == _selectedContactId) return true;
-
-                                        final data = d.data();
-                                        final addrId = data['addressId'];
-                                        final linked = data['linkedAddressIds'] as List?;
-                                        final assigned = data['assignedAddressId'];
-
-                                        if (addrId == _selectedAddressId) return true;
-                                        if (assigned == _selectedAddressId) return true;
-                                        if (linked != null && linked.contains(_selectedAddressId)) return true;
-                                        return false;
-                                      }).toList();
-                                    }
-                                  }
-
-                                  if (contacts.isEmpty) {
-                                    return Column(children: [
-                                      const Padding(
-                                        padding: EdgeInsets.only(bottom: 12),
-                                        child: Text('No linked contacts for selected address. Enter manually.',
-                                            style: TextStyle(color: Colors.grey, fontSize: 13)),
-                                      ),
-                                      _buildLegacyContactFields(),
-                                    ]);
-                                  }
-
-                                  final validContactId =
-                                  contacts.any((d) => d.id == _selectedContactId) ? _selectedContactId : null;
-
-                                  return Column(
-                                    children: [
-                                      Padding(
-                                        padding: const EdgeInsets.only(bottom: 12),
-                                        child: DropdownButtonFormField<String>(
-                                          isExpanded: true,
-                                          value: validContactId,
-                                          decoration: InputDecoration(
-                                            labelText: 'Select Contact Person',
-                                            prefixIcon: const Icon(Icons.person_outline),
-                                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                            filled: true,
-                                            fillColor: Colors.grey.shade50,
-                                            isDense: true,
-                                          ),
-                                          items: contacts
-                                              .map<DropdownMenuItem<String>>((doc) => DropdownMenuItem<String>(
-                                              value: doc.id,
-                                              child: Text(
-                                                  (doc.data()['name'] ?? doc.data()['contactName'] ?? '')
-                                                      .toString(),
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis)))
-                                              .toList(),
-                                          selectedItemBuilder: (BuildContext context) {
-                                            return contacts.map<Widget>((doc) {
-                                              return Text(
-                                                  (doc.data()['name'] ?? doc.data()['contactName'] ?? '').toString(),
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis);
-                                            }).toList();
-                                          },
-                                          onChanged: _isReadOnly
-                                              ? null
-                                              : (v) {
-                                            setState(() {
-                                              _selectedContactId = v;
-                                              _selectedContactData = null;
-                                              if (v != null) {
-                                                final matches = contacts.where((c) => c.id == v);
-                                                _selectedContactData =
-                                                matches.isNotEmpty ? matches.first.data() : null;
-                                                _updateContactSnapshots(_selectedContactData);
-                                                developer.log('Contact Changed By User',
-                                                    name: 'QuotationScreen');
-                                              }
-                                            });
-                                          },
-                                        ),
-                                      ),
-                                      Row(
-                                        children: [
-                                          Expanded(child: _buildItemTextField(_mobileController, 'Mobile')),
-                                          const SizedBox(width: 10),
-                                          Expanded(child: _buildItemTextField(_emailController, 'Email ID')),
-                                        ],
-                                      ),
-                                      _buildItemTextField(_gstController, 'GSTIN'),
-                                    ],
-                                  );
-                                },
-                              ),
+                              _buildQuotationContactSelector(),
                             ] else ...[
                               _buildLegacyContactFields(),
                             ],
@@ -3500,10 +5484,16 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _buildSectionHeader('Quotation & Inquiry Link', Icons.link),
+                            _buildSectionHeader(
+                              'Quotation & Inquiry Link',
+                              Icons.link,
+                            ),
                             if (_hasLinkedInquiry)
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
                                 margin: const EdgeInsets.only(bottom: 12),
                                 decoration: BoxDecoration(
                                   color: Colors.blue.shade50,
@@ -3517,7 +5507,38 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
-                              ),                            _buildItemTextField(
+                              ),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: DropdownButtonFormField<String>(
+                                value: _quotationType,
+                                isExpanded: true,
+                                decoration: _dec('Quotation Type'),
+                                items: const [
+                                  DropdownMenuItem(
+                                    value: 'domestic',
+                                    child: Text('Domestic Quotation'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'export',
+                                    child: Text('Export Quotation'),
+                                  ),
+                                ],
+                                onChanged: _isReadOnly
+                                    ? null
+                                    : (value) {
+                                  if (value == null) return;
+                                  setState(() {
+                                    _quotationType =
+                                        _normalizeQuotationType(value);
+                                    _applyQuotationSettingsDefaultTerms(
+                                      force: true,
+                                    );
+                                  });
+                                },
+                              ),
+                            ),
+                            _buildItemTextField(
                               _subjectController,
                               'Subject Line *',
                               validator: (v) => v!.isEmpty ? 'Required' : null,
@@ -3525,11 +5546,16 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                             if (widget.prepareSalesOrderMode) ...[
                               Container(
                                 width: double.infinity,
-                                margin: const EdgeInsets.only(top: 12, bottom: 16),
+                                margin: const EdgeInsets.only(
+                                  top: 12,
+                                  bottom: 16,
+                                ),
                                 padding: const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
                                   color: Colors.orange.shade50,
-                                  border: Border.all(color: Colors.orange.shade200),
+                                  border: Border.all(
+                                    color: Colors.orange.shade200,
+                                  ),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Column(
@@ -3555,7 +5581,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                     ),
                                     const SizedBox(height: 12),
                                     Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                      CrossAxisAlignment.start,
                                       children: [
                                         Expanded(
                                           child: _buildItemTextField(
@@ -3569,21 +5596,30 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                             onTap: _isReadOnly
                                                 ? null
                                                 : () async {
-                                              final selected = await showDatePicker(
+                                              final selected =
+                                              await showDatePicker(
                                                 context: context,
-                                                initialDate: _poDate ?? DateTime.now(),
+                                                initialDate:
+                                                _poDate ?? DateTime.now(),
                                                 firstDate: DateTime(2000),
                                                 lastDate: DateTime(2100),
                                               );
                                               if (selected != null) {
-                                                setState(() => _poDate = selected);
+                                                setState(() {
+                                                  _poDate = DateTime(
+                                                    selected.year,
+                                                    selected.month,
+                                                    selected.day,
+                                                  );
+                                                });
                                               }
                                             },
                                             child: InputDecorator(
                                               decoration: InputDecoration(
                                                 labelText: 'PO Date',
                                                 border: OutlineInputBorder(
-                                                  borderRadius: BorderRadius.circular(8),
+                                                  borderRadius:
+                                                  BorderRadius.circular(8),
                                                 ),
                                                 isDense: true,
                                                 filled: true,
@@ -3591,7 +5627,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                               ),
                                               child: Text(
                                                 _poDate != null
-                                                    ? DateFormat('dd/MM/yyyy').format(_poDate!)
+                                                    ? DateFormat('dd/MM/yyyy')
+                                                    .format(_poDate!)
                                                     : 'Select PO Date',
                                               ),
                                             ),
@@ -3605,7 +5642,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                       decoration: InputDecoration(
                                         labelText: 'PO Ref',
                                         border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius:
+                                          BorderRadius.circular(8),
                                         ),
                                         isDense: true,
                                         filled: true,
@@ -3613,10 +5651,11 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                       ),
                                       items: _poReferenceSources
                                           .map(
-                                            (source) => DropdownMenuItem<String>(
-                                          value: source,
-                                          child: Text(source),
-                                        ),
+                                            (source) =>
+                                            DropdownMenuItem<String>(
+                                              value: source,
+                                              child: Text(source),
+                                            ),
                                       )
                                           .toList(),
                                       onChanged: _isReadOnly
@@ -3631,7 +5670,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                         });
                                       },
                                     ),
-                                    if (_selectedPoReferenceSource == 'Other') ...[
+                                    if (_selectedPoReferenceSource ==
+                                        'Other') ...[
                                       const SizedBox(height: 12),
                                       _buildItemTextField(
                                         _poReferenceOtherController,
@@ -3687,7 +5727,11 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                       );
                                       if (d != null) {
                                         setState(() {
-                                          _quoteDate = DateTime(d.year, d.month, d.day);
+                                          _quoteDate = DateTime(
+                                            d.year,
+                                            d.month,
+                                            d.day,
+                                          );
                                         });
                                       }
                                     },
@@ -3695,20 +5739,46 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                       decoration: InputDecoration(
                                         labelText: 'Quote Date',
                                         border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(12),
-                                            borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          borderSide: const BorderSide(
+                                            color: Color(0xFFE2E8F0),
+                                          ),
+                                        ),
                                         enabledBorder: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(12),
-                                            borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          borderSide: const BorderSide(
+                                            color: Color(0xFFE2E8F0),
+                                          ),
+                                        ),
                                         focusedBorder: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(12),
-                                            borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.5)),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          borderSide: const BorderSide(
+                                            color: Color(0xFF2563EB),
+                                            width: 1.5,
+                                          ),
+                                        ),
                                         filled: true,
-                                        fillColor: _isReadOnly ? Colors.grey.shade100 : const Color(0xFFF8FAFC),
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                                        fillColor: _isReadOnly
+                                            ? Colors.grey.shade100
+                                            : const Color(0xFFF8FAFC),
+                                        contentPadding:
+                                        const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 16,
+                                        ),
                                       ),
-                                      child: Text(DateFormat('dd/MM/yyyy').format(_quoteDate),
-                                          style: const TextStyle(fontSize: 15)),
+                                      child: Text(
+                                        DateFormat(
+                                          'dd/MM/yyyy',
+                                        ).format(_quoteDate),
+                                        style: const TextStyle(fontSize: 15),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -3737,7 +5807,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                   backgroundColor: accentColor,
                                   foregroundColor: Colors.white,
                                   shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
+                                    borderRadius: BorderRadius.circular(
+                                      8,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -3746,7 +5818,12 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                               Padding(
                                 padding: const EdgeInsets.all(20),
                                 child: Center(
-                                  child: Text('No items added yet.', style: TextStyle(color: Colors.grey.shade500)),
+                                  child: Text(
+                                    'No items added yet.',
+                                    style: TextStyle(
+                                      color: Colors.grey.shade500,
+                                    ),
+                                  ),
                                 ),
                               )
                             else
@@ -3757,310 +5834,706 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                 itemBuilder: (ctx, i) {
                                   final item = topLevelItems[i];
                                   final extras = _itemExtras[item.id] ?? {};
-                                  final children = _items.where((c) => _itemExtras[c.id]?['parentId'] == item.id).toList();
-                                  children.sort((a,b) => _items.indexOf(a).compareTo(_items.indexOf(b)));
+                                  final children = _items
+                                      .where(
+                                        (c) =>
+                                    _itemExtras[c.id]?['parentId'] ==
+                                        item.id,
+                                  )
+                                      .toList();
+                                  children.sort(
+                                        (a, b) => _items
+                                        .indexOf(a)
+                                        .compareTo(_items.indexOf(b)),
+                                  );
 
                                   bool isOutOfStock = item.availableStock <= 0;
-                                  bool isLowStock = item.availableStock < item.quantity && !isOutOfStock;
-                                  Color stockColor =
-                                  isOutOfStock ? Colors.red : (isLowStock ? Colors.orange : Colors.green);
-                                  String stockText =
-                                  isOutOfStock ? 'Out of Stock' : (isLowStock ? 'Low Stock' : 'In Stock');
+                                  bool isLowStock =
+                                      item.availableStock < item.quantity &&
+                                          !isOutOfStock;
+                                  Color stockColor = isOutOfStock
+                                      ? Colors.red
+                                      : (isLowStock
+                                      ? Colors.orange
+                                      : Colors.green);
+                                  String stockText = isOutOfStock
+                                      ? 'Out of Stock'
+                                      : (isLowStock ? 'Low Stock' : 'In Stock');
 
                                   String sku = (extras['sku'] ?? '').toString();
-                                  String brand = (extras['brand'] ?? '').toString();
-                                  String model = (extras['model'] ?? '').toString();
-                                  String itemCode = (extras['itemCode'] ?? '').toString();
-                                  String nature = (extras['productNature'] ?? '').toString();
-                                  String machineType = (extras['machineType'] ?? '').toString();
-                                  List catalogs = extras['catalogs'] as List? ?? [];
+                                  String brand = (extras['brand'] ?? '')
+                                      .toString();
+                                  String model = (extras['model'] ?? '')
+                                      .toString();
+                                  String itemCode = (extras['itemCode'] ?? '')
+                                      .toString();
+                                  String nature =
+                                  (extras['productNature'] ?? '')
+                                      .toString();
+                                  String machineType =
+                                  (extras['machineType'] ?? '').toString();
+                                  List catalogs =
+                                      extras['catalogs'] as List? ?? [];
                                   List images = extras['images'] as List? ?? [];
-                                  String imgUrl = images.isNotEmpty ? images.first.toString() : '';
+                                  String imgUrl = images.isNotEmpty
+                                      ? images.first.toString()
+                                      : '';
 
-                                  bool showQtyWarning = item.quantity > item.availableStock && item.productId.isNotEmpty;
-                                  bool isMachine = nature.toLowerCase() == 'machine';
+                                  bool showQtyWarning =
+                                      item.quantity > item.availableStock &&
+                                          item.productId.isNotEmpty;
+                                  bool isMachine =
+                                      nature.toLowerCase() == 'machine';
 
                                   List<String> metaList = [];
                                   if (sku.isNotEmpty) metaList.add('SKU: $sku');
-                                  if (itemCode.isNotEmpty) metaList.add('Code: $itemCode');
-                                  if (brand.isNotEmpty) metaList.add('Brand: $brand');
-                                  if (model.isNotEmpty) metaList.add('Model: $model');
+                                  if (itemCode.isNotEmpty)
+                                    metaList.add('Code: $itemCode');
+                                  if (brand.isNotEmpty)
+                                    metaList.add('Brand: $brand');
+                                  if (model.isNotEmpty)
+                                    metaList.add('Model: $model');
 
                                   Color natureColor = Colors.grey;
-                                  if (nature.toLowerCase() == 'machine') natureColor = Colors.purple;
-                                  else if (nature.toLowerCase() == 'accessory') natureColor = Colors.orange;
-                                  else if (nature.toLowerCase() == 'spare') natureColor = Colors.blue;
-                                  else if (nature.toLowerCase() == 'consumable') natureColor = Colors.teal;
-                                  else if (nature.toLowerCase() == 'raw material') natureColor = Colors.brown;
+                                  if (nature.toLowerCase() == 'machine')
+                                    natureColor = Colors.purple;
+                                  else if (nature.toLowerCase() == 'accessory')
+                                    natureColor = Colors.orange;
+                                  else if (nature.toLowerCase() == 'spare')
+                                    natureColor = Colors.blue;
+                                  else if (nature.toLowerCase() == 'consumable')
+                                    natureColor = Colors.teal;
+                                  else if (nature.toLowerCase() ==
+                                      'raw material')
+                                    natureColor = Colors.brown;
 
                                   int actualIndex = _items.indexOf(item);
 
                                   return Column(
-                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    crossAxisAlignment:
+                                    CrossAxisAlignment.stretch,
                                     children: [
                                       Container(
-                                          padding: const EdgeInsets.all(12),
-                                          margin: const EdgeInsets.only(bottom: 8),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            border: Border.all(color: Colors.grey.shade200),
-                                            borderRadius: BorderRadius.circular(10),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                  color: Colors.black.withOpacity(0.02),
-                                                  blurRadius: 4,
-                                                  offset: const Offset(0, 2))
-                                            ],
+                                        padding: const EdgeInsets.all(12),
+                                        margin: const EdgeInsets.only(
+                                          bottom: 8,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          border: Border.all(
+                                            color: Colors.grey.shade200,
                                           ),
-                                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                              if (imgUrl.isNotEmpty)
-                                                InkWell(
-                                                  onTap: () => _openImage(imgUrl),
-                                                  child: ClipRRect(
-                                                    borderRadius: BorderRadius.circular(8),
-                                                    child: Image.network(imgUrl,
-                                                        width: 60, height: 60, fit: BoxFit.cover),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(
+                                                0.02,
+                                              ),
+                                              blurRadius: 4,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                              children: [
+                                                if (imgUrl.isNotEmpty)
+                                                  InkWell(
+                                                    onTap: () =>
+                                                        _openImage(imgUrl),
+                                                    child: ClipRRect(
+                                                      borderRadius:
+                                                      BorderRadius.circular(
+                                                        8,
+                                                      ),
+                                                      child: Image.network(
+                                                        imgUrl,
+                                                        width: 60,
+                                                        height: 60,
+                                                        fit: BoxFit.cover,
+                                                      ),
+                                                    ),
                                                   ),
-                                                ),
-                                              if (imgUrl.isNotEmpty) const SizedBox(width: 12),
-                                              Expanded(
+                                                if (imgUrl.isNotEmpty)
+                                                  const SizedBox(width: 12),
+                                                Expanded(
                                                   child: Column(
-                                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                                      children: [
-                                                        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                                                    crossAxisAlignment:
+                                                    CrossAxisAlignment
+                                                        .start,
+                                                    children: [
+                                                      Row(
+                                                        mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .spaceBetween,
+                                                        children: [
                                                           Expanded(
-                                                              child: Text(item.name,
-                                                                  style: const TextStyle(
-                                                                      fontWeight: FontWeight.w600, fontSize: 14))),
-                                                          Text('₹${item.totalAmount.toStringAsFixed(2)}',
+                                                            child: Text(
+                                                              item.name,
                                                               style: const TextStyle(
-                                                                  fontWeight: FontWeight.bold,
-                                                                  fontSize: 15,
-                                                                  color: primaryColor)),
-                                                        ]),
-                                                        const SizedBox(height: 6),
-                                                        Wrap(spacing: 6, runSpacing: 6, children: [
-                                                          if (nature.isNotEmpty && nature != 'General')
-                                                            Container(
-                                                              padding: const EdgeInsets.symmetric(
-                                                                  horizontal: 6, vertical: 2),
-                                                              decoration: BoxDecoration(
-                                                                  color: natureColor.withOpacity(0.1),
-                                                                  borderRadius: BorderRadius.circular(4),
-                                                                  border: Border.all(color: natureColor.withOpacity(0.3))),
-                                                              child: Text(nature,
-                                                                  style: TextStyle(
-                                                                      fontSize: 10,
-                                                                      color: natureColor,
-                                                                      fontWeight: FontWeight.bold)),
+                                                                fontWeight:
+                                                                FontWeight
+                                                                    .w600,
+                                                                fontSize: 14,
+                                                              ),
                                                             ),
-                                                          if (machineType.isNotEmpty)
-                                                            Container(
-                                                              padding: const EdgeInsets.symmetric(
-                                                                  horizontal: 6, vertical: 2),
-                                                              decoration: BoxDecoration(
-                                                                  color: Colors.purple.shade50,
-                                                                  borderRadius: BorderRadius.circular(4),
-                                                                  border: Border.all(color: Colors.purple.shade200)),
-                                                              child: Text('Type: $machineType',
-                                                                  style: TextStyle(
-                                                                      fontSize: 10,
-                                                                      color: Colors.purple.shade700,
-                                                                      fontWeight: FontWeight.bold)),
+                                                          ),
+                                                          Text(
+                                                            '₹${item.totalAmount.toStringAsFixed(2)}',
+                                                            style: const TextStyle(
+                                                              fontWeight:
+                                                              FontWeight
+                                                                  .bold,
+                                                              fontSize: 15,
+                                                              color:
+                                                              primaryColor,
                                                             ),
-                                                          if (item.productId.isNotEmpty)
+                                                          ),
+                                                        ],
+                                                      ),
+                                                      const SizedBox(height: 6),
+                                                      Wrap(
+                                                        spacing: 6,
+                                                        runSpacing: 6,
+                                                        children: [
+                                                          if (nature
+                                                              .isNotEmpty &&
+                                                              nature !=
+                                                                  'General')
                                                             Container(
                                                               padding:
-                                                              const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                              const EdgeInsets.symmetric(
+                                                                horizontal:
+                                                                6,
+                                                                vertical: 2,
+                                                              ),
                                                               decoration: BoxDecoration(
-                                                                  color: stockColor.withOpacity(0.1),
-                                                                  borderRadius: BorderRadius.circular(4),
-                                                                  border: Border.all(color: stockColor.withOpacity(0.3))),
-                                                              child: Text('$stockText (${item.availableStock})',
-                                                                  style: TextStyle(
-                                                                      color: stockColor,
-                                                                      fontSize: 10,
-                                                                      fontWeight: FontWeight.bold)),
-                                                            ),
-                                                        ]),
-                                                        const SizedBox(height: 6),
-                                                        if (metaList.isNotEmpty)
-                                                          Text(metaList.join(' | '),
-                                                              style: TextStyle(
-                                                                  fontSize: 12, color: Colors.blueGrey.shade600)),
-                                                        const SizedBox(height: 4),
-                                                        Text(
-                                                            '${item.quantity} ${item.uom} x ₹${item.unitPrice.toStringAsFixed(2)}  (Tax: ${item.cgstPercent + item.sgstPercent + item.igstPercent}% | Disc: ${item.discountPercent}%)',
-                                                            style: const TextStyle(fontSize: 12)),
-                                                        if (item.hsnCode.isNotEmpty)
-                                                          Text('HSN/SAC: ${item.hsnCode}',
-                                                              style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                                                      ])),
-                                              Column(children: [
-                                                if (!_isReadOnly)
-                                                  IconButton(
-                                                    icon: const Icon(Icons.edit, color: Colors.blueGrey, size: 18),
-                                                    onPressed: () => _showAddItemModal(item, actualIndex),
-                                                    padding: EdgeInsets.zero,
-                                                    constraints: const BoxConstraints(),
-                                                  ),
-                                                const SizedBox(height: 12),
-                                                if (!_isReadOnly)
-                                                  IconButton(
-                                                    icon: const Icon(Icons.delete, color: Colors.red, size: 18),
-                                                    onPressed: () => _onDeleteTopLevelItem(item),
-                                                    padding: EdgeInsets.zero,
-                                                    constraints: const BoxConstraints(),
-                                                  ),
-                                              ])
-                                            ]),
-                                            if (showQtyWarning)
-                                              Padding(
-                                                  padding: const EdgeInsets.only(top: 8),
-                                                  child: Row(children: [
-                                                    const Icon(Icons.warning_amber_rounded,
-                                                        size: 14, color: Colors.orange),
-                                                    const SizedBox(width: 6),
-                                                    Text('Warning: Quantity exceeds available stock.',
-                                                        style: TextStyle(
-                                                            color: Colors.orange.shade800,
-                                                            fontSize: 11,
-                                                            fontWeight: FontWeight.w600)),
-                                                  ])),
-                                            if (catalogs.isNotEmpty)
-                                              Padding(
-                                                  padding: const EdgeInsets.only(top: 8),
-                                                  child: Row(children: [
-                                                    const Icon(Icons.attach_file, size: 14, color: accentColor),
-                                                    const SizedBox(width: 6),
-                                                    Text('${catalogs.length} Catalog(s) Attached',
-                                                        style: const TextStyle(
-                                                            color: accentColor,
-                                                            fontSize: 11,
-                                                            fontWeight: FontWeight.w600)),
-                                                  ])),
-                                          ])),
-
-                                      if (isMachine || children.isNotEmpty)
-                                        Container(
-                                            margin: const EdgeInsets.only(bottom: 12, left: 16),
-                                            padding: const EdgeInsets.all(12),
-                                            decoration: BoxDecoration(
-                                              color: Colors.grey.shade50,
-                                              borderRadius: BorderRadius.circular(8),
-                                              border: Border.all(color: Colors.grey.shade200),
-                                            ),
-                                            child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Row(
-                                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                      children: [
-                                                        const Text('Scope of Supply', style: TextStyle(fontWeight: FontWeight.bold, color: primaryColor)),
-                                                        if (!_isReadOnly)
-                                                          TextButton.icon(
-                                                            onPressed: () => _showScopeItemModal(item.id),
-                                                            icon: const Icon(Icons.add, size: 16),
-                                                            label: const Text('Add Custom'),
-                                                            style: TextButton.styleFrom(minimumSize: Size.zero, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
-                                                          )
-                                                      ]
-                                                  ),
-                                                  const Divider(),
-                                                  if (children.isEmpty)
-                                                    Padding(
-                                                      padding: const EdgeInsets.symmetric(vertical: 8),
-                                                      child: Text('No scope items added.', style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
-                                                    )
-                                                  else
-                                                    ...children.map((child) {
-                                                      final childExtras = _itemExtras[child.id] ?? {};
-                                                      final isIncluded = childExtras['isIncluded'] != false;
-                                                      final pricingMode = childExtras['pricingMode'] ?? 'Included';
-
-                                                      return Padding(
-                                                        padding: const EdgeInsets.only(bottom: 8),
-                                                        child: Row(
-                                                            children: [
-                                                              if (!_isReadOnly)
-                                                                SizedBox(
-                                                                  height: 24,
-                                                                  width: 24,
-                                                                  child: Checkbox(
-                                                                    value: isIncluded,
-                                                                    onChanged: (v) {
-                                                                      setState(() {
-                                                                        _itemExtras[child.id]?['isIncluded'] = v;
-                                                                        _calculateTotals();
-                                                                      });
-                                                                    },
+                                                                color: natureColor
+                                                                    .withOpacity(
+                                                                  0.1,
+                                                                ),
+                                                                borderRadius:
+                                                                BorderRadius.circular(
+                                                                  4,
+                                                                ),
+                                                                border: Border.all(
+                                                                  color: natureColor
+                                                                      .withOpacity(
+                                                                    0.3,
                                                                   ),
                                                                 ),
-                                                              if (!_isReadOnly) const SizedBox(width: 8),
-                                                              Expanded(
-                                                                  child: Column(
-                                                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                                                      children: [
-                                                                        Text(
-                                                                            child.name,
-                                                                            style: TextStyle(
-                                                                              decoration: isIncluded ? null : TextDecoration.lineThrough,
-                                                                              color: isIncluded ? Colors.black87 : Colors.grey,
-                                                                              fontWeight: FontWeight.w600,
-                                                                              fontSize: 13,
-                                                                            )
-                                                                        ),
-                                                                        Text(
-                                                                            '${child.quantity} ${child.uom} | ${pricingMode == 'Included' ? 'Included' : '₹${child.unitPrice.toStringAsFixed(2)}'}',
-                                                                            style: TextStyle(fontSize: 11, color: Colors.grey.shade600)
-                                                                        )
-                                                                      ]
-                                                                  )
                                                               ),
-                                                              if (!_isReadOnly)
-                                                                Row(
-                                                                    mainAxisSize: MainAxisSize.min,
-                                                                    children: [
-                                                                      IconButton(
-                                                                        icon: const Icon(Icons.arrow_upward, size: 16),
-                                                                        onPressed: () => _moveScopeItem(child.id, -1),
-                                                                        constraints: const BoxConstraints(),
-                                                                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                                                                      ),
-                                                                      IconButton(
-                                                                        icon: const Icon(Icons.arrow_downward, size: 16),
-                                                                        onPressed: () => _moveScopeItem(child.id, 1),
-                                                                        constraints: const BoxConstraints(),
-                                                                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                                                                      ),
-                                                                      IconButton(
-                                                                        icon: const Icon(Icons.edit, size: 16, color: Colors.blueGrey),
-                                                                        onPressed: () => _showScopeItemModal(item.id, child),
-                                                                        constraints: const BoxConstraints(),
-                                                                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                                                                      ),
-                                                                      IconButton(
-                                                                        icon: const Icon(Icons.delete, size: 16, color: Colors.red),
-                                                                        onPressed: () {
-                                                                          setState(() {
-                                                                            _itemExtras.remove(child.id);
-                                                                            _items.remove(child);
-                                                                            _calculateTotals();
-                                                                          });
-                                                                        },
-                                                                        constraints: const BoxConstraints(),
-                                                                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                                                                      ),
-                                                                    ]
-                                                                )
-                                                            ]
+                                                              child: Text(
+                                                                nature,
+                                                                style: TextStyle(
+                                                                  fontSize: 10,
+                                                                  color:
+                                                                  natureColor,
+                                                                  fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          if (machineType
+                                                              .isNotEmpty)
+                                                            Container(
+                                                              padding:
+                                                              const EdgeInsets.symmetric(
+                                                                horizontal:
+                                                                6,
+                                                                vertical: 2,
+                                                              ),
+                                                              decoration: BoxDecoration(
+                                                                color: Colors
+                                                                    .purple
+                                                                    .shade50,
+                                                                borderRadius:
+                                                                BorderRadius.circular(
+                                                                  4,
+                                                                ),
+                                                                border: Border.all(
+                                                                  color: Colors
+                                                                      .purple
+                                                                      .shade200,
+                                                                ),
+                                                              ),
+                                                              child: Text(
+                                                                'Type: $machineType',
+                                                                style: TextStyle(
+                                                                  fontSize: 10,
+                                                                  color: Colors
+                                                                      .purple
+                                                                      .shade700,
+                                                                  fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          if (item
+                                                              .productId
+                                                              .isNotEmpty)
+                                                            Container(
+                                                              padding:
+                                                              const EdgeInsets.symmetric(
+                                                                horizontal:
+                                                                6,
+                                                                vertical: 2,
+                                                              ),
+                                                              decoration: BoxDecoration(
+                                                                color: stockColor
+                                                                    .withOpacity(
+                                                                  0.1,
+                                                                ),
+                                                                borderRadius:
+                                                                BorderRadius.circular(
+                                                                  4,
+                                                                ),
+                                                                border: Border.all(
+                                                                  color: stockColor
+                                                                      .withOpacity(
+                                                                    0.3,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                              child: Text(
+                                                                '$stockText (${item.availableStock})',
+                                                                style: TextStyle(
+                                                                  color:
+                                                                  stockColor,
+                                                                  fontSize: 10,
+                                                                  fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                        ],
+                                                      ),
+                                                      const SizedBox(height: 6),
+                                                      if (metaList.isNotEmpty)
+                                                        Text(
+                                                          metaList.join(' | '),
+                                                          style: TextStyle(
+                                                            fontSize: 12,
+                                                            color: Colors
+                                                                .blueGrey
+                                                                .shade600,
+                                                          ),
                                                         ),
-                                                      );
-                                                    }).toList(),
-                                                ]
-                                            )
-                                        )
+                                                      const SizedBox(height: 4),
+                                                      Text(
+                                                        '${item.quantity} ${item.uom} x ₹${item.unitPrice.toStringAsFixed(2)}  (Tax: ${item.cgstPercent + item.sgstPercent + item.igstPercent}% | Disc: ${item.discountPercent}%)',
+                                                        style: const TextStyle(
+                                                          fontSize: 12,
+                                                        ),
+                                                      ),
+                                                      if (item
+                                                          .hsnCode
+                                                          .isNotEmpty)
+                                                        Text(
+                                                          'HSN/SAC: ${item.hsnCode}',
+                                                          style:
+                                                          const TextStyle(
+                                                            fontSize: 11,
+                                                            color:
+                                                            Colors.grey,
+                                                          ),
+                                                        ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                Column(
+                                                  children: [
+                                                    if (!_isReadOnly)
+                                                      IconButton(
+                                                        icon: const Icon(
+                                                          Icons.edit,
+                                                          color:
+                                                          Colors.blueGrey,
+                                                          size: 18,
+                                                        ),
+                                                        onPressed: () =>
+                                                            _showAddItemModal(
+                                                              item,
+                                                              actualIndex,
+                                                            ),
+                                                        padding:
+                                                        EdgeInsets.zero,
+                                                        constraints:
+                                                        const BoxConstraints(),
+                                                      ),
+                                                    const SizedBox(height: 12),
+                                                    if (!_isReadOnly)
+                                                      IconButton(
+                                                        icon: const Icon(
+                                                          Icons.delete,
+                                                          color: Colors.red,
+                                                          size: 18,
+                                                        ),
+                                                        onPressed: () =>
+                                                            _onDeleteTopLevelItem(
+                                                              item,
+                                                            ),
+                                                        padding:
+                                                        EdgeInsets.zero,
+                                                        constraints:
+                                                        const BoxConstraints(),
+                                                      ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                            if (showQtyWarning)
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                  top: 8,
+                                                ),
+                                                child: Row(
+                                                  children: [
+                                                    const Icon(
+                                                      Icons
+                                                          .warning_amber_rounded,
+                                                      size: 14,
+                                                      color: Colors.orange,
+                                                    ),
+                                                    const SizedBox(width: 6),
+                                                    Text(
+                                                      'Warning: Quantity exceeds available stock.',
+                                                      style: TextStyle(
+                                                        color: Colors
+                                                            .orange
+                                                            .shade800,
+                                                        fontSize: 11,
+                                                        fontWeight:
+                                                        FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            if (catalogs.isNotEmpty)
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                  top: 8,
+                                                ),
+                                                child: Row(
+                                                  children: [
+                                                    const Icon(
+                                                      Icons.attach_file,
+                                                      size: 14,
+                                                      color: accentColor,
+                                                    ),
+                                                    const SizedBox(width: 6),
+                                                    Text(
+                                                      '${catalogs.length} Catalog(s) Attached',
+                                                      style: const TextStyle(
+                                                        color: accentColor,
+                                                        fontSize: 11,
+                                                        fontWeight:
+                                                        FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+
+                                      if (isMachine ||
+                                          children.isNotEmpty ||
+                                          item.scopeOfSupply.trim().isNotEmpty)
+                                        Container(
+                                          margin: const EdgeInsets.only(
+                                            bottom: 12,
+                                            left: 16,
+                                          ),
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            color: Colors.grey.shade50,
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                            border: Border.all(
+                                              color: Colors.grey.shade200,
+                                            ),
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                mainAxisAlignment:
+                                                MainAxisAlignment
+                                                    .spaceBetween,
+                                                children: [
+                                                  const Text(
+                                                    'Scope of Supply',
+                                                    style: TextStyle(
+                                                      fontWeight:
+                                                      FontWeight.bold,
+                                                      color: primaryColor,
+                                                    ),
+                                                  ),
+                                                  if (item.scopeOfSupply
+                                                      .trim()
+                                                      .isNotEmpty)
+                                                    Container(
+                                                      padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 4,
+                                                      ),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors
+                                                            .green
+                                                            .shade50,
+                                                        borderRadius:
+                                                        BorderRadius.circular(
+                                                          6,
+                                                        ),
+                                                        border: Border.all(
+                                                          color: Colors
+                                                              .green
+                                                              .shade200,
+                                                        ),
+                                                      ),
+                                                      child: Text(
+                                                        'Auto fetched',
+                                                        style: TextStyle(
+                                                          fontSize: 11,
+                                                          color: Colors
+                                                              .green
+                                                              .shade700,
+                                                          fontWeight:
+                                                          FontWeight.w600,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                ],
+                                              ),
+                                              const Divider(),
+                                              if (children.isEmpty &&
+                                                  item.scopeOfSupply
+                                                      .trim()
+                                                      .isNotEmpty)
+                                                Padding(
+                                                  padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 8,
+                                                  ),
+                                                  child: Text(
+                                                    item.scopeOfSupply.trim(),
+                                                    style: const TextStyle(
+                                                      color: Colors.black87,
+                                                      fontSize: 13,
+                                                      height: 1.45,
+                                                    ),
+                                                  ),
+                                                )
+                                              else if (children.isEmpty)
+                                                Padding(
+                                                  padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 8,
+                                                  ),
+                                                  child: Text(
+                                                    'No scope available in product master.',
+                                                    style: TextStyle(
+                                                      color:
+                                                      Colors.grey.shade500,
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                )
+                                              else
+                                                ...children.map((child) {
+                                                  final childExtras =
+                                                      _itemExtras[child.id] ??
+                                                          {};
+                                                  final isIncluded =
+                                                      childExtras['isIncluded'] !=
+                                                          false;
+                                                  final pricingMode =
+                                                      childExtras['pricingMode'] ??
+                                                          'Included';
+
+                                                  return Padding(
+                                                    padding:
+                                                    const EdgeInsets.only(
+                                                      bottom: 8,
+                                                    ),
+                                                    child: Row(
+                                                      children: [
+                                                        if (!_isReadOnly)
+                                                          SizedBox(
+                                                            height: 24,
+                                                            width: 24,
+                                                            child: Checkbox(
+                                                              value: isIncluded,
+                                                              onChanged: (v) {
+                                                                setState(() {
+                                                                  _itemExtras[child
+                                                                      .id]?['isIncluded'] =
+                                                                      v;
+                                                                  _calculateTotals();
+                                                                });
+                                                              },
+                                                            ),
+                                                          ),
+                                                        if (!_isReadOnly)
+                                                          const SizedBox(
+                                                            width: 8,
+                                                          ),
+                                                        Expanded(
+                                                          child: Column(
+                                                            crossAxisAlignment:
+                                                            CrossAxisAlignment
+                                                                .start,
+                                                            children: [
+                                                              Text(
+                                                                child.name,
+                                                                style: TextStyle(
+                                                                  decoration:
+                                                                  isIncluded
+                                                                      ? null
+                                                                      : TextDecoration
+                                                                      .lineThrough,
+                                                                  color:
+                                                                  isIncluded
+                                                                      ? Colors
+                                                                      .black87
+                                                                      : Colors
+                                                                      .grey,
+                                                                  fontWeight:
+                                                                  FontWeight
+                                                                      .w600,
+                                                                  fontSize: 13,
+                                                                ),
+                                                              ),
+                                                              Text(
+                                                                '${child.quantity} ${child.uom} | ${pricingMode == 'Included' ? 'Included' : '₹${child.unitPrice.toStringAsFixed(2)}'}',
+                                                                style: TextStyle(
+                                                                  fontSize: 11,
+                                                                  color: Colors
+                                                                      .grey
+                                                                      .shade600,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                        if (!_isReadOnly)
+                                                          Row(
+                                                            mainAxisSize:
+                                                            MainAxisSize
+                                                                .min,
+                                                            children: [
+                                                              IconButton(
+                                                                icon: const Icon(
+                                                                  Icons
+                                                                      .arrow_upward,
+                                                                  size: 16,
+                                                                ),
+                                                                onPressed: () =>
+                                                                    _moveScopeItem(
+                                                                      child.id,
+                                                                      -1,
+                                                                    ),
+                                                                constraints:
+                                                                const BoxConstraints(),
+                                                                padding:
+                                                                const EdgeInsets.symmetric(
+                                                                  horizontal:
+                                                                  4,
+                                                                ),
+                                                              ),
+                                                              IconButton(
+                                                                icon: const Icon(
+                                                                  Icons
+                                                                      .arrow_downward,
+                                                                  size: 16,
+                                                                ),
+                                                                onPressed: () =>
+                                                                    _moveScopeItem(
+                                                                      child.id,
+                                                                      1,
+                                                                    ),
+                                                                constraints:
+                                                                const BoxConstraints(),
+                                                                padding:
+                                                                const EdgeInsets.symmetric(
+                                                                  horizontal:
+                                                                  4,
+                                                                ),
+                                                              ),
+                                                              IconButton(
+                                                                icon: const Icon(
+                                                                  Icons.edit,
+                                                                  size: 16,
+                                                                  color: Colors
+                                                                      .blueGrey,
+                                                                ),
+                                                                onPressed: () =>
+                                                                    _showScopeItemModal(
+                                                                      item.id,
+                                                                      child,
+                                                                    ),
+                                                                constraints:
+                                                                const BoxConstraints(),
+                                                                padding:
+                                                                const EdgeInsets.symmetric(
+                                                                  horizontal:
+                                                                  4,
+                                                                ),
+                                                              ),
+                                                              IconButton(
+                                                                icon: const Icon(
+                                                                  Icons.delete,
+                                                                  size: 16,
+                                                                  color: Colors
+                                                                      .red,
+                                                                ),
+                                                                onPressed: () {
+                                                                  setState(() {
+                                                                    _itemExtras
+                                                                        .remove(
+                                                                      child
+                                                                          .id,
+                                                                    );
+                                                                    _items
+                                                                        .remove(
+                                                                      child,
+                                                                    );
+                                                                    _calculateTotals();
+                                                                  });
+                                                                },
+                                                                constraints:
+                                                                const BoxConstraints(),
+                                                                padding:
+                                                                const EdgeInsets.symmetric(
+                                                                  horizontal:
+                                                                  4,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                      ],
+                                                    ),
+                                                  );
+                                                }).toList(),
+                                            ],
+                                          ),
+                                        ),
                                     ],
                                   );
                                 },
@@ -4073,15 +6546,24 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                 child: Column(
                                   children: [
                                     _calcRow('Subtotal', _cachedSubtotal),
-                                    _calcRow('Item Discounts', -_cachedItemDiscount, color: Colors.red),
-                                    _calcRow('Taxable Value', _cachedTaxableAmount, bold: true),
+                                    _calcRow(
+                                      'Item Discounts',
+                                      -_cachedItemDiscount,
+                                      color: Colors.red,
+                                    ),
+                                    _calcRow(
+                                      'Taxable Value',
+                                      _cachedTaxableAmount,
+                                      bold: true,
+                                    ),
                                     if (!_isInterState) ...[
                                       _calcRow('CGST', _cachedCgst),
                                       _calcRow('SGST', _cachedSgst),
                                     ] else ...[
                                       _calcRow('IGST', _cachedIgst),
                                     ],
-                                    if (_cachedRoundOff != 0) _calcRow('Round Off', _cachedRoundOff),
+                                    if (_cachedRoundOff != 0)
+                                      _calcRow('Round Off', _cachedRoundOff),
                                     const Divider(),
                                     _calcRow(
                                       'FINAL TOTAL',
@@ -4107,9 +6589,13 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                             if (!_isReadOnly)
                               SwitchListTile(
                                 contentPadding: EdgeInsets.zero,
-                                title: const Text('Packing & Forwarding Extra', style: TextStyle(fontSize: 14)),
+                                title: const Text(
+                                  'Packing & Forwarding Extra',
+                                  style: TextStyle(fontSize: 14),
+                                ),
                                 value: _packingChargesExtra,
-                                onChanged: (v) => setState(() => _packingChargesExtra = v),
+                                onChanged: (v) =>
+                                    setState(() => _packingChargesExtra = v),
                               ),
                             const Divider(height: 10),
                             _buildSectionHeader(
@@ -4118,16 +6604,25 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                               trailing: _isReadOnly
                                   ? null
                                   : OutlinedButton.icon(
-                                onPressed: () => setState(() => _dynamicTerms.add(TermRow())),
+                                onPressed: () => setState(
+                                      () => _dynamicTerms.add(TermRow()),
+                                ),
                                 icon: const Icon(Icons.add, size: 18),
                                 label: const Text('Add Term'),
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: accentColor,
-                                  side: const BorderSide(color: accentColor),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
+                                  side: const BorderSide(
+                                    color: accentColor,
                                   ),
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(
+                                      8,
+                                    ),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  ),
                                   minimumSize: Size.zero,
                                 ),
                               ),
@@ -4140,25 +6635,37 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                 return Padding(
                                   padding: const EdgeInsets.only(bottom: 12),
                                   child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                    CrossAxisAlignment.start,
                                     children: [
                                       Expanded(
                                         flex: 3,
-                                        child: _buildItemTextField(_dynamicTerms[i].titleCtrl, 'Title (e.g. Payment)',
-                                            maxLines: 1),
+                                        child: _buildItemTextField(
+                                          _dynamicTerms[i].titleCtrl,
+                                          'Title (e.g. Payment)',
+                                          maxLines: 1,
+                                        ),
                                       ),
                                       const SizedBox(width: 10),
                                       Expanded(
                                         flex: 7,
-                                        child: _buildItemTextField(_dynamicTerms[i].valueCtrl, 'Term Detail',
-                                            maxLines: null),
+                                        child: _buildItemTextField(
+                                          _dynamicTerms[i].valueCtrl,
+                                          'Term Detail',
+                                          maxLines: null,
+                                        ),
                                       ),
                                       if (!_isReadOnly)
                                         IconButton(
-                                          icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                          icon: const Icon(
+                                            Icons.delete_outline,
+                                            color: Colors.red,
+                                          ),
                                           onPressed: () {
                                             var term = _dynamicTerms[i];
-                                            setState(() => _dynamicTerms.removeAt(i));
+                                            setState(
+                                                  () => _dynamicTerms.removeAt(i),
+                                            );
                                             term.dispose();
                                           },
                                         ),
@@ -4168,12 +6675,25 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                               },
                             ),
                             const Divider(height: 30),
-                            _buildSectionHeader('Signature Details', Icons.edit_document),
+                            _buildSectionHeader(
+                              'Signature Details',
+                              Icons.edit_document,
+                            ),
                             Row(
                               children: [
-                                Expanded(child: _buildItemTextField(_signNameController, 'Signatory Name')),
+                                Expanded(
+                                  child: _buildItemTextField(
+                                    _signNameController,
+                                    'Signatory Name',
+                                  ),
+                                ),
                                 const SizedBox(width: 10),
-                                Expanded(child: _buildItemTextField(_signDesignationController, 'Designation')),
+                                Expanded(
+                                  child: _buildItemTextField(
+                                    _signDesignationController,
+                                    'Designation',
+                                  ),
+                                ),
                               ],
                             ),
                             const SizedBox(height: 12),
@@ -4191,7 +6711,10 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                               ],
                             ),
                             const Divider(height: 30),
-                            const Text('Follow-up Schedule', style: TextStyle(fontWeight: FontWeight.bold)),
+                            const Text(
+                              'Follow-up Schedule',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
                             const SizedBox(height: 8),
                             Row(
                               children: [
@@ -4203,30 +6726,50 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                       final d = await showDatePicker(
                                         context: context,
                                         initialDate:
-                                        _nextFollowUpDate ?? DateTime.now().add(const Duration(days: 3)),
+                                        _nextFollowUpDate ??
+                                            DateTime.now().add(
+                                              const Duration(days: 3),
+                                            ),
                                         firstDate: DateTime.now(),
                                         lastDate: DateTime(2100),
                                       );
                                       if (d != null) {
-                                        setState(() => _nextFollowUpDate = d);
+                                        setState(
+                                              () => _nextFollowUpDate = d,
+                                        );
                                       }
                                     },
                                     child: InputDecorator(
                                       decoration: InputDecoration(
                                         labelText: 'Next Follow-up',
-                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
                                         filled: true,
-                                        fillColor: _isReadOnly ? Colors.grey.shade100 : Colors.orange.shade50,
+                                        fillColor: _isReadOnly
+                                            ? Colors.grey.shade100
+                                            : Colors.orange.shade50,
                                         isDense: true,
                                       ),
-                                      child: Text(_nextFollowUpDate != null
-                                          ? DateFormat('dd/MM/yyyy').format(_nextFollowUpDate!)
-                                          : 'Select Date'),
+                                      child: Text(
+                                        _nextFollowUpDate != null
+                                            ? DateFormat(
+                                          'dd/MM/yyyy',
+                                        ).format(_nextFollowUpDate!)
+                                            : 'Select Date',
+                                      ),
                                     ),
                                   ),
                                 ),
                                 const SizedBox(width: 10),
-                                Expanded(child: _buildItemTextField(_followUpNotesController, 'Follow-up Notes')),
+                                Expanded(
+                                  child: _buildItemTextField(
+                                    _followUpNotesController,
+                                    'Follow-up Notes',
+                                  ),
+                                ),
                               ],
                             ),
                           ],
@@ -4242,7 +6785,11 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
               decoration: const BoxDecoration(
                 color: Colors.white,
                 boxShadow: [
-                  BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -2)),
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 10,
+                    offset: Offset(0, -2),
+                  ),
                 ],
               ),
               child: SafeArea(
@@ -4256,10 +6803,20 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Final Total', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                        Text(
+                          'Final Total',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
                         Text(
                           '₹ ${_cachedFinalTotal.toStringAsFixed(2)}',
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: primaryColor),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: primaryColor,
+                          ),
                         ),
                       ],
                     ),
@@ -4268,7 +6825,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                       runSpacing: 8,
                       children: [
                         if (_quotationStatus != 'Converted' &&
-                            (_approvalStatus == 'Approved' || _isAdminOrManager) &&
+                            (_approvalStatus == 'Approved' ||
+                                _isAdminOrManager) &&
                             widget.quotationId != null)
                           OutlinedButton(
                             onPressed: _convertToInvoice,
@@ -4280,12 +6838,17 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                           ),
                         if (!widget.prepareSalesOrderMode)
                           ElevatedButton.icon(
-                            onPressed: _isReadOnly || _isLoading ? null : _saveQuotation,
+                            onPressed: _isReadOnly || _isLoading
+                                ? null
+                                : _saveQuotation,
                             icon: _isLoading
                                 ? const SizedBox(
                               width: 16,
                               height: 16,
-                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
                             )
                                 : const Icon(Icons.save),
                             label: const Text('Save Quotation'),

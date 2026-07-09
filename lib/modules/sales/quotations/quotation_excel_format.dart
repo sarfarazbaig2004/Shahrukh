@@ -94,10 +94,10 @@ class ExcelQuotationFormat {
   }
 
   static String first(
-    Map<String, dynamic> data,
-    List<String> keys, [
-    String fallback = '',
-  ]) {
+      Map<String, dynamic> data,
+      List<String> keys, [
+        String fallback = '',
+      ]) {
     for (final key in keys) {
       final value = safe(data[key]);
       if (value.isNotEmpty) return value;
@@ -125,21 +125,21 @@ class ExcelQuotationFormat {
         child: pw.Center(
           child: image == null
               ? pw.Opacity(
-                  opacity: 0.07,
-                  child: pw.Text(
-                    'memco',
-                    style: pw.TextStyle(
-                      fontSize: 96,
-                      color: PdfColors.red800,
-                      fontWeight: pw.FontWeight.bold,
-                      letterSpacing: 2,
-                    ),
-                  ),
-                )
+            opacity: 0.07,
+            child: pw.Text(
+              'memco',
+              style: pw.TextStyle(
+                fontSize: 96,
+                color: PdfColors.red800,
+                fontWeight: pw.FontWeight.bold,
+                letterSpacing: 2,
+              ),
+            ),
+          )
               : pw.Opacity(
-                  opacity: 0.16,
-                  child: pw.Image(image, width: 430, fit: pw.BoxFit.contain),
-                ),
+            opacity: 0.16,
+            child: pw.Image(image, width: 430, fit: pw.BoxFit.contain),
+          ),
         ),
       ),
     );
@@ -150,102 +150,126 @@ class ExcelQuotationFormat {
   static pw.Widget logoWatermark() => watermarkImage(null);
 
   static pw.Widget header(Map<String, dynamic> q, pw.ImageProvider? logoImage) {
-    const companyName = 'Miraj Electrical & Mechanical Co. Pvt. Ltd.';
-    const address =
-        'Head Office: 2, Swastik Chambers, Ground Floor, C. S. T. Road, Chembur, Mumbai - 400 071.';
-    const contact = '+91 9082907433';
-    const email = 'memcosales@memcoin.com';
-    const website = 'www.memcoin.com';
-    const gst = '27AAACM8022D1ZU';
-    const pan = 'AAACM8022D';
-    const cin = 'U31200MH1982PTC026005';
-    const udyam = 'UDYAM-MH-19-0022252';
+    String valueFrom(List<String> keys) {
+      for (final key in keys) {
+        final value = q[key]?.toString().trim() ?? '';
+        if (value.isNotEmpty && value.toLowerCase() != 'null') {
+          return value;
+        }
+      }
+      return '';
+    }
+
+    final companyName = valueFrom([
+      'companyName',
+      'workspaceName',
+      'businessName',
+      'firmName',
+      'sellerName',
+    ]);
+
+    final address = valueFrom([
+      'companyAddress',
+      'registeredAddress',
+      'billingAddress',
+      'address',
+    ]);
+
+    final contact = valueFrom([
+      'companyPhone',
+      'companyMobile',
+      'phone',
+      'mobile',
+      'contact',
+    ]);
+
+    final email = valueFrom(['companyEmail', 'email']);
+
+    final website = valueFrom(['website', 'companyWebsite']);
+
+    final gst = valueFrom(['gst', 'gstin', 'companyGstin', 'gstNo']);
+
+    final pan = valueFrom(['pan', 'companyPan', 'panNo']);
+
+    final cin = valueFrom(['cin', 'companyCin']);
+
+    final udyam = valueFrom(['udyam', 'udyamNo', 'msmeNo']);
+
+    final contactLine = [
+      if (contact.isNotEmpty) 'Contact: $contact',
+      if (email.isNotEmpty) 'Email: $email',
+      if (website.isNotEmpty) 'Web: $website',
+    ].join(' | ');
+
+    final statutoryLine = [
+      if (gst.isNotEmpty) 'GSTIN: $gst',
+      if (pan.isNotEmpty) 'PAN: $pan',
+      if (cin.isNotEmpty) 'CIN: $cin',
+      if (udyam.isNotEmpty) 'UDYAM: $udyam',
+    ].join(' | ');
+
+    if (companyName.isEmpty &&
+        address.isEmpty &&
+        contactLine.isEmpty &&
+        statutoryLine.isEmpty &&
+        logoImage == null) {
+      return pw.SizedBox();
+    }
 
     return pw.Container(
       decoration: pw.BoxDecoration(
         border: pw.Border.all(color: PdfColors.black, width: 0.9),
       ),
       padding: const pw.EdgeInsets.fromLTRB(10, 8, 10, 8),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.center,
         children: [
-          pw.Row(
-            crossAxisAlignment: pw.CrossAxisAlignment.center,
-            children: [
-              pw.Expanded(
-                child: pw.Text(
-                  companyName,
-                  textAlign: pw.TextAlign.center,
-                  style: style(size: 16, bold: true, color: darkBrown),
-                ),
-              ),
-              pw.SizedBox(width: 10),
-              logoImage == null
-                  ? pw.Text(
-                      'MEMCO',
-                      style: pw.TextStyle(
-                        fontSize: 20,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.red800,
-                      ),
-                    )
-                  : pw.Container(
-                      width: 94,
-                      height: 40,
-                      alignment: pw.Alignment.center,
-                      child: pw.Image(logoImage, fit: pw.BoxFit.contain),
-                    ),
-            ],
-          ),
-          pw.SizedBox(height: 4),
-          pw.Text(
-            'AN ISO 45001:2018, 9001:2008 & 50001:2018 Certified Company',
-            textAlign: pw.TextAlign.center,
-            style: style(size: 7.5, bold: true),
-          ),
-          pw.SizedBox(height: 2),
-          pw.Text(
-            address,
-            textAlign: pw.TextAlign.center,
-            style: style(size: 7.3),
-          ),
-          pw.SizedBox(height: 2),
-          pw.Text(
-            'Contact: $contact  |  Email: $email  |  Web: $website',
-            textAlign: pw.TextAlign.center,
-            style: style(size: 7.3),
-          ),
-          pw.SizedBox(height: 2),
-          pw.Text(
-            'GSTIN: $gst  |  PAN: $pan  |  CIN: $cin  |  Udyam: $udyam',
-            textAlign: pw.TextAlign.center,
-            style: style(size: 7.2, bold: true),
+          if (logoImage != null)
+            pw.Container(
+              width: 72,
+              height: 58,
+              alignment: pw.Alignment.center,
+              child: pw.Image(logoImage, fit: pw.BoxFit.contain),
+            ),
+          if (logoImage != null) pw.SizedBox(width: 10),
+          pw.Expanded(
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              children: [
+                if (companyName.isNotEmpty)
+                  pw.Text(
+                    companyName,
+                    textAlign: pw.TextAlign.center,
+                    style: style(size: 14, bold: true),
+                  ),
+                if (address.isNotEmpty) ...[
+                  pw.SizedBox(height: 3),
+                  pw.Text(
+                    address,
+                    textAlign: pw.TextAlign.center,
+                    style: style(size: bodySize),
+                  ),
+                ],
+                if (contactLine.isNotEmpty) ...[
+                  pw.SizedBox(height: 3),
+                  pw.Text(
+                    contactLine,
+                    textAlign: pw.TextAlign.center,
+                    style: style(size: bodySize),
+                  ),
+                ],
+                if (statutoryLine.isNotEmpty) ...[
+                  pw.SizedBox(height: 3),
+                  pw.Text(
+                    statutoryLine,
+                    textAlign: pw.TextAlign.center,
+                    style: style(size: bodySize),
+                  ),
+                ],
+              ],
+            ),
           ),
         ],
-      ),
-    );
-  }
-
-  static pw.Widget _centerLine(
-    String text, {
-    double size = 8.4,
-    bool bold = false,
-    double height = 17,
-    PdfColor color = PdfColors.black,
-  }) {
-    return pw.Container(
-      height: height,
-      alignment: pw.Alignment.center,
-      decoration: const pw.BoxDecoration(
-        border: pw.Border(
-          top: pw.BorderSide(color: PdfColors.black, width: 0.45),
-          bottom: pw.BorderSide(color: PdfColors.black, width: 0.45),
-        ),
-      ),
-      child: pw.Text(
-        safe(text),
-        textAlign: pw.TextAlign.center,
-        style: style(size: size, bold: bold, color: color),
       ),
     );
   }
@@ -270,10 +294,10 @@ class ExcelQuotationFormat {
   }
 
   static pw.Widget infoBox(
-    Map<String, dynamic> q,
-    String docNo,
-    String docDate,
-  ) {
+      Map<String, dynamic> q,
+      String docNo,
+      String docDate,
+      ) {
     final customer = first(q, [
       'clientName',
       'customerName',
@@ -383,12 +407,12 @@ class ExcelQuotationFormat {
   }
 
   static pw.Widget _plainCell(
-    String text, {
-    bool bold = false,
-    pw.Alignment align = pw.Alignment.centerLeft,
-    double size = 8.4,
-    PdfColor? fill,
-  }) {
+      String text, {
+        bool bold = false,
+        pw.Alignment align = pw.Alignment.centerLeft,
+        double size = 8.4,
+        PdfColor? fill,
+      }) {
     return pw.Container(
       constraints: const pw.BoxConstraints(minHeight: 19),
       alignment: align,
@@ -696,13 +720,13 @@ class ExcelQuotationFormat {
     }
 
     pw.Widget cell(
-      String text, {
-      bool bold = false,
-      PdfColor? fill,
-      double size = 6.9,
-      pw.TextAlign align = pw.TextAlign.left,
-      double minHeight = 54,
-    }) {
+        String text, {
+          bool bold = false,
+          PdfColor? fill,
+          double size = 6.9,
+          pw.TextAlign align = pw.TextAlign.left,
+          double minHeight = 54,
+        }) {
       return pw.Container(
         constraints: pw.BoxConstraints(minHeight: minHeight),
         padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4),
@@ -857,14 +881,14 @@ class ExcelQuotationFormat {
   }
 
   static pw.Widget amountSummary(
-    Map<String, dynamic> q,
-    bool isInterState,
-    double roundOff,
-    List<dynamic> items,
-  ) {
+      Map<String, dynamic> q,
+      bool isInterState,
+      double roundOff,
+      List<dynamic> items,
+      ) {
     final itemsSubtotal = items.fold<double>(
       0,
-      (sum, item) => sum + readNum(item, 'subtotal'),
+          (sum, item) => sum + readNum(item, 'subtotal'),
     );
     final subtotal = numValue(q['totalSubtotal']);
     final taxable = numValue(q['totalTaxableAmount']);
@@ -925,39 +949,39 @@ class ExcelQuotationFormat {
 
     final rawTerms =
         q['terms'] ??
-        q['dynamicTerms'] ??
-        q['termsAndConditions'] ??
-        q['paymentTerms'];
+            q['dynamicTerms'] ??
+            q['termsAndConditions'] ??
+            q['paymentTerms'];
 
     if (rawTerms is List) {
       rows = rawTerms
           .map<Map<String, String>>((item) {
-            if (item is Map) {
-              final title = safe(
-                item['title'] ??
-                    item['name'] ??
-                    item['term'] ??
-                    item['label'] ??
-                    '',
-              ).trim();
+        if (item is Map) {
+          final title = safe(
+            item['title'] ??
+                item['name'] ??
+                item['term'] ??
+                item['label'] ??
+                '',
+          ).trim();
 
-              final value = safe(
-                item['value'] ??
-                    item['detail'] ??
-                    item['description'] ??
-                    item['text'] ??
-                    '',
-              ).trim();
+          final value = safe(
+            item['value'] ??
+                item['detail'] ??
+                item['description'] ??
+                item['text'] ??
+                '',
+          ).trim();
 
-              return {'title': title, 'value': value};
-            }
+          return {'title': title, 'value': value};
+        }
 
-            return {'title': '', 'value': safe(item)};
-          })
+        return {'title': '', 'value': safe(item)};
+      })
           .where((row) {
-            return (row['title'] ?? '').trim().isNotEmpty ||
-                (row['value'] ?? '').trim().isNotEmpty;
-          })
+        return (row['title'] ?? '').trim().isNotEmpty ||
+            (row['value'] ?? '').trim().isNotEmpty;
+      })
           .toList();
     }
 
@@ -997,7 +1021,7 @@ class ExcelQuotationFormat {
             ],
           ),
           ...rows.map(
-            (row) => pw.TableRow(
+                (row) => pw.TableRow(
               children: [
                 _plainCell(row['title'] ?? '', bold: true, size: 7.6),
                 _plainCell(row['value'] ?? '', size: 7.6),
@@ -1010,12 +1034,54 @@ class ExcelQuotationFormat {
   }
 
   static pw.Widget signature(Map<String, dynamic> q) {
-    const company = 'Miraj Electrical & Mechanical Co. Pvt. Ltd.';
-    const sigName = 'Faizan Khan';
-    const sigDesignation = 'Marketing Executive';
-    const sigPhone = '+91 7351248854';
-    const factory =
-        'Factory Address: Ansa A 1&2, Ansa Industrial Estate, Sakivihar Road, Sakinaka, Mumbai - 400 072.';
+    String valueFrom(List<String> keys) {
+      for (final key in keys) {
+        final value = q[key]?.toString().trim() ?? '';
+        if (value.isNotEmpty && value.toLowerCase() != 'null') {
+          return value;
+        }
+      }
+      return '';
+    }
+
+    final company = valueFrom([
+      'companyName',
+      'workspaceName',
+      'businessName',
+      'firmName',
+      'sellerName',
+    ]);
+
+    final sigName = valueFrom([
+      'signatureName',
+      'signatoryName',
+      'authorizedSignatory',
+      'authorisedSignatory',
+    ]);
+
+    final sigDesignation = valueFrom([
+      'signatureDesignation',
+      'signatoryDesignation',
+    ]);
+
+    final sigPhone = valueFrom([
+      'signaturePhone',
+      'signatureMobile',
+      'signatoryPhone',
+      'signatoryMobile',
+    ]);
+
+    final factory = valueFrom([
+      'factoryAddress',
+      'companyAddress',
+      'registeredAddress',
+      'address',
+    ]);
+
+    final signerLine = [
+      if (sigName.isNotEmpty) sigName,
+      if (sigDesignation.isNotEmpty) '($sigDesignation)',
+    ].join(' ');
 
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.stretch,
@@ -1031,46 +1097,37 @@ class ExcelQuotationFormat {
             mainAxisSize: pw.MainAxisSize.min,
             crossAxisAlignment: pw.CrossAxisAlignment.end,
             children: [
-              pw.Text('For $company', style: style(size: bodySize, bold: true)),
+              if (company.isNotEmpty)
+                pw.Text(
+                  'For $company',
+                  style: style(size: bodySize, bold: true),
+                ),
               pw.SizedBox(height: 4),
               pw.Text(
-                '$sigName ($sigDesignation)',
+                signerLine.isNotEmpty ? signerLine : 'Authorised Signatory',
                 style: style(size: bodySize, bold: true),
               ),
-              pw.Text(
-                'Contact No. $sigPhone',
-                style: style(size: bodySize, bold: true),
-              ),
+              if (sigPhone.isNotEmpty)
+                pw.Text(
+                  'Contact No. $sigPhone',
+                  style: style(size: bodySize, bold: true),
+                ),
             ],
           ),
         ),
-        pw.Container(
-          height: 31,
-          alignment: pw.Alignment.center,
-          decoration: pw.BoxDecoration(
-            border: pw.Border.all(color: PdfColors.black, width: 0.55),
+        if (factory.isNotEmpty)
+          pw.Container(
+            height: 31,
+            alignment: pw.Alignment.center,
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColors.black, width: 0.55),
+            ),
+            child: pw.Text(
+              factory,
+              textAlign: pw.TextAlign.center,
+              style: style(size: bodySize, bold: true),
+            ),
           ),
-          child: pw.Text(
-            factory,
-            textAlign: pw.TextAlign.center,
-            style: style(size: bodySize, bold: true),
-          ),
-        ),
-        pw.Container(
-          height: 18,
-          decoration: pw.BoxDecoration(
-            color: peach,
-            border: pw.Border.all(color: PdfColors.black, width: 0.55),
-          ),
-        ),
-        pw.Container(
-          height: 31,
-          alignment: pw.Alignment.center,
-          decoration: pw.BoxDecoration(
-            border: pw.Border.all(color: PdfColors.black, width: 0.55),
-          ),
-          child: pw.Text('MAKE IN INDIA', style: style(size: 10.5, bold: true)),
-        ),
       ],
     );
   }
