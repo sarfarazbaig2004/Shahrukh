@@ -9,7 +9,6 @@ import 'package:QUIK/auth/register/register_screen_local.dart';
 import 'package:QUIK/core/theme/app_theme.dart';
 import 'package:QUIK/modules/notifications/screen_notification_center.dart';
 import 'package:QUIK/modules/settings/screen_company_profile_bank_settings.dart';
-import 'package:QUIK/modules/settings/quotation_settings_screen.dart';
 import 'package:QUIK/modules/settings/letterhead_settings_screen.dart';
 
 enum _SettingsSection { personal, workspace, access, system, danger }
@@ -220,11 +219,11 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
           .collection('companies')
           .doc(widget.companyId)
           .update({
-            'companyLogoUrl': downloadUrl,
-            'logoUrl': downloadUrl,
-            'updatedAt': FieldValue.serverTimestamp(),
-            'updatedBy': user.uid,
-          });
+        'companyLogoUrl': downloadUrl,
+        'logoUrl': downloadUrl,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'updatedBy': user.uid,
+      });
 
       if (mounted) {
         setState(() {
@@ -315,11 +314,11 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
           .collection('companies')
           .doc(widget.companyId)
           .update({
-            'companyLogoUrl': FieldValue.delete(),
-            'logoUrl': FieldValue.delete(),
-            'updatedAt': FieldValue.serverTimestamp(),
-            'updatedBy': user?.uid,
-          });
+        'companyLogoUrl': FieldValue.delete(),
+        'logoUrl': FieldValue.delete(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'updatedBy': user?.uid,
+      });
 
       if (mounted) {
         setState(() => _isUploadingLogo = false);
@@ -490,7 +489,7 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
         _ActionTile(
           title: 'My Profile',
           subtitle:
-              'View and update the same company and registration details already saved in your workspace.',
+          'View and update the same company and registration details already saved in your workspace.',
           icon: Icons.person_outline,
           onTap: () async {
             await Navigator.of(context).push(
@@ -513,7 +512,7 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
         _ActionTile(
           title: 'Notification Center',
           subtitle:
-              'View alerts, reminders, task updates, and meeting invitations.',
+          'View alerts, reminders, task updates, and meeting invitations.',
           icon: Icons.notifications_active_outlined,
           onTap: () async {
             await Navigator.of(context).push(
@@ -544,7 +543,7 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
         final String? rawLogoUrl =
             data['companyLogoUrl'] as String? ?? data['logoUrl'] as String?;
         final String? logoUrl =
-            (rawLogoUrl != null && rawLogoUrl.trim().isNotEmpty)
+        (rawLogoUrl != null && rawLogoUrl.trim().isNotEmpty)
             ? rawLogoUrl.trim()
             : null;
 
@@ -555,7 +554,7 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
         return _SectionPanel(
           title: 'Workspace Overview',
           subtitle:
-              'Company-level settings, identity, and workspace information.',
+          'Company-level settings, identity, and workspace information.',
           children: [
             Container(
               padding: const EdgeInsets.all(16),
@@ -592,21 +591,21 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
                             ),
                             child: logoUrl != null
                                 ? Image.network(
-                                    logoUrl, // ❌ NO Cache Buster Strings
-                                    fit: BoxFit.contain,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return const Icon(
-                                        Icons.business_outlined,
-                                        size: 40,
-                                        color: zMuted,
-                                      );
-                                    },
-                                  )
+                              logoUrl, // ❌ NO Cache Buster Strings
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) {
+                                return const Icon(
+                                  Icons.business_outlined,
+                                  size: 40,
+                                  color: zMuted,
+                                );
+                              },
+                            )
                                 : const Icon(
-                                    Icons.business_outlined,
-                                    size: 40,
-                                    color: zMuted,
-                                  ),
+                              Icons.business_outlined,
+                              size: 40,
+                              color: zMuted,
+                            ),
                           ),
                           if (_isUploadingLogo)
                             Container(
@@ -646,9 +645,9 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
                               children: [
                                 _StatusBadge(
                                   text:
-                                      data['industry']
-                                          ?.toString()
-                                          .toUpperCase() ??
+                                  data['industry']
+                                      ?.toString()
+                                      .toUpperCase() ??
                                       'INDUSTRY NOT SET',
                                   color: zPurple,
                                   bgColor: zPurpleSoft,
@@ -806,7 +805,7 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
               _ActionTile(
                 title: 'Company Profile & Banking',
                 subtitle:
-                    'Manage company identity, GST, PAN, address, billing information, and multiple bank accounts.',
+                'Manage company identity, GST, PAN, address, billing information, and multiple bank accounts.',
                 icon: Icons.apartment_outlined,
                 enabled: canOpenCompanyProfile,
                 onTap: () async {
@@ -821,57 +820,38 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
               ),
             if (!isExportImport) ...[
               _ActionTile(
-                title: 'Quotation Settings',
-                subtitle:
-                    'Upload quotation letterhead and configure quotation print options.',
-                icon: Icons.receipt_long_outlined,
-                enabled: isAdminOrManager,
-                onTap: () async {
-                  await Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => QuotationSettingsScreen(
-                        companyId: widget.companyId,
-                        currentUserUid:
-                            FirebaseAuth.instance.currentUser?.uid ?? '',
-                        currentUserName: widget.userEmail,
-                      ),
-                    ),
-                  );
-                },
-              ),
-              _ActionTile(
                 title: 'Branches & Locations',
                 subtitle:
-                    'Manage branch structure, warehouses, and branch-level setup.',
+                'Manage branch structure, warehouses, and branch-level setup.',
                 icon: Icons.account_tree_outlined,
                 enabled: isAdminOrManager,
                 onTap: () => _showComingSoon('Branches'),
               ),
               _ActionTile(
-                title: 'Letterhead Settings',
+                title: 'Letter Head Layout',
                 subtitle:
-                    'Upload company letterhead and define reusable print positions for documents.',
-                icon: Icons.article_outlined,
+                'Configure the Letter Head layout, printable area, margins, and upload the company letterhead.',
+                icon: Icons.dashboard_customize_outlined,
                 enabled: isAdminOrManager,
                 onTap: isAdminOrManager
                     ? () async {
-                        await Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => LetterheadSettingsScreen(
-                              companyId: widget.companyId,
-                              currentUserUid:
-                                  FirebaseAuth.instance.currentUser?.uid ?? '',
-                              currentUserName: widget.userEmail,
-                            ),
-                          ),
-                        );
-                      }
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => LetterheadSettingsScreen(
+                        companyId: widget.companyId,
+                        currentUserUid:
+                        FirebaseAuth.instance.currentUser?.uid ?? '',
+                        currentUserName: widget.userEmail,
+                      ),
+                    ),
+                  );
+                }
                     : null,
               ),
               _ActionTile(
                 title: 'Document Numbering',
                 subtitle:
-                    'Control quotation, invoice, and sales order numbering formats.',
+                'Control quotation, invoice, and sales order numbering formats.',
                 icon: Icons.numbers_outlined,
                 enabled: isAdminOrManager,
                 onTap: () => _showComingSoon('Document Numbering'),
@@ -938,7 +918,7 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
           _ActionTile(
             title: 'Security Policies',
             subtitle:
-                'Future controls for session rules and account protection.',
+            'Future controls for session rules and account protection.',
             icon: Icons.security_outlined,
             enabled: isAdminOrManager,
             onTap: () => _showComingSoon('Security Policies'),
@@ -956,7 +936,7 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
         _ActionTile(
           title: 'Delete Account',
           subtitle:
-              'Permanently delete your login and remove your root user profile.',
+          'Permanently delete your login and remove your root user profile.',
           icon: Icons.delete_forever_outlined,
           isDanger: true,
           onTap: () => _showDeleteDialog(context),
@@ -1148,13 +1128,13 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
                   onPressed: saving ? null : submit,
                   child: saving
                       ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
                       : const Text('Update Password'),
                 ),
               ],
@@ -1297,13 +1277,13 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
                   onPressed: deleting ? null : submitDelete,
                   child: deleting
                       ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
                       : const Text('Delete Permanently'),
                 ),
               ],
