@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'package:QUIK/modules/administration/users/helpers/user_management_constants.dart';
 import 'package:QUIK/modules/administration/users/helpers/user_management_formatters.dart';
@@ -7,7 +8,7 @@ import 'package:QUIK/modules/administration/users/widgets/mini_badge.dart';
 
 typedef UserDoc = QueryDocumentSnapshot<Map<String, dynamic>>;
 
-class DesktopUserTable extends StatelessWidget {
+class DesktopUserTable extends StatefulWidget {
   final List<UserDoc> pageDocs;
   final String currentUid;
 
@@ -37,6 +38,67 @@ class DesktopUserTable extends StatelessWidget {
     this.onRestore,
     this.onPermanentDelete,
   });
+  @override
+  State<DesktopUserTable> createState() => _DesktopUserTableState();
+}
+
+class _DesktopUserTableState extends State<DesktopUserTable> {
+  final ScrollController _horizontalScrollController = ScrollController();
+  final FocusNode _tableFocusNode = FocusNode(debugLabel: 'DesktopUserTable');
+
+  static const double _keyboardScrollStep = 160;
+
+  List<UserDoc> get pageDocs => widget.pageDocs;
+  String get currentUid => widget.currentUid;
+  bool get sortAscending => widget.sortAscending;
+  int? get sortColumnIndex => widget.sortColumnIndex;
+
+  void Function(int, String) get onSort => widget.onSort;
+  Future<void> Function(UserDoc) get onView => widget.onView;
+  Future<void> Function(UserDoc) get onEdit => widget.onEdit;
+  Future<void> Function(UserDoc) get onToggle => widget.onToggle;
+  Future<void> Function(UserDoc) get onDelete => widget.onDelete;
+
+  Future<void> Function(UserDoc)? get onRestore => widget.onRestore;
+  Future<void> Function(UserDoc)? get onPermanentDelete =>
+      widget.onPermanentDelete;
+
+  KeyEventResult _handleHorizontalKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is KeyUpEvent || !_horizontalScrollController.hasClients) {
+      return KeyEventResult.ignored;
+    }
+
+    double delta;
+
+    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      delta = -_keyboardScrollStep;
+    } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      delta = _keyboardScrollStep;
+    } else {
+      return KeyEventResult.ignored;
+    }
+
+    final position = _horizontalScrollController.position;
+
+    final targetOffset = (_horizontalScrollController.offset + delta)
+        .clamp(position.minScrollExtent, position.maxScrollExtent)
+        .toDouble();
+
+    _horizontalScrollController.animateTo(
+      targetOffset,
+      duration: const Duration(milliseconds: 120),
+      curve: Curves.easeOut,
+    );
+
+    return KeyEventResult.handled;
+  }
+
+  @override
+  void dispose() {
+    _horizontalScrollController.dispose();
+    _tableFocusNode.dispose();
+    super.dispose();
+  }
 
   static const double _tableMinWidth = 1040;
 
@@ -59,29 +121,45 @@ class DesktopUserTable extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(18),
-        child: Scrollbar(
-          thumbVisibility: true,
-          radius: const Radius.circular(999),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: _tableMinWidth),
-              child: Theme(
-                data: Theme.of(context).copyWith(dividerColor: cardBorderColor),
-                child: DataTable(
-                  sortAscending: sortAscending,
-                  sortColumnIndex: sortColumnIndex,
-                  headingRowHeight: 50,
-                  dataRowMinHeight: 64,
-                  dataRowMaxHeight: 70,
-                  columnSpacing: 20,
-                  horizontalMargin: 16,
-                  dividerThickness: 0.7,
-                  headingRowColor: WidgetStateProperty.all(
-                    const Color(0xFFF8FAFC),
+        child: Focus(
+          focusNode: _tableFocusNode,
+          autofocus: true,
+          onKeyEvent: _handleHorizontalKeyEvent,
+          child: Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: (_) => _tableFocusNode.requestFocus(),
+            child: Scrollbar(
+              controller: _horizontalScrollController,
+              thumbVisibility: true,
+              trackVisibility: true,
+              interactive: true,
+              scrollbarOrientation: ScrollbarOrientation.bottom,
+              radius: const Radius.circular(999),
+              child: SingleChildScrollView(
+                controller: _horizontalScrollController,
+                scrollDirection: Axis.horizontal,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: _tableMinWidth),
+                  child: Theme(
+                    data: Theme.of(
+                      context,
+                    ).copyWith(dividerColor: cardBorderColor),
+                    child: DataTable(
+                      sortAscending: sortAscending,
+                      sortColumnIndex: sortColumnIndex,
+                      headingRowHeight: 50,
+                      dataRowMinHeight: 64,
+                      dataRowMaxHeight: 70,
+                      columnSpacing: 20,
+                      horizontalMargin: 16,
+                      dividerThickness: 0.7,
+                      headingRowColor: WidgetStateProperty.all(
+                        const Color(0xFFF8FAFC),
+                      ),
+                      columns: _buildColumns(),
+                      rows: pageDocs.map(_buildRow).toList(),
+                    ),
                   ),
-                  columns: _buildColumns(),
-                  rows: pageDocs.map(_buildRow).toList(),
                 ),
               ),
             ),
