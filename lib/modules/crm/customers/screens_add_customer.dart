@@ -9,6 +9,7 @@ import 'package:QUIK/modules/crm/customers/customer_duplicate_helper.dart';
 import 'package:QUIK/modules/crm/customers/customer_duplicate_search_service.dart';
 import 'package:QUIK/modules/crm/customers/screens_customer_360.dart';
 import 'package:QUIK/modules/crm/customers/widgets/customer_duplicate_lookup_field.dart';
+import 'package:QUIK/modules/crm/customers/customer_country_currency_catalog.dart';
 
 // --- PRODUCTION SAFE ID GENERATOR ---
 String _generateSecureId() {
@@ -60,6 +61,130 @@ bool _isValidGst(String gst) {
   final panPart = gst.substring(2, 12);
   if (!_isValidPan(panPart)) return false;
   return true;
+}
+
+String _buildInternationalPhoneValue({
+  required String countryCode,
+  required String phone,
+}) {
+  final raw = phone.trim();
+  if (raw.isEmpty) return '';
+  if (raw.startsWith('+')) return raw.replaceAll(RegExp(r'[^0-9+]'), '');
+
+  final digits = raw.replaceAll(RegExp(r'\D'), '');
+  if (digits.isEmpty) return '';
+
+  final country = CustomerCountryCurrencyCatalog.byCode(countryCode);
+  final callingDigits = country.callingCode.replaceAll(RegExp(r'\D'), '');
+  if (callingDigits.isEmpty) return digits;
+
+  return '+$callingDigits$digits';
+}
+
+Future<T?> _showSearchPicker<T>({
+  required BuildContext context,
+  required String title,
+  required String searchHint,
+  required List<T> items,
+  required String Function(T item) searchText,
+  required Widget Function(T item) itemBuilder,
+}) async {
+  final searchController = TextEditingController();
+
+  try {
+    return await showDialog<T>(
+      context: context,
+      builder: (dialogContext) {
+        String query = '';
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final normalizedQuery = query.trim().toLowerCase();
+            final filteredItems = normalizedQuery.isEmpty
+                ? items
+                : items.where((item) {
+              return searchText(item).toLowerCase().contains(normalizedQuery);
+            }).toList();
+
+            final mediaSize = MediaQuery.sizeOf(context);
+            final dialogHeight = (mediaSize.height * 0.72).clamp(320.0, 620.0).toDouble();
+            final dialogWidth = min(mediaSize.width - 40, 520.0);
+
+            return AlertDialog(
+              insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              titlePadding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
+              contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+              title: Text(
+                title,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+              content: SizedBox(
+                width: dialogWidth,
+                height: dialogHeight,
+                child: Column(
+                  children: [
+                    TextField(
+                      controller: searchController,
+                      autofocus: true,
+                      onChanged: (value) => setDialogState(() => query = value),
+                      decoration: _inputDecoration(
+                        label: 'Search',
+                        icon: Icons.search,
+                        hint: searchHint,
+                      ).copyWith(
+                        suffixIcon: query.isEmpty
+                            ? null
+                            : IconButton(
+                          tooltip: 'Clear search',
+                          onPressed: () {
+                            searchController.clear();
+                            setDialogState(() => query = '');
+                          },
+                          icon: const Icon(Icons.close, size: 18),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: filteredItems.isEmpty
+                          ? const Center(
+                        child: Text(
+                          'No matching option found.',
+                          style: TextStyle(color: Color(0xFF64748B)),
+                        ),
+                      )
+                          : ListView.separated(
+                        itemCount: filteredItems.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final item = filteredItems[index];
+                          return InkWell(
+                            onTap: () => Navigator.of(dialogContext).pop(item),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                              child: itemBuilder(item),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  } finally {
+    searchController.dispose();
+  }
 }
 
 Map<String, dynamic> _sanitizePayload(Map<String, dynamic> payload) {
@@ -126,28 +251,143 @@ void _logError({
   } catch (_) {}
 }
 
-// --- GLOBAL UI HELPERS FOR PERFORMANCE ISOLATION ---
-InputDecoration _inputDecoration({required String label, required IconData icon, String? hint}) {
+// --- ENTERPRISE FORM UI SYSTEM ---
+const Color _pageBackground = Color(0xFFF4F6F8);
+const Color _surfaceColor = Colors.white;
+const Color _borderColor = Color(0xFFD9E1EA);
+const Color _dividerColor = Color(0xFFE8EDF3);
+const Color _primaryColor = Color(0xFF2563EB);
+const Color _textPrimary = Color(0xFF0F172A);
+const Color _textSecondary = Color(0xFF64748B);
+
+const TextStyle _formFieldTextStyle = TextStyle(
+  fontSize: 13,
+  fontWeight: FontWeight.w500,
+  color: _textPrimary,
+  height: 1.2,
+);
+
+String _cleanFieldLabel(String label) {
+  return label.replaceAll('*', '').trim();
+}
+
+bool _isRequiredField(String label) => label.contains('*');
+
+InputDecoration _inputDecoration({
+  String? label,
+  IconData? icon,
+  String? hint,
+  Widget? suffixIcon,
+}) {
+  const borderRadius = BorderRadius.all(Radius.circular(6));
+
   return InputDecoration(
-    labelText: label,
     hintText: hint,
-    prefixIcon: Icon(icon, size: 20),
+    hintStyle: const TextStyle(
+      fontSize: 12.5,
+      fontWeight: FontWeight.w400,
+      color: Color(0xFF94A3B8),
+    ),
+    prefixIcon: icon == null
+        ? null
+        : Icon(icon, size: 17, color: _textSecondary),
+    prefixIconConstraints: icon == null
+        ? null
+        : const BoxConstraints(minWidth: 36, minHeight: 40),
+    suffixIcon: suffixIcon,
+    suffixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 40),
     filled: true,
     fillColor: Colors.white,
     isDense: true,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
-    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
-    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.blue.shade600, width: 1.2)),
-    errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.red.shade400)),
-    focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.red.shade400, width: 1.2)),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+    constraints: const BoxConstraints(minHeight: 40),
+    border: const OutlineInputBorder(
+      borderRadius: borderRadius,
+      borderSide: BorderSide(color: _borderColor, width: 1),
+    ),
+    enabledBorder: const OutlineInputBorder(
+      borderRadius: borderRadius,
+      borderSide: BorderSide(color: _borderColor, width: 1),
+    ),
+    disabledBorder: const OutlineInputBorder(
+      borderRadius: borderRadius,
+      borderSide: BorderSide(color: _dividerColor, width: 1),
+    ),
+    focusedBorder: const OutlineInputBorder(
+      borderRadius: borderRadius,
+      borderSide: BorderSide(color: _primaryColor, width: 1.25),
+    ),
+    errorBorder: const OutlineInputBorder(
+      borderRadius: borderRadius,
+      borderSide: BorderSide(color: Color(0xFFEF4444), width: 1),
+    ),
+    focusedErrorBorder: const OutlineInputBorder(
+      borderRadius: borderRadius,
+      borderSide: BorderSide(color: Color(0xFFDC2626), width: 1.25),
+    ),
+    errorStyle: const TextStyle(fontSize: 10.5, height: 1.1),
   );
+}
+
+class _FieldLabel extends StatelessWidget {
+  final String label;
+
+  const _FieldLabel(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 1, bottom: 5),
+      child: RichText(
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        text: TextSpan(
+          style: const TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF475569),
+            height: 1.1,
+          ),
+          children: [
+            TextSpan(text: _cleanFieldLabel(label)),
+            if (_isRequiredField(label))
+              const TextSpan(
+                text: ' *',
+                style: TextStyle(color: Color(0xFFDC2626)),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LabeledControl extends StatelessWidget {
+  final String label;
+  final Widget child;
+
+  const _LabeledControl({
+    required this.label,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _FieldLabel(label),
+        child,
+      ],
+    );
+  }
 }
 
 Widget _buildTextField({
   required TextEditingController controller,
   required String label,
-  required IconData icon,
+  IconData? icon,
   String? hint,
   TextInputType? keyboardType,
   String? Function(String?)? validator,
@@ -156,43 +396,90 @@ Widget _buildTextField({
   bool enabled = true,
   TextCapitalization textCapitalization = TextCapitalization.none,
 }) {
-  return TextFormField(
-    controller: controller,
-    decoration: _inputDecoration(label: label, icon: icon, hint: hint),
-    keyboardType: keyboardType,
-    maxLines: maxLines,
-    validator: validator,
-    onChanged: onChanged,
-    enabled: enabled,
-    textCapitalization: textCapitalization,
+  return _LabeledControl(
+    label: label,
+    child: TextFormField(
+      controller: controller,
+      decoration: _inputDecoration(hint: hint),
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      minLines: maxLines > 1 ? maxLines : 1,
+      validator: validator,
+      onChanged: onChanged,
+      enabled: enabled,
+      textCapitalization: textCapitalization,
+      style: _formFieldTextStyle,
+      cursorHeight: 17,
+    ),
+  );
+}
+
+Widget _buildDropdownField<T>({
+  required String label,
+  required T? value,
+  required List<DropdownMenuItem<T>> items,
+  required ValueChanged<T?>? onChanged,
+  String? Function(T?)? validator,
+}) {
+  return _LabeledControl(
+    label: label,
+    child: DropdownButtonFormField<T>(
+      value: value,
+      isExpanded: true,
+      style: _formFieldTextStyle,
+      icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
+      decoration: _inputDecoration(),
+      dropdownColor: Colors.white,
+      items: items,
+      onChanged: onChanged,
+      validator: validator,
+    ),
   );
 }
 
 class _ResponsiveRow extends StatelessWidget {
   final List<Widget> children;
-  const _ResponsiveRow({Key? key, required this.children}) : super(key: key);
+  final double minChildWidth;
+  final double spacing;
+
+  const _ResponsiveRow({
+    super.key,
+    required this.children,
+    this.minChildWidth = 220,
+    this.spacing = 12,
+  });
 
   @override
   Widget build(BuildContext context) {
+    if (children.isEmpty) return const SizedBox.shrink();
+    if (children.length == 1) return children.first;
+
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isStacked = constraints.maxWidth < 700;
+        final requiredWidth =
+            (children.length * minChildWidth) +
+                ((children.length - 1) * spacing);
+        final isStacked = constraints.maxWidth < requiredWidth;
+
         if (isStacked) {
           return Column(
             children: [
               for (int i = 0; i < children.length; i++) ...[
                 children[i],
-                if (i != children.length - 1) const SizedBox(height: 12),
+                if (i != children.length - 1)
+                  SizedBox(height: spacing),
               ],
             ],
           );
         }
+
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             for (int i = 0; i < children.length; i++) ...[
               Expanded(child: children[i]),
-              if (i != children.length - 1) const SizedBox(width: 12),
+              if (i != children.length - 1)
+                SizedBox(width: spacing),
             ],
           ],
         );
@@ -203,41 +490,447 @@ class _ResponsiveRow extends StatelessWidget {
 
 class _SectionBlock extends StatelessWidget {
   final String title;
-  final String subtitle;
   final Widget child;
+  final Widget? trailing;
+  final bool showDivider;
 
   const _SectionBlock({
+    super.key,
     required this.title,
-    required this.subtitle,
     required this.child,
+    this.trailing,
+    this.showDivider = true,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.shade200, width: 0.9),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.015), blurRadius: 10, offset: const Offset(0, 4))]
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.black87)),
-          const SizedBox(height: 4),
-          Text(subtitle, style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600)),
-          const SizedBox(height: 20),
+          Row(
+            children: [
+              Container(
+                width: 3,
+                height: 18,
+                decoration: BoxDecoration(
+                  color: _primaryColor,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w800,
+                    color: _textPrimary,
+                    letterSpacing: -0.15,
+                  ),
+                ),
+              ),
+              if (trailing != null) trailing!,
+            ],
+          ),
+          const SizedBox(height: 14),
           child,
+          if (showDivider) ...[
+            const SizedBox(height: 20),
+            const Divider(height: 1, thickness: 1, color: _dividerColor),
+          ],
         ],
       ),
     );
   }
 }
 
-// --- STATE MODEL ---
+class _SubsectionLabel extends StatelessWidget {
+  final String text;
+
+  const _SubsectionLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 9),
+      child: Text(
+        text.toUpperCase(),
+        style: const TextStyle(
+          fontSize: 10.5,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.7,
+          color: _textSecondary,
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionNavigationItem {
+  final String label;
+  final VoidCallback onTap;
+
+  const _SectionNavigationItem({
+    required this.label,
+    required this.onTap,
+  });
+}
+
+class _SectionNavigation extends StatelessWidget {
+  final List<_SectionNavigationItem> items;
+
+  const _SectionNavigation({required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 42,
+      alignment: Alignment.centerLeft,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          top: BorderSide(color: _dividerColor, width: 1),
+          bottom: BorderSide(color: _dividerColor, width: 1),
+        ),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Row(
+          children: [
+            for (int i = 0; i < items.length; i++) ...[
+              TextButton(
+                onPressed: items[i].onTap,
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF334155),
+                  minimumSize: const Size(0, 32),
+                  padding: const EdgeInsets.symmetric(horizontal: 11),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                child: Text(items[i].label),
+              ),
+              if (i != items.length - 1)
+                const SizedBox(width: 2),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CountryPickerField extends StatelessWidget {
+  final CustomerCountryOption value;
+  final String label;
+  final ValueChanged<CustomerCountryOption> onChanged;
+
+  const _CountryPickerField({
+    required this.value,
+    required this.label,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return FormField<String>(
+      key: ValueKey(value.isoCode),
+      initialValue: value.isoCode,
+      validator: (_) => value.isoCode.trim().isEmpty
+          ? 'Please select a country'
+          : null,
+      builder: (field) {
+        return _LabeledControl(
+          label: label,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(6),
+            onTap: () async {
+              final selected =
+              await _showSearchPicker<CustomerCountryOption>(
+                context: context,
+                title: 'Select Country',
+                searchHint: 'Search country, ISO code or calling code',
+                items: CustomerCountryCurrencyCatalog.countries,
+                searchText: (country) =>
+                '${country.name} ${country.isoCode} ${country.callingCode}',
+                itemBuilder: (country) => ListTile(
+                  dense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                  leading: Text(
+                    country.flagEmoji,
+                    style: const TextStyle(fontSize: 22),
+                  ),
+                  title: Text(
+                    country.name,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    '${country.isoCode} • ${country.callingCode.isEmpty ? 'No calling code' : country.callingCode}',
+                  ),
+                  trailing: Text(
+                    country.currencyCode,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF475569),
+                    ),
+                  ),
+                ),
+              );
+              if (selected == null) return;
+              field.didChange(selected.isoCode);
+              onChanged(selected);
+            },
+            child: InputDecorator(
+              isEmpty: false,
+              decoration: _inputDecoration(
+                suffixIcon: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 18,
+                ),
+              ).copyWith(errorText: field.errorText),
+              child: Row(
+                children: [
+                  Text(value.flagEmoji, style: const TextStyle(fontSize: 16)),
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Text(
+                      '${value.name} (${value.isoCode})',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _formFieldTextStyle,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _CurrencyPickerField extends StatelessWidget {
+  final CustomerCurrencyOption value;
+  final ValueChanged<CustomerCurrencyOption> onChanged;
+
+  const _CurrencyPickerField({
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return FormField<String>(
+      key: ValueKey(value.code),
+      initialValue: value.code,
+      validator: (_) => value.code.trim().isEmpty || value.code == 'XXX'
+          ? 'Please select a valid currency'
+          : null,
+      builder: (field) {
+        return _LabeledControl(
+          label: 'Default Currency *',
+          child: InkWell(
+            borderRadius: BorderRadius.circular(6),
+            onTap: () async {
+              final selected =
+              await _showSearchPicker<CustomerCurrencyOption>(
+                context: context,
+                title: 'Select Customer Currency',
+                searchHint: 'Search currency name, code or symbol',
+                items: CustomerCountryCurrencyCatalog.currencies
+                    .where((currency) => currency.code != 'XXX')
+                    .toList(),
+                searchText: (currency) =>
+                '${currency.name} ${currency.code} ${currency.symbol}',
+                itemBuilder: (currency) => ListTile(
+                  dense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                  leading: Container(
+                    width: 38,
+                    height: 38,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      currency.symbol,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  title: Text(
+                    currency.name,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(currency.code),
+                ),
+              );
+              if (selected == null) return;
+              field.didChange(selected.code);
+              onChanged(selected);
+            },
+            child: InputDecorator(
+              isEmpty: false,
+              decoration: _inputDecoration(
+                suffixIcon: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 18,
+                ),
+              ).copyWith(errorText: field.errorText),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 26,
+                    child: Text(
+                      value.symbol,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF334155),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Text(
+                      '${value.code} • ${value.name}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _formFieldTextStyle,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _InternationalPhoneField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final String countryCode;
+  final ValueChanged<CustomerCountryOption> onCountryChanged;
+  final String? Function(String?)? validator;
+  final ValueChanged<String>? onChanged;
+
+  const _InternationalPhoneField({
+    required this.controller,
+    required this.label,
+    required this.countryCode,
+    required this.onCountryChanged,
+    this.validator,
+    this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final country = CustomerCountryCurrencyCatalog.byCode(countryCode);
+
+    return _LabeledControl(
+      label: label,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 104,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(6),
+              onTap: () async {
+                final selected =
+                await _showSearchPicker<CustomerCountryOption>(
+                  context: context,
+                  title: 'Select Phone Country',
+                  searchHint: 'Search country or calling code',
+                  items: CustomerCountryCurrencyCatalog.countries,
+                  searchText: (item) =>
+                  '${item.name} ${item.isoCode} ${item.callingCode}',
+                  itemBuilder: (item) => ListTile(
+                    dense: true,
+                    contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 8),
+                    leading: Text(
+                      item.flagEmoji,
+                      style: const TextStyle(fontSize: 22),
+                    ),
+                    title: Text(
+                      item.name,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    trailing: Text(
+                      item.callingCode.isEmpty ? '—' : item.callingCode,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                );
+                if (selected != null) onCountryChanged(selected);
+              },
+              child: InputDecorator(
+                isEmpty: false,
+                decoration: _inputDecoration(),
+                child: Row(
+                  children: [
+                    Text(
+                      country.flagEmoji,
+                      style: const TextStyle(fontSize: 15),
+                    ),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        country.callingCode.isEmpty
+                            ? country.isoCode
+                            : country.callingCode,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12.3,
+                          fontWeight: FontWeight.w700,
+                          color: _textPrimary,
+                        ),
+                      ),
+                    ),
+                    const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 16,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextFormField(
+              controller: controller,
+              decoration: _inputDecoration(hint: 'Enter phone number'),
+              keyboardType: TextInputType.phone,
+              validator: validator,
+              onChanged: onChanged,
+              style: _formFieldTextStyle,
+              cursorHeight: 17,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _AddressItem {
   final String id;
   DateTime createdAt;
@@ -255,10 +948,12 @@ class _AddressItem {
   final TextEditingController stateController;
   final TextEditingController pincodeController;
   final TextEditingController countryController;
+  String countryCode;
 
   final TextEditingController gstController;
   final TextEditingController contactPersonController;
   final TextEditingController contactPhoneController;
+  String contactPhoneCountryCode;
   final TextEditingController contactEmailController;
 
   List<String> tags;
@@ -271,7 +966,6 @@ class _AddressItem {
   bool isDispatchAddress;
   bool isServiceAddress;
 
-  final TextEditingController tagInputController = TextEditingController();
   final ValueNotifier<String> summaryNotifier = ValueNotifier('');
 
   late final Map<String, dynamic> _originalState;
@@ -292,9 +986,11 @@ class _AddressItem {
     String state = '',
     String pincode = '',
     String country = 'India',
+    String countryCode = '',
     String gst = '',
     String contactPerson = '',
     String contactPhone = '',
+    String contactPhoneCountryCode = '',
     String contactEmail = '',
     List<String>? tags,
     this.isPrimary = false,
@@ -308,13 +1004,27 @@ class _AddressItem {
   })  : id = id ?? _generateSecureId(),
         createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now(),
+        countryCode = CustomerCountryCurrencyCatalog.resolve(
+          code: countryCode,
+          name: country,
+        ).isoCode,
+        contactPhoneCountryCode = CustomerCountryCurrencyCatalog.resolve(
+          code: contactPhoneCountryCode,
+          name: contactPhoneCountryCode.trim().isEmpty ? country : null,
+          fallbackCode: CustomerCountryCurrencyCatalog.resolve(
+            code: countryCode,
+            name: country,
+          ).isoCode,
+        ).isoCode,
         tags = tags ?? [],
         customTypeController = TextEditingController(text: customType),
         streetController = TextEditingController(text: street),
         cityController = TextEditingController(text: city),
         stateController = TextEditingController(text: state),
         pincodeController = TextEditingController(text: pincode),
-        countryController = TextEditingController(text: country),
+        countryController = TextEditingController(
+          text: CustomerCountryCurrencyCatalog.resolve(code: countryCode, name: country).name,
+        ),
         gstController = TextEditingController(text: gst),
         contactPersonController = TextEditingController(text: contactPerson),
         contactPhoneController = TextEditingController(text: contactPhone),
@@ -332,9 +1042,11 @@ class _AddressItem {
       'state': stateController.text.trim(),
       'pincode': pincodeController.text.trim(),
       'country': countryController.text.trim(),
+      'countryCode': countryCode,
       'gst': gstController.text.trim().toUpperCase(),
       'contactPerson': contactPersonController.text.trim(),
       'contactPhone': contactPhoneController.text.trim(),
+      'contactPhoneCountryCode': contactPhoneCountryCode,
       'contactEmail': contactEmailController.text.trim(),
       'tags': tags.join(','),
       'isPrimary': isPrimary,
@@ -382,6 +1094,7 @@ class _AddressItem {
   }
 
   void _onGstChanged() {
+    if (countryCode != 'IN') return;
     final gst = gstController.text.trim().toUpperCase();
     if (gst.length >= 2) {
       final code = gst.substring(0, 2);
@@ -410,19 +1123,6 @@ class _AddressItem {
     summaryNotifier.value = loc.isEmpty ? t : '$t • $loc';
   }
 
-  void addTag(String tag) {
-    final t = tag.trim();
-    if (t.isNotEmpty && !tags.contains(t)) {
-      tags.add(t);
-      _markUpdated();
-    }
-    tagInputController.clear();
-  }
-
-  void removeTag(String tag) {
-    tags.remove(tag);
-    _markUpdated();
-  }
 
   void dispose() {
     if (_listenersAttached) {
@@ -456,7 +1156,6 @@ class _AddressItem {
     contactPersonController.dispose();
     contactPhoneController.dispose();
     contactEmailController.dispose();
-    tagInputController.dispose();
   }
 }
 
@@ -484,363 +1183,442 @@ class _AddressCardWidget extends StatefulWidget {
 }
 
 class _AddressCardWidgetState extends State<_AddressCardWidget> {
+  CustomerCountryOption get _selectedCountry =>
+      CustomerCountryCurrencyCatalog.resolve(
+        code: widget.address.countryCode,
+        name: widget.address.countryController.text,
+      );
 
-  Widget _buildCheckbox({required String label, required bool value, required ValueChanged<bool?> onChanged}) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(
-          width: 24,
-          height: 24,
-          child: Checkbox(value: value, onChanged: onChanged, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4))),
+  String get _displayAddressType {
+    final address = widget.address;
+    if (address.type == 'Other') {
+      final custom = address.customTypeController.text.trim();
+      return custom.isEmpty ? 'Custom Address' : custom;
+    }
+    return address.type;
+  }
+
+  void _changeAddressCountry(CustomerCountryOption country) {
+    final address = widget.address;
+    final previousCountry = _selectedCountry;
+
+    setState(() {
+      address.countryCode = country.isoCode;
+      address.countryController.text = country.name;
+
+      if (address.contactPhoneCountryCode.isEmpty ||
+          address.contactPhoneCountryCode == previousCountry.isoCode) {
+        address.contactPhoneCountryCode = country.isoCode;
+      }
+
+      address._markUpdated();
+      address.updateSummary();
+    });
+  }
+
+  void _toggleActive() {
+    setState(() {
+      widget.address.isActive = !widget.address.isActive;
+      widget.address._markUpdated();
+    });
+  }
+
+  void _handleMenuAction(String action) {
+    switch (action) {
+      case 'primary':
+        widget.onSetPrimary();
+        break;
+      case 'active':
+        _toggleActive();
+        break;
+      case 'duplicate':
+        widget.onDuplicate();
+        break;
+      case 'remove':
+        widget.onRemove();
+        break;
+    }
+  }
+
+  Widget _buildStatusPill({
+    required String label,
+    required Color foreground,
+    required Color background,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 9.5,
+          fontWeight: FontWeight.w800,
+          color: foreground,
         ),
-        const SizedBox(width: 6),
-        GestureDetector(
-          onTap: () => onChanged(!value),
-          child: Text(label, style: const TextStyle(fontSize: 13, color: Colors.black87)),
-        ),
-      ],
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final address = widget.address;
+    final selectedCountry = _selectedCountry;
 
     return RepaintBoundary(
-      child: Opacity(
-        opacity: address.isActive ? 1.0 : 0.65,
+      child: AnimatedOpacity(
+        opacity: address.isActive ? 1 : 0.68,
+        duration: const Duration(milliseconds: 120),
         child: Container(
-          margin: const EdgeInsets.only(bottom: 16),
+          margin: const EdgeInsets.only(bottom: 10),
           decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: address.isPrimary ? Colors.blue.shade300 : Colors.grey.shade300, width: address.isPrimary ? 1.5 : 1.2),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 6, offset: const Offset(0, 2))]
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: address.isPrimary
+                  ? const Color(0xFF93C5FD)
+                  : _borderColor,
+              width: address.isPrimary ? 1.2 : 1,
+            ),
           ),
           child: Column(
             children: [
-              InkWell(
-                onTap: () => setState(() => address.isExpanded = !address.isExpanded),
-                borderRadius: BorderRadius.vertical(top: const Radius.circular(11), bottom: address.isExpanded ? Radius.zero : const Radius.circular(11)),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: address.isPrimary ? Colors.blue.shade50.withOpacity(0.4) : Colors.grey.shade50,
-                    borderRadius: BorderRadius.vertical(top: const Radius.circular(11), bottom: address.isExpanded ? Radius.zero : const Radius.circular(11)),
-                    border: Border(bottom: BorderSide(color: address.isExpanded ? Colors.grey.shade200 : Colors.transparent)),
+              Material(
+                color: address.isExpanded
+                    ? const Color(0xFFF8FAFC)
+                    : Colors.white,
+                borderRadius: BorderRadius.vertical(
+                  top: const Radius.circular(7),
+                  bottom: address.isExpanded
+                      ? Radius.zero
+                      : const Radius.circular(7),
+                ),
+                child: InkWell(
+                  onTap: () {
+                    setState(() => address.isExpanded = !address.isExpanded);
+                  },
+                  borderRadius: BorderRadius.vertical(
+                    top: const Radius.circular(7),
+                    bottom: address.isExpanded
+                        ? Radius.zero
+                        : const Radius.circular(7),
                   ),
-                  child: Row(
-                    children: [
-                      ReorderableDragStartListener(
-                        index: widget.index,
-                        child: const Padding(padding: EdgeInsets.only(right: 8), child: Icon(Icons.drag_indicator, size: 20, color: Colors.grey)),
-                      ),
-                      Text('Address ${widget.index + 1}', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.grey.shade800)),
-                      if (address.isPrimary) ...[
-                        const SizedBox(width: 10),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 9,
+                    ),
+                    child: Row(
+                      children: [
+                        ReorderableDragStartListener(
+                          index: widget.index,
+                          child: const Padding(
+                            padding: EdgeInsets.only(right: 8),
+                            child: Icon(
+                              Icons.drag_indicator_rounded,
+                              size: 18,
+                              color: Color(0xFF94A3B8),
+                            ),
+                          ),
+                        ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(color: Colors.blue.shade100, borderRadius: BorderRadius.circular(20)),
-                          child: Text('Primary', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.blue.shade800)),
+                          width: 28,
+                          height: 28,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '${widget.index + 1}',
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF1D4ED8),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      _displayAddressType,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w800,
+                                        color: _textPrimary,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    address.erpAddressCode,
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: _textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              ValueListenableBuilder<String>(
+                                valueListenable: address.summaryNotifier,
+                                builder: (context, summary, _) {
+                                  return Text(
+                                    summary,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w500,
+                                      color: _textSecondary,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (address.isPrimary) ...[
+                          const SizedBox(width: 8),
+                          _buildStatusPill(
+                            label: 'PRIMARY',
+                            foreground: const Color(0xFF1D4ED8),
+                            background: const Color(0xFFDBEAFE),
+                          ),
+                        ],
+                        if (!address.isActive) ...[
+                          const SizedBox(width: 6),
+                          _buildStatusPill(
+                            label: 'INACTIVE',
+                            foreground: const Color(0xFF475569),
+                            background: const Color(0xFFE2E8F0),
+                          ),
+                        ],
+                        const SizedBox(width: 4),
+                        PopupMenuButton<String>(
+                          tooltip: 'Address actions',
+                          padding: EdgeInsets.zero,
+                          splashRadius: 18,
+                          icon: const Icon(
+                            Icons.more_vert_rounded,
+                            size: 19,
+                            color: _textSecondary,
+                          ),
+                          onSelected: _handleMenuAction,
+                          itemBuilder: (context) => <PopupMenuEntry<String>>[
+                            if (!address.isPrimary)
+                              const PopupMenuItem<String>(
+                                value: 'primary',
+                                child: Text('Set as primary'),
+                              ),
+                            PopupMenuItem<String>(
+                              value: 'active',
+                              child: Text(
+                                address.isActive
+                                    ? 'Mark inactive'
+                                    : 'Mark active',
+                              ),
+                            ),
+                            const PopupMenuItem<String>(
+                              value: 'duplicate',
+                              child: Text('Duplicate address'),
+                            ),
+                            const PopupMenuDivider(),
+                            const PopupMenuItem<String>(
+                              value: 'remove',
+                              child: Text(
+                                'Remove address',
+                                style: TextStyle(color: Color(0xFFDC2626)),
+                              ),
+                            ),
+                          ],
+                        ),
+                        Icon(
+                          address.isExpanded
+                              ? Icons.keyboard_arrow_up_rounded
+                              : Icons.keyboard_arrow_down_rounded,
+                          size: 19,
+                          color: _textSecondary,
                         ),
                       ],
-                      if (!address.isActive) ...[
-                        const SizedBox(width: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(20)),
-                          child: Text('Inactive', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.grey.shade800)),
-                        ),
-                      ],
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ValueListenableBuilder<String>(
-                          valueListenable: address.summaryNotifier,
-                          builder: (context, summary, _) {
-                            return Text(
-                              summary,
-                              style: TextStyle(fontSize: 13, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
-                              maxLines: 1, overflow: TextOverflow.ellipsis,
-                            );
-                          },
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.content_copy, size: 18),
-                        onPressed: widget.onDuplicate,
-                        tooltip: 'Duplicate Address',
-                        splashRadius: 20,
-                      ),
-                      Icon(address.isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: Colors.grey.shade600),
-                    ],
+                    ),
                   ),
                 ),
               ),
-
               if (address.isExpanded)
-                Padding(
-                  padding: const EdgeInsets.all(16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
+                  decoration: const BoxDecoration(
+                    border: Border(
+                      top: BorderSide(color: _dividerColor, width: 1),
+                    ),
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (widget.isDuplicateType) ...[
                         Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.amber.shade200)),
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 7,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFFBEB),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: const Color(0xFFFDE68A),
+                            ),
+                          ),
                           child: Row(
                             children: [
-                              Icon(Icons.info_outline, size: 14, color: Colors.amber.shade800),
-                              const SizedBox(width: 6),
-                              Expanded(child: Text('Multiple "${address.type}" addresses detected.', style: TextStyle(fontSize: 12, color: Colors.amber.shade900))),
+                              const Icon(
+                                Icons.info_outline_rounded,
+                                size: 14,
+                                color: Color(0xFFD97706),
+                              ),
+                              const SizedBox(width: 7),
+                              Expanded(
+                                child: Text(
+                                  'Multiple "${address.type}" addresses are configured.',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF92400E),
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
                         ),
                       ],
-
                       _ResponsiveRow(
+                        minChildWidth: 180,
                         children: [
-                          DropdownButtonFormField<String>(
+                          _buildDropdownField<String>(
+                            label: 'Address Type *',
                             value: address.type,
-                            decoration: _inputDecoration(label: 'Address Type *', icon: Icons.bookmark_border_outlined),
-                            items: _addressTypeOptions.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
-                            onChanged: (val) {
-                              if (val != null) {
-                                setState(() {
-                                  address.type = val;
-                                  if (val != 'Other') address.customTypeController.clear();
-                                  address.updateSummary();
-                                });
-                              }
+                            items: _addressTypeOptions
+                                .map(
+                                  (type) => DropdownMenuItem<String>(
+                                value: type,
+                                child: Text(
+                                  type,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            )
+                                .toList(),
+                            onChanged: (value) {
+                              if (value == null) return;
+                              setState(() {
+                                address.type = value;
+                                if (value != 'Other') {
+                                  address.customTypeController.clear();
+                                }
+                                address._markUpdated();
+                                address.updateSummary();
+                              });
                             },
                           ),
                           if (address.type == 'Other')
                             _buildTextField(
                               controller: address.customTypeController,
-                              label: 'Custom Type Name *',
-                              icon: Icons.edit_outlined,
-                              validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-                            )
-                          else
-                            const SizedBox.shrink(),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      _buildTextField(
-                        controller: address.streetController,
-                        label: 'Street Address',
-                        icon: Icons.home_outlined,
-                        maxLines: 2,
-                      ),
-                      const SizedBox(height: 12),
-                      _ResponsiveRow(
-                        children: [
+                              label: 'Custom Address Type *',
+                              validator: (value) =>
+                              value == null || value.trim().isEmpty
+                                  ? 'Required'
+                                  : null,
+                            ),
+                          _buildTextField(
+                            controller: address.streetController,
+                            label: 'Street Address',
+                          ),
                           _buildTextField(
                             controller: address.cityController,
                             label: 'City *',
-                            icon: Icons.location_city_outlined,
-                            validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                            validator: (value) =>
+                            value == null || value.trim().isEmpty
+                                ? 'Required'
+                                : null,
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 11),
+                      _ResponsiveRow(
+                        minChildWidth: 180,
+                        children: [
                           _buildTextField(
                             controller: address.stateController,
-                            label: 'State',
-                            icon: Icons.map_outlined,
+                            label: selectedCountry.administrativeAreaLabel,
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      _ResponsiveRow(
-                        children: [
                           _buildTextField(
                             controller: address.pincodeController,
-                            label: 'Pincode',
-                            icon: Icons.markunread_mailbox_outlined,
-                            keyboardType: TextInputType.number,
-                            validator: (v) {
-                              if (v != null && v.trim().isNotEmpty) {
-                                final ctry = address.countryController.text.trim().toLowerCase();
-                                if (ctry == 'india' && !RegExp(r'^\d{6}$').hasMatch(v.trim())) {
-                                  return 'Invalid Pincode (6 digits)';
-                                }
-                              }
-                              return null;
-                            },
+                            label: selectedCountry.postalCodeLabel,
+                            keyboardType: TextInputType.text,
+                            validator: (value) =>
+                                selectedCountry.validatePostalCode(value ?? ''),
                           ),
-                          _buildTextField(
-                            controller: address.countryController,
+                          _CountryPickerField(
+                            value: selectedCountry,
                             label: 'Country *',
-                            icon: Icons.public_outlined,
-                            validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-                          ),
-                        ],
-                      ),
-
-                      const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Divider(height: 1)),
-
-                      const Text('Contact & Tax Details (Optional)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87)),
-                      const SizedBox(height: 12),
-                      _ResponsiveRow(
-                        children: [
-                          _buildTextField(
-                            controller: address.contactPersonController,
-                            label: 'Contact Person',
-                            icon: Icons.person_outline,
+                            onChanged: _changeAddressCountry,
                           ),
                           _buildTextField(
                             controller: address.gstController,
-                            label: 'Address GST',
-                            icon: Icons.receipt_long_outlined,
-                            textCapitalization: TextCapitalization.characters,
+                            label: selectedCountry.taxRegistrationLabel,
+                            textCapitalization:
+                            TextCapitalization.characters,
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 11),
                       _ResponsiveRow(
+                        minChildWidth: 220,
                         children: [
                           _buildTextField(
+                            controller: address.contactPersonController,
+                            label: 'Site Contact',
+                          ),
+                          _InternationalPhoneField(
                             controller: address.contactPhoneController,
                             label: 'Contact Phone',
-                            icon: Icons.phone_outlined,
-                            keyboardType: TextInputType.phone,
+                            countryCode: address.contactPhoneCountryCode,
+                            onCountryChanged: (country) {
+                              setState(() {
+                                address.contactPhoneCountryCode =
+                                    country.isoCode;
+                                address._markUpdated();
+                              });
+                            },
                           ),
                           _buildTextField(
                             controller: address.contactEmailController,
                             label: 'Contact Email',
-                            icon: Icons.email_outlined,
                             keyboardType: TextInputType.emailAddress,
-                            validator: (v) {
-                              final email = (v ?? '').trim();
+                            validator: (value) {
+                              final email = (value ?? '').trim();
                               if (email.isEmpty) return null;
-                              if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) return 'Invalid email';
+                              if (!RegExp(
+                                r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
+                              ).hasMatch(email)) {
+                                return 'Invalid email';
+                              }
                               return null;
                             },
-                          ),
-                        ],
-                      ),
-
-                      const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Divider(height: 1)),
-
-                      const Text('Usage Flags & Tags', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87)),
-                      const SizedBox(height: 10),
-                      Wrap(
-                        spacing: 16,
-                        runSpacing: 10,
-                        children: [
-                          _buildCheckbox(label: 'Billing', value: address.isBillingAddress, onChanged: (v) => setState(() => address.isBillingAddress = v ?? false)),
-                          _buildCheckbox(label: 'Shipping', value: address.isShippingAddress, onChanged: (v) => setState(() => address.isShippingAddress = v ?? false)),
-                          _buildCheckbox(label: 'Dispatch', value: address.isDispatchAddress, onChanged: (v) => setState(() => address.isDispatchAddress = v ?? false)),
-                          _buildCheckbox(label: 'Service', value: address.isServiceAddress, onChanged: (v) => setState(() => address.isServiceAddress = v ?? false)),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: address.tagInputController,
-                              decoration: _inputDecoration(label: 'Add Tag (e.g. "HQ")', icon: Icons.local_offer_outlined).copyWith(
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                suffixIcon: IconButton(
-                                  icon: const Icon(Icons.add, size: 20),
-                                  onPressed: () => setState(() => address.addTag(address.tagInputController.text)),
-                                ),
-                              ),
-                              onFieldSubmitted: (val) => setState(() => address.addTag(val)),
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (address.tags.isNotEmpty) ...[
-                        const SizedBox(height: 10),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: address.tags.map((tag) => Chip(
-                            label: Text(tag, style: const TextStyle(fontSize: 11)),
-                            onDeleted: () => setState(() => address.removeTag(tag)),
-                            padding: EdgeInsets.zero,
-                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          )).toList(),
-                        ),
-                      ],
-
-                      const SizedBox(height: 16),
-                      const Divider(height: 1),
-                      const SizedBox(height: 12),
-
-                      Wrap(
-                        alignment: WrapAlignment.spaceBetween,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        spacing: 12,
-                        runSpacing: 12,
-                        children: [
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              InkWell(
-                                onTap: widget.onSetPrimary,
-                                borderRadius: BorderRadius.circular(6),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        address.isPrimary ? Icons.check_circle : Icons.radio_button_unchecked,
-                                        color: address.isPrimary ? Colors.blue.shade700 : Colors.grey.shade500,
-                                        size: 22,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        'Primary',
-                                        style: TextStyle(
-                                          fontSize: 13.5,
-                                          fontWeight: address.isPrimary ? FontWeight.w600 : FontWeight.w500,
-                                          color: address.isPrimary ? Colors.blue.shade700 : Colors.grey.shade700,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              InkWell(
-                                onTap: () => setState(() => address.isActive = !address.isActive),
-                                borderRadius: BorderRadius.circular(6),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        address.isActive ? Icons.toggle_on : Icons.toggle_off,
-                                        color: address.isActive ? Colors.green.shade600 : Colors.grey.shade500,
-                                        size: 32,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        address.isActive ? 'Active' : 'Inactive',
-                                        style: TextStyle(
-                                          fontSize: 13.5,
-                                          fontWeight: address.isActive ? FontWeight.w600 : FontWeight.w500,
-                                          color: address.isActive ? Colors.green.shade700 : Colors.grey.shade700,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          TextButton.icon(
-                            onPressed: widget.onRemove,
-                            icon: const Icon(Icons.delete_outline, size: 18),
-                            label: const Text('Remove Address'),
-                            style: TextButton.styleFrom(
-                              foregroundColor: Colors.red.shade600,
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
-                            ),
                           ),
                         ],
                       ),
@@ -896,6 +1674,12 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
 
   final _formKey = GlobalKey<FormState>();
 
+  final _generalSectionKey = GlobalKey();
+  final _commercialSectionKey = GlobalKey();
+  final _contactCrmSectionKey = GlobalKey();
+  final _addressesSectionKey = GlobalKey();
+  final _ownershipSectionKey = GlobalKey();
+
   bool _isSaving = false;
   bool _isLoadingExisting = false;
   Timer? _draftTimer;
@@ -910,6 +1694,12 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
   String? _status;
   String? _priority;
   String? _customerStage;
+
+  String _customerCountryCode = 'IN';
+  String _currencyCode = 'INR';
+  String _primaryPhoneCountryCode = 'IN';
+  String _alternatePhoneCountryCode = 'IN';
+  bool _currencyManuallySelected = false;
 
   String _existingCreatedByUid = '';
   Timestamp? _existingCreatedAt;
@@ -934,6 +1724,12 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
 
   bool get _isEdit => widget.existingDoc != null;
 
+  CustomerCountryOption get _selectedCustomerCountry =>
+      CustomerCountryCurrencyCatalog.byCode(_customerCountryCode);
+
+  CustomerCurrencyOption get _selectedCurrency =>
+      CustomerCountryCurrencyCatalog.currencyByCode(_currencyCode);
+
   CollectionReference<Map<String, dynamic>> get _customersCol =>
       FirebaseFirestore.instance
           .collection('companies')
@@ -954,6 +1750,106 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
 
   void _notifyAddressChange() {
     _addressListNotifier.value++;
+  }
+
+
+  void _scrollToSection(GlobalKey sectionKey) {
+    FocusScope.of(context).unfocus();
+    final sectionContext = sectionKey.currentContext;
+    if (sectionContext == null) return;
+
+    Scrollable.ensureVisible(
+      sectionContext,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+      alignment: 0.03,
+    );
+  }
+
+  void _applyCustomerCountryDefaults(
+      CustomerCountryOption country, {
+        bool primaryPhoneIsSource = false,
+      }) {
+    final previousCountry = _selectedCustomerCountry;
+
+    _safeSetState(() {
+      _customerCountryCode = country.isoCode;
+
+      if (!_currencyManuallySelected ||
+          _currencyCode == previousCountry.currencyCode) {
+        if (country.currencyCode != 'XXX') {
+          _currencyCode = country.currencyCode;
+          _currencyManuallySelected = false;
+        }
+      } else if (_currencyCode == country.currencyCode) {
+        _currencyManuallySelected = false;
+      }
+
+      final primaryPhoneIsBlank = _phoneController.text.trim().isEmpty;
+      if (primaryPhoneIsSource ||
+          primaryPhoneIsBlank ||
+          _primaryPhoneCountryCode == previousCountry.isoCode) {
+        _primaryPhoneCountryCode = country.isoCode;
+      }
+
+      final alternatePhoneIsBlank = _altPhoneController.text.trim().isEmpty;
+      if (alternatePhoneIsBlank ||
+          _alternatePhoneCountryCode == previousCountry.isoCode) {
+        _alternatePhoneCountryCode = country.isoCode;
+      }
+
+      for (final address in _addresses) {
+        final isBlankAddress = address.streetController.text.trim().isEmpty &&
+            address.cityController.text.trim().isEmpty &&
+            address.stateController.text.trim().isEmpty &&
+            address.pincodeController.text.trim().isEmpty;
+        bool addressChanged = false;
+
+        if (isBlankAddress &&
+            address.countryCode == previousCountry.isoCode) {
+          address.countryCode = country.isoCode;
+          address.countryController.text = country.name;
+          addressChanged = true;
+        }
+
+        final addressPhoneIsBlank =
+            address.contactPhoneController.text.trim().isEmpty;
+        final addressUsesSelectedCountry =
+            address.countryCode == country.isoCode;
+        if (addressUsesSelectedCountry &&
+            (addressPhoneIsBlank ||
+                address.contactPhoneCountryCode == previousCountry.isoCode) &&
+            address.contactPhoneCountryCode != country.isoCode) {
+          address.contactPhoneCountryCode = country.isoCode;
+          addressChanged = true;
+        }
+
+        if (addressChanged) {
+          address._markUpdated();
+          address.updateSummary();
+        }
+      }
+    });
+
+    _notifyAddressChange();
+  }
+
+  void _changeCustomerCountry(CustomerCountryOption country) {
+    _applyCustomerCountryDefaults(country);
+  }
+
+  void _changePrimaryPhoneCountry(CustomerCountryOption country) {
+    _applyCustomerCountryDefaults(
+      country,
+      primaryPhoneIsSource: true,
+    );
+  }
+
+  void _changeCustomerCurrency(CustomerCurrencyOption currency) {
+    _safeSetState(() {
+      _currencyCode = currency.code;
+      _currencyManuallySelected = currency.code != _selectedCustomerCountry.currencyCode;
+    });
   }
 
   void _openDuplicateCustomer(CustomerDuplicateSuggestion suggestion) {
@@ -1057,6 +1953,11 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
         'status': _status,
         'priority': _priority,
         'customerStage': _customerStage,
+        'customerCountryCode': _customerCountryCode,
+        'currencyCode': _currencyCode,
+        'currencyManuallySelected': _currencyManuallySelected,
+        'primaryPhoneCountryCode': _primaryPhoneCountryCode,
+        'alternatePhoneCountryCode': _alternatePhoneCountryCode,
         'notes': _notesController.text,
         'addresses': _addresses.map((a) => {
           'id': a.id,
@@ -1069,9 +1970,11 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
           'state': a.stateController.text,
           'pincode': a.pincodeController.text,
           'country': a.countryController.text,
+          'countryCode': a.countryCode,
           'gst': a.gstController.text,
           'contactPerson': a.contactPersonController.text,
           'contactPhone': a.contactPhoneController.text,
+          'contactPhoneCountryCode': a.contactPhoneCountryCode,
           'contactEmail': a.contactEmailController.text,
           'tags': a.tags,
           'isActive': a.isActive,
@@ -1120,6 +2023,25 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
           _status = data['status'] ?? 'Active';
           _priority = data['priority'] ?? 'Medium';
           _customerStage = data['customerStage'] ?? 'Potential Customer';
+          _customerCountryCode = CustomerCountryCurrencyCatalog.resolve(
+            code: data['customerCountryCode']?.toString(),
+            name: data['country']?.toString(),
+          ).isoCode;
+          _currencyCode = CustomerCountryCurrencyCatalog.currencyByCode(
+            data['currencyCode']?.toString(),
+            fallbackCode: _selectedCustomerCountry.currencyCode == 'XXX'
+                ? 'INR'
+                : _selectedCustomerCountry.currencyCode,
+          ).code;
+          _currencyManuallySelected = _parseBool(data['currencyManuallySelected']);
+          _primaryPhoneCountryCode = CustomerCountryCurrencyCatalog.resolve(
+            code: data['primaryPhoneCountryCode']?.toString(),
+            fallbackCode: _customerCountryCode,
+          ).isoCode;
+          _alternatePhoneCountryCode = CustomerCountryCurrencyCatalog.resolve(
+            code: data['alternatePhoneCountryCode']?.toString(),
+            fallbackCode: _customerCountryCode,
+          ).isoCode;
           _notesController.text = data['notes'] ?? '';
 
           if (data['addresses'] != null) {
@@ -1135,10 +2057,15 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
                 city: a['city'] ?? '',
                 state: a['state'] ?? '',
                 pincode: a['pincode'] ?? '',
-                country: a['country'] ?? 'India',
+                country: a['country'] ?? _selectedCustomerCountry.name,
+                countryCode: a['countryCode'] ?? '',
                 gst: a['gst'] ?? '',
                 contactPerson: a['contactPerson'] ?? '',
                 contactPhone: a['contactPhone'] ?? '',
+                contactPhoneCountryCode: a['contactPhoneCountryCode'] ?? a['countryCode'] ?? CustomerCountryCurrencyCatalog.resolve(
+                  name: a['country']?.toString(),
+                  fallbackCode: _customerCountryCode,
+                ).isoCode,
                 contactEmail: a['contactEmail'] ?? '',
                 tags: List<String>.from(a['tags'] ?? []),
                 isActive: _parseBool(a['isActive'], fallback: true),
@@ -1241,6 +2168,10 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
       'status': _status,
       'priority': _priority,
       'customerStage': _customerStage,
+      'customerCountryCode': _customerCountryCode,
+      'currencyCode': _currencyCode,
+      'primaryPhoneCountryCode': _primaryPhoneCountryCode,
+      'alternatePhoneCountryCode': _alternatePhoneCountryCode,
       'notes': _notesController.text.trim(),
     };
   }
@@ -1261,8 +2192,36 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
       _altPhoneController.text = (data['alternatePhone'] ?? '').toString();
       _businessEmailController.text = (data['businessEmail'] ?? data['email'] ?? '').toString();
       _websiteController.text = (data['website'] ?? '').toString();
-      _gstController.text = (data['gst'] ?? '').toString();
-      _panController.text = (data['pan'] ?? '').toString();
+      _gstController.text = (data['gst'] ?? data['taxRegistrationNumber'] ?? '').toString();
+      _panController.text = (data['pan'] ?? data['businessRegistrationNumber'] ?? '').toString();
+
+      final resolvedCustomerCountry = CustomerCountryCurrencyCatalog.resolve(
+        code: (data['customerCountryCode'] ?? data['countryCode'])?.toString(),
+        name: data['country']?.toString(),
+      );
+      _customerCountryCode = resolvedCustomerCountry.isoCode;
+
+      final savedCurrencyCode = (data['currencyCode'] ?? '').toString().trim().toUpperCase();
+      _currencyCode = CustomerCountryCurrencyCatalog.currencyByCode(
+        savedCurrencyCode.isEmpty ? resolvedCustomerCountry.currencyCode : savedCurrencyCode,
+        fallbackCode: resolvedCustomerCountry.currencyCode == 'XXX'
+            ? 'INR'
+            : resolvedCustomerCountry.currencyCode,
+      ).code;
+      final savedCurrencySource = (data['currencySource'] ?? '').toString().trim().toLowerCase();
+      _currencyManuallySelected = savedCurrencySource == 'manual' ||
+          (savedCurrencySource.isEmpty &&
+              savedCurrencyCode.isNotEmpty &&
+              savedCurrencyCode != resolvedCustomerCountry.currencyCode);
+
+      _primaryPhoneCountryCode = CustomerCountryCurrencyCatalog.resolve(
+        code: (data['phoneCountryCode'] ?? data['primaryPhoneCountryCode'])?.toString(),
+        fallbackCode: _customerCountryCode,
+      ).isoCode;
+      _alternatePhoneCountryCode = CustomerCountryCurrencyCatalog.resolve(
+        code: (data['alternatePhoneCountryCode'] ?? data['phoneCountryCode'])?.toString(),
+        fallbackCode: _customerCountryCode,
+      ).isoCode;
 
       _contactNameController.text = (data['contactName'] ?? '').toString();
       _designationController.text = (data['designation'] ?? '').toString();
@@ -1310,10 +2269,15 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
             city: (map['city'] ?? '').toString(),
             state: (map['state'] ?? '').toString(),
             pincode: (map['pincode'] ?? '').toString(),
-            country: (map['country'] ?? 'India').toString(),
-            gst: (map['gst'] ?? '').toString(),
+            country: (map['country'] ?? _selectedCustomerCountry.name).toString(),
+            countryCode: (map['countryCode'] ?? '').toString(),
+            gst: (map['gst'] ?? map['taxRegistrationNumber'] ?? '').toString(),
             contactPerson: (map['contactPerson'] ?? '').toString(),
             contactPhone: (map['contactPhone'] ?? '').toString(),
+            contactPhoneCountryCode: (map['contactPhoneCountryCode'] ?? map['countryCode'] ?? CustomerCountryCurrencyCatalog.resolve(
+              name: map['country']?.toString(),
+              fallbackCode: _customerCountryCode,
+            ).isoCode).toString(),
             contactEmail: (map['contactEmail'] ?? '').toString(),
             tags: List<String>.from(map['tags'] ?? []),
             isActive: _parseBool(map['isActive'], fallback: true),
@@ -1335,7 +2299,9 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
           city: (data['city'] ?? '').toString(),
           state: (data['state'] ?? '').toString(),
           pincode: (data['pincode'] ?? '').toString(),
-          country: (data['country'] ?? 'India').toString(),
+          country: (data['country'] ?? _selectedCustomerCountry.name).toString(),
+          countryCode: (data['countryCode'] ?? _customerCountryCode).toString(),
+          contactPhoneCountryCode: _customerCountryCode,
           isPrimary: true,
           isBillingAddress: true,
           isExpanded: false,
@@ -1450,6 +2416,9 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
       isPrimary: _addresses.isEmpty,
       isBillingAddress: _addresses.isEmpty,
       isExpanded: true,
+      country: _selectedCustomerCountry.name,
+      countryCode: _customerCountryCode,
+      contactPhoneCountryCode: _customerCountryCode,
       createdByUid: widget.currentUserUid,
       updatedByUid: widget.currentUserUid,
       erpAddressCode: _getNextAddressCode(),
@@ -1472,9 +2441,11 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
         state: src.stateController.text,
         pincode: src.pincodeController.text,
         country: src.countryController.text,
+        countryCode: src.countryCode,
         gst: src.gstController.text,
         contactPerson: src.contactPersonController.text,
         contactPhone: src.contactPhoneController.text,
+        contactPhoneCountryCode: src.contactPhoneCountryCode,
         contactEmail: src.contactEmailController.text,
         tags: List.from(src.tags),
         isPrimary: false,
@@ -1574,10 +2545,17 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
     addNgrams(data['gst']);
     addNgrams(data['pan']);
     addNgrams(data['contactName']);
+    addNgrams(data['customerCountryName']);
+    addNgrams(data['customerCountryCode']);
+    addNgrams(data['currencyCode']);
+    addNgrams(data['taxRegistrationNumber']);
+    addNgrams(data['businessRegistrationNumber']);
 
     for (final a in addresses) {
       addNgrams(a['city']);
       addNgrams(a['state']);
+      addNgrams(a['country']);
+      addNgrams(a['countryCode']);
       addNgrams(a['gst']);
       addNgrams(a['contactPerson']);
       addNgrams(a['contactPhone']);
@@ -1602,7 +2580,10 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
     final parts = [addr['street'], addr['city'], addr['state'], addr['pincode'], addr['country']]
         .where((e) => e != null && e.toString().trim().isNotEmpty).join(', ');
     String res = parts;
-    if (addr['gst']?.toString().isNotEmpty == true) res += '\nGST: ${addr['gst']}';
+    if (addr['gst']?.toString().isNotEmpty == true) {
+      final taxLabel = (addr['taxRegistrationType'] ?? 'Tax Registration').toString();
+      res += '\n$taxLabel: ${addr['gst']}';
+    }
     if (addr['contactPerson']?.toString().isNotEmpty == true) {
       res += '\nContact: ${addr['contactPerson']}';
       if (addr['contactPhone']?.toString().isNotEmpty == true) res += ' (${addr['contactPhone']})';
@@ -1613,7 +2594,7 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
   String _buildSearchIndex(Map<String, dynamic> addr) {
     return [
       addr['type'], addr['customType'], addr['street'], addr['city'],
-      addr['state'], addr['pincode'], addr['country'], addr['gst'],
+      addr['state'], addr['pincode'], addr['country'], addr['countryCode'], addr['gst'],
       addr['contactPerson'], addr['contactPhone'], addr['contactEmail']
     ].where((e) => e != null && e.toString().trim().isNotEmpty)
         .join(' ').toLowerCase();
@@ -1729,7 +2710,7 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
     if (hasWarnings) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Warning: Duplicate GST, Phone, or Email detected internally.'),
+          content: Text('Warning: Duplicate tax registration number, phone, or email detected internally.'),
           backgroundColor: Colors.orange,
           duration: Duration(seconds: 3),
         ),
@@ -1740,30 +2721,52 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
   // --- DATA INTEGRITY VALIDATORS ---
   bool _runPreSaveValidations() {
     final mainGst = _gstController.text.trim().toUpperCase();
-    if (mainGst.isNotEmpty && !_isValidGst(mainGst)) {
-      _scrollToTop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Primary GST is invalid. Check format and state code.'), backgroundColor: Colors.red),
-      );
-      return false;
-    }
-
     final mainPan = _panController.text.trim().toUpperCase();
-    if (mainPan.isNotEmpty && !_isValidPan(mainPan)) {
-      _scrollToTop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('PAN is invalid. Expected format: 5 letters, 4 numbers, 1 letter.'), backgroundColor: Colors.red),
-      );
-      return false;
+
+    if (_customerCountryCode == 'IN') {
+      if (mainGst.isNotEmpty && !_isValidGst(mainGst)) {
+        _scrollToTop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Primary GSTIN is invalid. Check format and state code.'), backgroundColor: Colors.red),
+        );
+        return false;
+      }
+
+      if (mainPan.isNotEmpty && !_isValidPan(mainPan)) {
+        _scrollToTop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('PAN is invalid. Expected format: 5 letters, 4 numbers, 1 letter.'), backgroundColor: Colors.red),
+        );
+        return false;
+      }
+    } else {
+      if (mainGst.length > 80 || mainPan.length > 80) {
+        _scrollToTop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Tax or business registration number is too long.'), backgroundColor: Colors.red),
+        );
+        return false;
+      }
     }
 
     for (var a in _addresses) {
       final aGst = a.gstController.text.trim().toUpperCase();
-      if (aGst.isNotEmpty && !_isValidGst(aGst)) {
+      if (a.countryCode == 'IN' && aGst.isNotEmpty && !_isValidGst(aGst)) {
         a.isExpanded = true;
         _safeSetState(() {});
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Address "${a.erpAddressCode}" has an invalid GST.'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Address "${a.erpAddressCode}" has an invalid GSTIN.'), backgroundColor: Colors.red),
+        );
+        return false;
+      }
+
+      final postalError = CustomerCountryCurrencyCatalog.byCode(a.countryCode)
+          .validatePostalCode(a.pincodeController.text);
+      if (postalError != null) {
+        a.isExpanded = true;
+        _safeSetState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${a.erpAddressCode}: $postalError'), backgroundColor: Colors.red),
         );
         return false;
       }
@@ -1843,8 +2846,13 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
         final state = addr.stateController.text.trim();
         final pincode = addr.pincodeController.text.trim();
         final country = addr.countryController.text.trim();
+        final resolvedAddressCountry = CustomerCountryCurrencyCatalog.resolve(
+          code: addr.countryCode,
+          name: country,
+          fallbackCode: _customerCountryCode,
+        );
 
-        final addressParts = <String>[street, city, state, pincode, country].where((e) => e.isNotEmpty).toList();
+        final addressParts = <String>[street, city, state, pincode, resolvedAddressCountry.name].where((e) => e.isNotEmpty).toList();
         final combinedAddress = addressParts.join(', ');
 
         final isCustom = addr.type == 'Other';
@@ -1866,10 +2874,20 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
           'city': city,
           'state': state,
           'pincode': pincode,
-          'country': country,
+          'country': resolvedAddressCountry.name,
+          'countryCode': resolvedAddressCountry.isoCode,
+          'countryCallingCode': resolvedAddressCountry.callingCode,
           'gst': addr.gstController.text.trim().toUpperCase(),
+          'taxRegistrationNumber': addr.gstController.text.trim().toUpperCase(),
+          'taxRegistrationType': resolvedAddressCountry.taxRegistrationLabel,
           'contactPerson': addr.contactPersonController.text.trim(),
           'contactPhone': addr.contactPhoneController.text.trim(),
+          'contactPhoneCountryCode': addr.contactPhoneCountryCode,
+          'contactPhoneCallingCode': CustomerCountryCurrencyCatalog.byCode(addr.contactPhoneCountryCode).callingCode,
+          'contactPhoneWithCountryCode': _buildInternationalPhoneValue(
+            countryCode: addr.contactPhoneCountryCode,
+            phone: addr.contactPhoneController.text,
+          ),
           'contactPhoneNormalized': normalizePhone(addr.contactPhoneController.text),
           'contactEmail': normalizeEmail(addr.contactEmailController.text),
           'tags': addr.tags,
@@ -1906,9 +2924,23 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
       final finalIndustry = _industry == 'Other' ? (customIndustry.isNotEmpty ? customIndustry : 'Other') : (_industry ?? '').trim();
 
       final name = _companyController.text.trim();
-      final gst = normalizeGST(_gstController.text);
+      final customerCountry = _selectedCustomerCountry;
+      final customerCurrency = _selectedCurrency;
+      final taxRegistrationNumber = _gstController.text.trim().toUpperCase();
+      final businessRegistrationNumber = _panController.text.trim().toUpperCase();
+      final gst = customerCountry.isoCode == 'IN'
+          ? normalizeGST(_gstController.text)
+          : taxRegistrationNumber;
       final phone = normalizePhone(_phoneController.text);
       final email = normalizeEmail(_businessEmailController.text);
+      final phoneWithCountryCode = _buildInternationalPhoneValue(
+        countryCode: _primaryPhoneCountryCode,
+        phone: _phoneController.text,
+      );
+      final alternatePhoneWithCountryCode = _buildInternationalPhoneValue(
+        countryCode: _alternatePhoneCountryCode,
+        phone: _altPhoneController.text,
+      );
 
       final duplicateField = await _checkCustomerDuplicate(
         name: name,
@@ -1944,21 +2976,43 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
         'companyNameNormalized': normalizeCustomerName(name),
         'customerNameNormalized': normalizeCustomerName(name),
         'phone': _phoneController.text.trim(),
+        'phoneCountryCode': _primaryPhoneCountryCode,
+        'primaryPhoneCountryCode': _primaryPhoneCountryCode,
+        'phoneCallingCode': CustomerCountryCurrencyCatalog.byCode(_primaryPhoneCountryCode).callingCode,
+        'phoneWithCountryCode': phoneWithCountryCode,
         'phoneNormalized': normalizePhone(_phoneController.text),
         'phoneNumberNormalized': normalizePhone(_phoneController.text),
         'phoneLast10': normalizeCustomerPhoneLast10(_phoneController.text),
         'phoneDigitsOnly': _phoneController.text.replaceAll(RegExp(r'\D'), ''),
         'companyPhone': _phoneController.text.trim(),
         'alternatePhone': _altPhoneController.text.trim(),
+        'alternatePhoneCountryCode': _alternatePhoneCountryCode,
+        'alternatePhoneCallingCode': CustomerCountryCurrencyCatalog.byCode(_alternatePhoneCountryCode).callingCode,
+        'alternatePhoneWithCountryCode': alternatePhoneWithCountryCode,
         'alternatePhoneNormalized': normalizePhone(_altPhoneController.text),
         'email': _businessEmailController.text.trim(),
         'emailNormalized': normalizeEmail(_businessEmailController.text),
         'emailLower': normalizeEmail(_businessEmailController.text),
         'businessEmail': _businessEmailController.text.trim(),
         'gst': gst,
-        'gstNumberNormalized': normalizeGST(_gstController.text),
-        'gstNormalized': normalizeGST(_gstController.text),
-        'pan': _panController.text.trim().toUpperCase(),
+        'gstNumberNormalized': customerCountry.isoCode == 'IN' ? normalizeGST(_gstController.text) : taxRegistrationNumber,
+        'gstNormalized': customerCountry.isoCode == 'IN' ? normalizeGST(_gstController.text) : taxRegistrationNumber,
+        'pan': businessRegistrationNumber,
+        'taxRegistrationNumber': taxRegistrationNumber,
+        'taxRegistrationType': customerCountry.taxRegistrationLabel,
+        'businessRegistrationNumber': businessRegistrationNumber,
+        'businessRegistrationType': customerCountry.businessRegistrationLabel,
+        'taxCountryCode': customerCountry.isoCode,
+        'customerCountryCode': customerCountry.isoCode,
+        'customerCountryName': customerCountry.name,
+        'customerCountryCallingCode': customerCountry.callingCode,
+        'currencyCode': customerCurrency.code,
+        'defaultCurrencyCode': customerCurrency.code,
+        'currencyName': customerCurrency.name,
+        'currencySymbol': customerCurrency.symbol,
+        'currencySource': _currencyManuallySelected ? 'manual' : 'country_default',
+        'isIndianCustomer': customerCountry.isoCode == 'IN',
+        'internationalProfileVersion': 1,
         'website': _websiteController.text.trim(),
 
         'customerType': finalCustomerType,
@@ -1980,6 +3034,7 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
         'state': primaryAddr['state'],
         'pincode': primaryAddr['pincode'],
         'country': primaryAddr['country'],
+        'countryCode': primaryAddr['countryCode'],
 
         'contactName': _contactNameController.text.trim(),
         'designation': _designationController.text.trim(),
@@ -2002,6 +3057,8 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
         'auditSummary': {
           'lastAction': _isEdit ? 'updated' : 'created',
           'addressCount': addressesPayload.length,
+          'customerCountryCode': customerCountry.isoCode,
+          'currencyCode': customerCurrency.code,
           'modifiedSections': allModifiedSections.toList(),
         }
       };
@@ -2077,6 +3134,12 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
             'designation': _designationController.text.trim(),
             'department': _departmentController.text.trim(),
             'phone': contactPhone,
+            'phoneCountryCode': _primaryPhoneCountryCode,
+            'phoneCallingCode': CustomerCountryCurrencyCatalog.byCode(_primaryPhoneCountryCode).callingCode,
+            'phoneWithCountryCode': _buildInternationalPhoneValue(
+              countryCode: _primaryPhoneCountryCode,
+              phone: contactPhone,
+            ),
             'phoneNormalized': normalizePhone(contactPhone),
             'email': normalizeEmail(contactEmail),
             'emailNormalized': normalizeEmail(contactEmail),
@@ -2142,81 +3205,146 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
       stream: _activeUsersStream,
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
-          return const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: LinearProgressIndicator(minHeight: 2));
+          return const _LabeledControl(
+            label: 'Account Owner *',
+            child: SizedBox(
+              height: 40,
+              child: Center(
+                child: LinearProgressIndicator(minHeight: 2),
+              ),
+            ),
+          );
         }
 
         if (snap.hasError) {
-          return Text('Failed to load users: ${snap.error}', style: const TextStyle(color: Colors.red));
+          return _LabeledControl(
+            label: 'Account Owner *',
+            child: Text(
+              'Failed to load users: ${snap.error}',
+              style: const TextStyle(
+                color: Color(0xFFDC2626),
+                fontSize: 12,
+              ),
+            ),
+          );
         }
 
-        final docs = snap.data?.docs.toList() ?? <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+        final docs = snap.data?.docs.toList() ??
+            <QueryDocumentSnapshot<Map<String, dynamic>>>[];
 
         docs.sort((a, b) {
-          final an = _extractUserName(a.data(), fallbackUid: a.id).toLowerCase();
-          final bn = _extractUserName(b.data(), fallbackUid: b.id).toLowerCase();
+          final an = _extractUserName(
+            a.data(),
+            fallbackUid: a.id,
+          ).toLowerCase();
+          final bn = _extractUserName(
+            b.data(),
+            fallbackUid: b.id,
+          ).toLowerCase();
           return an.compareTo(bn);
         });
 
-        for (final d in docs) {
-          _cachedUserNames[d.id] = _extractUserName(d.data(), fallbackUid: d.id);
+        for (final doc in docs) {
+          _cachedUserNames[doc.id] = _extractUserName(
+            doc.data(),
+            fallbackUid: doc.id,
+          );
         }
 
         if (docs.isEmpty) {
-          return const Text('No active users found');
+          return const _LabeledControl(
+            label: 'Account Owner *',
+            child: Text(
+              'No active users found',
+              style: TextStyle(color: _textSecondary, fontSize: 12),
+            ),
+          );
         }
 
         String? safeAssignedValue;
-        final hasAssignedUser = docs.any((doc) => doc.id == _assignedToUid);
+        final hasAssignedUser =
+        docs.any((doc) => doc.id == _assignedToUid);
 
         if (hasAssignedUser) {
           safeAssignedValue = _assignedToUid;
         } else if (_canAssignOthers) {
           safeAssignedValue = null;
         } else {
-          final currentUserExists = docs.any((doc) => doc.id == widget.currentUserUid);
-          safeAssignedValue = currentUserExists ? widget.currentUserUid : null;
+          final currentUserExists =
+          docs.any((doc) => doc.id == widget.currentUserUid);
+          safeAssignedValue =
+          currentUserExists ? widget.currentUserUid : null;
         }
 
         return StatefulBuilder(
-          builder: (context, setLocalState) => DropdownButtonFormField<String>(
-            value: safeAssignedValue,
-            decoration: _inputDecoration(label: 'Assign to', icon: Icons.person_pin_circle_outlined),
-            items: docs.map((doc) {
-              final data = doc.data();
-              final name = _extractUserName(data, fallbackUid: doc.id);
-              final role = (data['role'] ?? '').toString().trim();
-              return DropdownMenuItem<String>(
-                value: doc.id,
-                child: Text(role.isEmpty ? name : '$name • $role', overflow: TextOverflow.ellipsis),
-              );
-            }).toList(),
-            onChanged: _canAssignOthers ? (value) {
-              _assignedToUid = value;
-              setLocalState(() {});
-            } : null,
-            validator: (value) {
-              final finalValue = _canAssignOthers ? value : widget.currentUserUid;
-              if (finalValue == null || finalValue.trim().isEmpty) return 'Please select assigned user';
-              return null;
-            },
-          ),
+          builder: (context, setLocalState) {
+            return _buildDropdownField<String>(
+              label: 'Account Owner *',
+              value: safeAssignedValue,
+              items: docs.map((doc) {
+                final data = doc.data();
+                final name = _extractUserName(
+                  data,
+                  fallbackUid: doc.id,
+                );
+                final role = (data['role'] ?? '').toString().trim();
+                return DropdownMenuItem<String>(
+                  value: doc.id,
+                  child: Text(
+                    role.isEmpty ? name : '$name • $role',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                );
+              }).toList(),
+              onChanged: _canAssignOthers
+                  ? (value) {
+                _assignedToUid = value;
+                setLocalState(() {});
+              }
+                  : null,
+              validator: (value) {
+                final finalValue = _canAssignOthers
+                    ? value
+                    : widget.currentUserUid;
+                if (finalValue == null || finalValue.trim().isEmpty) {
+                  return 'Please select assigned user';
+                }
+                return null;
+              },
+            );
+          },
         );
       },
     );
   }
 
-  Widget _buildAssignmentSection() {
-    return _SectionBlock(
-      title: 'Ownership & Assignment',
-      subtitle: 'Who owns and manages this customer record',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildAssignUserDropdown(),
-          if (!_canAssignOthers) ...[
-            const SizedBox(height: 10),
-            Text('You can create customer only for yourself.', style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600)),
-          ],
+  PreferredSizeWidget? _buildSectionNavigation(bool compact) {
+    if (compact) return null;
+
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(42),
+      child: _SectionNavigation(
+        items: [
+          _SectionNavigationItem(
+            label: 'General',
+            onTap: () => _scrollToSection(_generalSectionKey),
+          ),
+          _SectionNavigationItem(
+            label: 'Commercial & Tax',
+            onTap: () => _scrollToSection(_commercialSectionKey),
+          ),
+          _SectionNavigationItem(
+            label: 'Contact & CRM',
+            onTap: () => _scrollToSection(_contactCrmSectionKey),
+          ),
+          _SectionNavigationItem(
+            label: 'Addresses',
+            onTap: () => _scrollToSection(_addressesSectionKey),
+          ),
+          _SectionNavigationItem(
+            label: 'Ownership & Notes',
+            onTap: () => _scrollToSection(_ownershipSectionKey),
+          ),
         ],
       ),
     );
@@ -2224,130 +3352,214 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      onPopInvoked: (didPop) async {
-        if (didPop) return;
-        final bool shouldPop = await _onWillPop();
-        if (shouldPop && context.mounted) {
-          Navigator.of(context).pop();
-        }
-      },
-      child: Scaffold(
-        backgroundColor: Colors.grey.shade100,
-        appBar: AppBar(
-          elevation: 0,
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black87,
-          titleSpacing: 16,
-          title: Text(_isEdit ? 'Edit Customer' : 'Add Customer', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18)),
-          actions: [
-            if (_customerCode != null || !_isEdit)
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 20),
+    final mediaWidth = MediaQuery.sizeOf(context).width;
+    final isCompactHeader = mediaWidth < 720;
+    final baseTheme = Theme.of(context);
+
+    return Theme(
+      data: baseTheme.copyWith(
+        visualDensity: const VisualDensity(horizontal: -1, vertical: -1),
+        scaffoldBackgroundColor: _pageBackground,
+      ),
+      child: PopScope(
+        canPop: false,
+        onPopInvoked: (didPop) async {
+          if (didPop) return;
+          final shouldPop = await _onWillPop();
+          if (shouldPop && context.mounted) {
+            Navigator.of(context).pop();
+          }
+        },
+        child: Scaffold(
+          backgroundColor: _pageBackground,
+          appBar: AppBar(
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            surfaceTintColor: Colors.transparent,
+            backgroundColor: Colors.white,
+            foregroundColor: _textPrimary,
+            toolbarHeight: 58,
+            titleSpacing: 10,
+            title: Text(
+              _isEdit ? 'Edit Customer' : 'Add Customer',
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 17,
+                letterSpacing: -0.2,
+              ),
+            ),
+            bottom: _buildSectionNavigation(isCompactHeader),
+            actions: [
+              if (!isCompactHeader && (_customerCode != null || !_isEdit))
+                Center(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 5,
+                    ),
                     decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.blue.shade200),
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(5),
                     ),
                     child: Text(
-                      _isEdit ? 'Code: $_customerCode' : 'Code: Auto-generated',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.blue.shade800),
+                      _isEdit ? '$_customerCode' : 'Auto code',
+                      style: const TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF1D4ED8),
+                      ),
                     ),
                   ),
                 ),
-              ),
-          ],
-        ),
-        body: _isLoadingExisting
-            ? const Center(child: CircularProgressIndicator())
-            : Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 1180),
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final isWide = constraints.maxWidth >= 980;
-
-                          if (isWide) {
-                            return Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  flex: 7,
-                                  child: Column(
-                                    children: [
-                                      _buildAccountSection(),
-                                      const SizedBox(height: 16),
-                                      _buildAddressesSection(),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  flex: 5,
-                                  child: Column(
-                                    children: [
-                                      _buildPrimaryContactSection(),
-                                      const SizedBox(height: 16),
-                                      _buildClassificationSection(),
-                                      const SizedBox(height: 16),
-                                      _buildAssignmentSection(),
-                                      const SizedBox(height: 16),
-                                      _buildNotesSection(),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            );
-                          }
-
-                          return Column(
-                            children: [
-                              _buildAccountSection(),
-                              const SizedBox(height: 16),
-                              _buildPrimaryContactSection(),
-                              const SizedBox(height: 16),
-                              _buildClassificationSection(),
-                              const SizedBox(height: 16),
-                              _buildAssignmentSection(),
-                              const SizedBox(height: 16),
-                              _buildAddressesSection(),
-                              const SizedBox(height: 16),
-                              _buildNotesSection(),
-                            ],
-                          );
-                        },
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: isCompactHeader
+                      ? IconButton(
+                    tooltip: _isEdit
+                        ? 'Update Customer'
+                        : 'Save Customer',
+                    onPressed: _isSaving ? null : _saveCustomer,
+                    style: IconButton.styleFrom(
+                      backgroundColor: _primaryColor,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor:
+                      const Color(0xFFCBD5E1),
+                      minimumSize: const Size(38, 38),
+                    ),
+                    icon: _isSaving
+                        ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                        : const Icon(
+                      Icons.save_outlined,
+                      size: 18,
+                    ),
+                  )
+                      : FilledButton.icon(
+                    onPressed: _isSaving ? null : _saveCustomer,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _primaryColor,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      minimumSize: const Size(0, 38),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                    icon: _isSaving
+                        ? const SizedBox(
+                      width: 15,
+                      height: 15,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                        : const Icon(
+                      Icons.save_outlined,
+                      size: 16,
+                    ),
+                    label: Text(
+                      _isEdit ? 'Update Customer' : 'Save Customer',
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
                 ),
               ),
-              _buildBottomSaveBar(),
             ],
+          ),
+          body: _isLoadingExisting
+              ? const Center(child: CircularProgressIndicator())
+              : Form(
+            key: _formKey,
+            child: LayoutBuilder(
+              builder: (context, viewport) {
+                final horizontalPadding = viewport.maxWidth >= 1000
+                    ? 24.0
+                    : 12.0;
+
+                return Scrollbar(
+                  controller: _scrollController,
+                  interactive: true,
+                  child: SingleChildScrollView(
+                    controller: _scrollController,
+                    padding: EdgeInsets.fromLTRB(
+                      horizontalPadding,
+                      16,
+                      horizontalPadding,
+                      30,
+                    ),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints:
+                        const BoxConstraints(maxWidth: 1500),
+                        child: Container(
+                          clipBehavior: Clip.antiAlias,
+                          decoration: BoxDecoration(
+                            color: _surfaceColor,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: _borderColor),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Color(0x0A0F172A),
+                                blurRadius: 14,
+                                offset: Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            children: [
+                              _buildAccountSection(
+                                key: _generalSectionKey,
+                              ),
+                              _buildInternationalProfileSection(
+                                key: _commercialSectionKey,
+                              ),
+                              _buildContactAndCrmSection(
+                                key: _contactCrmSectionKey,
+                              ),
+                              _buildAddressesSection(
+                                key: _addressesSectionKey,
+                              ),
+                              _buildOwnershipAndNotesSection(
+                                key: _ownershipSectionKey,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildAccountSection() {
+  Widget _buildAccountSection({Key? key}) {
     return _SectionBlock(
-      title: 'Account Details',
-      subtitle: 'Business identity and core contact channels',
+      key: key,
+      title: 'General Information',
       child: Column(
         children: [
           _ResponsiveRow(
+            minChildWidth: 230,
             children: [
               CustomerDuplicateLookupField(
                 lookupType: CustomerDuplicateLookupType.name,
@@ -2357,47 +3569,18 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
                 fieldBuilder: (onChanged) => _buildTextField(
                   controller: _companyController,
                   label: 'Company / Firm Name *',
-                  icon: Icons.apartment_outlined,
-                  validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                  validator: (value) =>
+                  value == null || value.trim().isEmpty
+                      ? 'Required'
+                      : null,
                   onChanged: onChanged,
                 ),
               ),
               _buildTextField(
                 controller: _websiteController,
                 label: 'Website',
-                icon: Icons.language_outlined,
                 keyboardType: TextInputType.url,
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _ResponsiveRow(
-            children: [
-              CustomerDuplicateLookupField(
-                lookupType: CustomerDuplicateLookupType.phone,
-                searchService: _liveDuplicateSearchService,
-                excludedCustomerId: widget.existingDoc?.id,
-                onViewCustomer: _openDuplicateCustomer,
-                fieldBuilder: (onChanged) => _buildTextField(
-                  controller: _phoneController,
-                  label: 'Primary Phone *',
-                  icon: Icons.phone_outlined,
-                  keyboardType: TextInputType.phone,
-                  validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-                  onChanged: onChanged,
-                ),
-              ),
-              _buildTextField(
-                controller: _altPhoneController,
-                label: 'Alternate Phone',
-                icon: Icons.local_phone_outlined,
-                keyboardType: TextInputType.phone,
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _ResponsiveRow(
-            children: [
               CustomerDuplicateLookupField(
                 lookupType: CustomerDuplicateLookupType.email,
                 searchService: _liveDuplicateSearchService,
@@ -2406,16 +3589,86 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
                 fieldBuilder: (onChanged) => _buildTextField(
                   controller: _businessEmailController,
                   label: 'Business Email',
-                  icon: Icons.email_outlined,
                   keyboardType: TextInputType.emailAddress,
                   onChanged: onChanged,
-                  validator: (v) {
-                    final email = (v ?? '').trim();
+                  validator: (value) {
+                    final email = (value ?? '').trim();
                     if (email.isEmpty) return null;
-                    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) return 'Enter valid email';
+                    if (!RegExp(
+                      r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
+                    ).hasMatch(email)) {
+                      return 'Enter valid email';
+                    }
                     return null;
                   },
                 ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _ResponsiveRow(
+            minChildWidth: 300,
+            children: [
+              CustomerDuplicateLookupField(
+                lookupType: CustomerDuplicateLookupType.phone,
+                searchService: _liveDuplicateSearchService,
+                excludedCustomerId: widget.existingDoc?.id,
+                onViewCustomer: _openDuplicateCustomer,
+                fieldBuilder: (onChanged) => _InternationalPhoneField(
+                  controller: _phoneController,
+                  label: 'Primary Phone *',
+                  countryCode: _primaryPhoneCountryCode,
+                  onCountryChanged: _changePrimaryPhoneCountry,
+                  validator: (value) =>
+                  value == null || value.trim().isEmpty
+                      ? 'Required'
+                      : null,
+                  onChanged: onChanged,
+                ),
+              ),
+              _InternationalPhoneField(
+                controller: _altPhoneController,
+                label: 'Alternate Phone',
+                countryCode: _alternatePhoneCountryCode,
+                onCountryChanged: (country) {
+                  _safeSetState(() {
+                    _alternatePhoneCountryCode = country.isoCode;
+                  });
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInternationalProfileSection({Key? key}) {
+    final country = _selectedCustomerCountry;
+    final currency = _selectedCurrency;
+    final countryDefaultCurrency =
+    CustomerCountryCurrencyCatalog.currencyByCode(
+      country.currencyCode,
+      fallbackCode: currency.code,
+    );
+
+    return _SectionBlock(
+      key: key,
+      title: 'Commercial & Tax Profile',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _ResponsiveRow(
+            minChildWidth: 220,
+            children: [
+              _CountryPickerField(
+                value: country,
+                label: 'Customer Country *',
+                onChanged: _changeCustomerCountry,
+              ),
+              _CurrencyPickerField(
+                value: currency,
+                onChanged: _changeCustomerCurrency,
               ),
               CustomerDuplicateLookupField(
                 lookupType: CustomerDuplicateLookupType.gst,
@@ -2424,276 +3677,399 @@ class _ScreensAddCustomerState extends State<ScreensAddCustomer> {
                 onViewCustomer: _openDuplicateCustomer,
                 fieldBuilder: (onChanged) => _buildTextField(
                   controller: _gstController,
-                  label: 'Primary GST',
-                  icon: Icons.receipt_long_outlined,
+                  label: country.taxRegistrationLabel,
                   textCapitalization: TextCapitalization.characters,
                   onChanged: onChanged,
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _ResponsiveRow(
-            children: [
               _buildTextField(
                 controller: _panController,
-                label: 'PAN',
-                icon: Icons.badge_outlined,
+                label: country.businessRegistrationLabel,
                 textCapitalization: TextCapitalization.characters,
               ),
-              const SizedBox.shrink(),
             ],
           ),
+          if (_currencyManuallySelected &&
+              country.currencyCode != 'XXX' &&
+              currency.code != country.currencyCode) ...[
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () {
+                  _safeSetState(() {
+                    _currencyCode = countryDefaultCurrency.code;
+                    _currencyManuallySelected = false;
+                  });
+                },
+                style: TextButton.styleFrom(
+                  foregroundColor: _primaryColor,
+                  visualDensity: VisualDensity.compact,
+                  minimumSize: Size.zero,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 5,
+                    vertical: 3,
+                  ),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Text(
+                  'Use ${countryDefaultCurrency.code}, the country default',
+                  style: const TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildClassificationSection() {
+  Widget _buildContactAndCrmSection({Key? key}) {
     return StatefulBuilder(
-        builder: (context, setLocalState) {
-          return _SectionBlock(
-            title: 'CRM Classification',
-            subtitle: 'Standard segmentation and lifecycle fields',
-            child: Column(
-              children: [
-                _ResponsiveRow(
-                  children: [
-                    DropdownButtonFormField<String>(
-                      value: _customerStage,
-                      decoration: _inputDecoration(label: 'Customer Stage', icon: Icons.account_tree_outlined),
-                      items: _customerStageOptions.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
-                      onChanged: (value) => setLocalState(() => _customerStage = value),
-                    ),
-                    DropdownButtonFormField<String>(
-                      value: _customerType,
-                      decoration: _inputDecoration(label: 'Customer Type', icon: Icons.groups_2_outlined),
-                      items: _customerTypeOptions.map((t) => DropdownMenuItem(value: t, child: Text(t, overflow: TextOverflow.ellipsis))).toList(),
-                      onChanged: (value) {
-                        setLocalState(() {
-                          _customerType = value;
-                          if (value != 'Other') _customerTypeCustomController.clear();
-                        });
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                _ResponsiveRow(
-                  children: [
-                    DropdownButtonFormField<String>(
-                      value: _industry,
-                      decoration: _inputDecoration(label: 'Industry', icon: Icons.factory_outlined),
-                      items: _industryOptions.map((t) => DropdownMenuItem(value: t, child: Text(t, overflow: TextOverflow.ellipsis))).toList(),
-                      onChanged: (value) {
-                        setLocalState(() {
-                          _industry = value;
-                          if (value != 'Other') _industryCustomController.clear();
-                        });
-                      },
-                    ),
-                    DropdownButtonFormField<String>(
-                      value: _leadSource,
-                      decoration: _inputDecoration(label: 'Lead Source', icon: Icons.campaign_outlined),
-                      items: _leadSourceOptions.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
-                      onChanged: (value) => setLocalState(() => _leadSource = value),
-                    ),
-                  ],
-                ),
-                if (_customerType == 'Other' || _industry == 'Other') ...[
-                  const SizedBox(height: 12),
-                  _ResponsiveRow(
-                    children: [
-                      _customerType == 'Other'
-                          ? _buildTextField(controller: _customerTypeCustomController, label: 'Custom Customer Type', icon: Icons.edit_outlined)
-                          : const SizedBox.shrink(),
-                      _industry == 'Other'
-                          ? _buildTextField(controller: _industryCustomController, label: 'Custom Industry', icon: Icons.tune_outlined)
-                          : const SizedBox.shrink(),
-                    ],
+      builder: (context, setLocalState) {
+        return _SectionBlock(
+          key: key,
+          title: 'Contact & CRM Profile',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const _SubsectionLabel('Primary contact'),
+              _ResponsiveRow(
+                minChildWidth: 210,
+                children: [
+                  _buildTextField(
+                    controller: _contactNameController,
+                    label: 'Contact Name',
+                  ),
+                  _buildTextField(
+                    controller: _designationController,
+                    label: 'Designation',
+                  ),
+                  _buildTextField(
+                    controller: _departmentController,
+                    label: 'Department',
                   ),
                 ],
+              ),
+              const SizedBox(height: 16),
+              const _SubsectionLabel('CRM classification'),
+              _ResponsiveRow(
+                minChildWidth: 190,
+                children: [
+                  _buildDropdownField<String>(
+                    label: 'Customer Stage',
+                    value: _customerStage,
+                    items: _customerStageOptions
+                        .map(
+                          (value) => DropdownMenuItem<String>(
+                        value: value,
+                        child: Text(value),
+                      ),
+                    )
+                        .toList(),
+                    onChanged: (value) {
+                      setLocalState(() => _customerStage = value);
+                    },
+                  ),
+                  _buildDropdownField<String>(
+                    label: 'Customer Type',
+                    value: _customerType,
+                    items: _customerTypeOptions
+                        .map(
+                          (value) => DropdownMenuItem<String>(
+                        value: value,
+                        child: Text(
+                          value,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    )
+                        .toList(),
+                    onChanged: (value) {
+                      setLocalState(() {
+                        _customerType = value;
+                        if (value != 'Other') {
+                          _customerTypeCustomController.clear();
+                        }
+                      });
+                    },
+                  ),
+                  _buildDropdownField<String>(
+                    label: 'Industry',
+                    value: _industry,
+                    items: _industryOptions
+                        .map(
+                          (value) => DropdownMenuItem<String>(
+                        value: value,
+                        child: Text(
+                          value,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    )
+                        .toList(),
+                    onChanged: (value) {
+                      setLocalState(() {
+                        _industry = value;
+                        if (value != 'Other') {
+                          _industryCustomController.clear();
+                        }
+                      });
+                    },
+                  ),
+                  _buildDropdownField<String>(
+                    label: 'Lead Source',
+                    value: _leadSource,
+                    items: _leadSourceOptions
+                        .map(
+                          (value) => DropdownMenuItem<String>(
+                        value: value,
+                        child: Text(value),
+                      ),
+                    )
+                        .toList(),
+                    onChanged: (value) {
+                      setLocalState(() => _leadSource = value);
+                    },
+                  ),
+                ],
+              ),
+              if (_customerType == 'Other' || _industry == 'Other') ...[
                 const SizedBox(height: 12),
                 _ResponsiveRow(
+                  minChildWidth: 220,
                   children: [
-                    DropdownButtonFormField<String>(
-                      value: _status,
-                      decoration: _inputDecoration(label: 'Status', icon: Icons.verified_user_outlined),
-                      items: _statusOptions.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
-                      onChanged: (value) => setLocalState(() => _status = value),
-                    ),
-                    DropdownButtonFormField<String>(
-                      value: _priority,
-                      decoration: _inputDecoration(label: 'Priority', icon: Icons.flag_outlined),
-                      items: _priorityOptions.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
-                      onChanged: (value) => setLocalState(() => _priority = value),
-                    ),
+                    if (_customerType == 'Other')
+                      _buildTextField(
+                        controller: _customerTypeCustomController,
+                        label: 'Custom Customer Type',
+                      ),
+                    if (_industry == 'Other')
+                      _buildTextField(
+                        controller: _industryCustomController,
+                        label: 'Custom Industry',
+                      ),
                   ],
                 ),
               ],
-            ),
-          );
-        }
-    );
-  }
-
-  Widget _buildPrimaryContactSection() {
-    return _SectionBlock(
-      title: 'Primary Contact',
-      subtitle: 'Main person linked with this account',
-      child: Column(
-        children: [
-          _buildTextField(
-            controller: _contactNameController,
-            label: 'Contact Name',
-            icon: Icons.person_outline,
-          ),
-          const SizedBox(height: 12),
-          _ResponsiveRow(
-            children: [
-              _buildTextField(controller: _designationController, label: 'Designation', icon: Icons.badge_outlined),
-              _buildTextField(controller: _departmentController, label: 'Department', icon: Icons.account_tree_outlined),
+              const SizedBox(height: 12),
+              _ResponsiveRow(
+                minChildWidth: 220,
+                children: [
+                  _buildDropdownField<String>(
+                    label: 'Status',
+                    value: _status,
+                    items: _statusOptions
+                        .map(
+                          (value) => DropdownMenuItem<String>(
+                        value: value,
+                        child: Text(value),
+                      ),
+                    )
+                        .toList(),
+                    onChanged: (value) {
+                      setLocalState(() => _status = value);
+                    },
+                  ),
+                  _buildDropdownField<String>(
+                    label: 'Priority',
+                    value: _priority,
+                    items: _priorityOptions
+                        .map(
+                          (value) => DropdownMenuItem<String>(
+                        value: value,
+                        child: Text(value),
+                      ),
+                    )
+                        .toList(),
+                    onChanged: (value) {
+                      setLocalState(() => _priority = value);
+                    },
+                  ),
+                ],
+              ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   Widget _buildEmptyAddressState() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _borderColor),
       ),
-      child: Column(
+      child: Row(
         children: [
-          Icon(Icons.location_off_outlined, size: 48, color: Colors.grey.shade400),
-          const SizedBox(height: 12),
-          Text('No Addresses Found', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.grey.shade800)),
-          const SizedBox(height: 6),
-          Text('Add at least one address to continue.', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
+          Container(
+            width: 38,
+            height: 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(7),
+              border: Border.all(color: _borderColor),
+            ),
+            child: const Icon(
+              Icons.location_on_outlined,
+              size: 19,
+              color: _textSecondary,
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'No address configured',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w800,
+                    color: _textPrimary,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'Add at least one address to complete the customer master.',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    color: _textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          OutlinedButton.icon(
             onPressed: _addAddress,
-            icon: const Icon(Icons.add, size: 18),
+            icon: const Icon(Icons.add_rounded, size: 16),
             label: const Text('Add Address'),
-            style: ElevatedButton.styleFrom(elevation: 0),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildAddressesSection() {
+  Widget _buildAddressesSection({Key? key}) {
     return _SectionBlock(
+      key: key,
       title: 'Business Addresses',
-      subtitle: 'Locations, shipping points, and regional contact details',
+      trailing: TextButton.icon(
+        onPressed: _addAddress,
+        style: TextButton.styleFrom(
+          foregroundColor: _primaryColor,
+          minimumSize: const Size(0, 30),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          textStyle: const TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        icon: const Icon(Icons.add_rounded, size: 16),
+        label: const Text('Add Address'),
+      ),
       child: ValueListenableBuilder<int>(
-          valueListenable: _addressListNotifier,
-          builder: (context, _, __) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (_addresses.isEmpty)
-                  _buildEmptyAddressState()
-                else
-                  ReorderableListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: _addresses.length,
-                    buildDefaultDragHandles: false,
-                    onReorderStart: (_) => FocusScope.of(context).unfocus(),
-                    onReorder: _onReorderAddresses,
-                    proxyDecorator: (child, index, animation) => Material(color: Colors.transparent, child: child),
-                    itemBuilder: (context, index) {
-                      final address = _addresses[index];
-                      return _AddressCardWidget(
-                        key: ValueKey(address.id),
-                        index: index,
-                        address: address,
-                        isDuplicateType: address.type != 'Other' && _addresses.where((a) => a.type == address.type).length > 1,
-                        onDuplicate: () => _duplicateAddress(index),
-                        onRemove: () => _removeAddress(index),
-                        onSetPrimary: () => _setPrimaryAddress(index),
-                      );
-                    },
-                  ),
+        valueListenable: _addressListNotifier,
+        builder: (context, _, __) {
+          if (_addresses.isEmpty) return _buildEmptyAddressState();
 
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: _addAddress,
-                  icon: const Icon(Icons.add_location_alt_outlined, size: 18),
-                  label: const Text('Add Another Address'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          return ReorderableListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _addresses.length,
+            buildDefaultDragHandles: false,
+            onReorderStart: (_) => FocusScope.of(context).unfocus(),
+            onReorder: _onReorderAddresses,
+            proxyDecorator: (child, index, animation) {
+              return Material(
+                color: Colors.transparent,
+                elevation: 2,
+                child: child,
+              );
+            },
+            itemBuilder: (context, index) {
+              final address = _addresses[index];
+              return _AddressCardWidget(
+                key: ValueKey(address.id),
+                index: index,
+                address: address,
+                isDuplicateType: address.type != 'Other' &&
+                    _addresses
+                        .where((item) => item.type == address.type)
+                        .length >
+                        1,
+                onDuplicate: () => _duplicateAddress(index),
+                onRemove: () => _removeAddress(index),
+                onSetPrimary: () => _setPrimaryAddress(index),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildOwnershipAndNotesSection({Key? key}) {
+    return _SectionBlock(
+      key: key,
+      title: 'Ownership & Notes',
+      showDivider: false,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isWide = constraints.maxWidth >= 780;
+
+          final owner = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildAssignUserDropdown(),
+              if (!_canAssignOthers) ...[
+                const SizedBox(height: 6),
+                const Text(
+                  'Your role can assign this customer only to your own account.',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    color: _textSecondary,
                   ),
                 ),
+              ],
+            ],
+          );
+
+          final notes = _buildTextField(
+            controller: _notesController,
+            label: 'Internal Notes',
+            hint: 'Sales context, remarks or internal instructions',
+            maxLines: 3,
+          );
+
+          if (!isWide) {
+            return Column(
+              children: [
+                owner,
+                const SizedBox(height: 14),
+                notes,
               ],
             );
           }
-      ),
-    );
-  }
 
-  Widget _buildNotesSection() {
-    return _SectionBlock(
-      title: 'Internal Notes',
-      subtitle: 'Sales context, remarks or follow-up notes',
-      child: _buildTextField(
-        controller: _notesController,
-        label: 'Notes / Remarks',
-        icon: Icons.edit_note_outlined,
-        maxLines: 5,
-      ),
-    );
-  }
-
-  Widget _buildBottomSaveBar() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-      decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: Colors.grey.shade200)),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), offset: const Offset(0, -4), blurRadius: 10)]
-      ),
-      child: SafeArea(
-        top: false,
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1180),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _isEdit ? 'Update the customer record after reviewing the details.' : 'Save this new customer record to CRM.',
-                    style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                SizedBox(
-                  width: 170,
-                  height: 46,
-                  child: ElevatedButton.icon(
-                    onPressed: _isSaving ? null : _saveCustomer,
-                    icon: _isSaving
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
-                        : Icon(_isEdit ? Icons.save_outlined : Icons.add_circle_outline, size: 18),
-                    label: Text(_isEdit ? 'Update' : 'Save Customer'),
-                    style: ElevatedButton.styleFrom(
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(flex: 4, child: owner),
+              const SizedBox(width: 14),
+              Expanded(flex: 8, child: notes),
+            ],
+          );
+        },
       ),
     );
   }
@@ -2720,3 +4096,4 @@ const List<String> _leadSourceOptions = [
 const List<String> _statusOptions = ['Active', 'Prospect', 'Lead', 'Dormant', 'Blocked'];
 
 const List<String> _priorityOptions = ['Low', 'Medium', 'High', 'Critical'];
+

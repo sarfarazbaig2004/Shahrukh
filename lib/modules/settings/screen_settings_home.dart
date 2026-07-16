@@ -10,8 +10,9 @@ import 'package:QUIK/core/theme/app_theme.dart';
 import 'package:QUIK/modules/notifications/screen_notification_center.dart';
 import 'package:QUIK/modules/settings/screen_company_profile_bank_settings.dart';
 import 'package:QUIK/modules/settings/letterhead_settings_screen.dart';
+import 'package:QUIK/modules/settings/screen_email_settings.dart';
 
-enum _SettingsSection { personal, workspace, access, system, danger }
+enum _SettingsSection { personal, workspace, access, integration, system, danger }
 
 class ScreenSettingsHome extends StatefulWidget {
   final String companyId;
@@ -95,6 +96,12 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
           section: _SettingsSection.access,
           title: 'Users & Access',
           icon: Icons.admin_panel_settings_outlined,
+        ),
+      if (!isExportImport && isAdminOrManager)
+        const _NavItemData(
+          section: _SettingsSection.integration,
+          title: 'Integrations',
+          icon: Icons.hub_outlined,
         ),
       if (!isExportImport && (canOpenAuditLogs || isAdminOrManager))
         const _NavItemData(
@@ -233,11 +240,12 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
         _showSnack('Company logo updated successfully.');
       }
     } on FirebaseException catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _isUploadingLogo = false;
           _uploadProgress = null;
         });
+      }
       debugPrint('Firebase Storage Exception: ${e.code} - ${e.message}');
       _showSnack(
         e.code == 'unauthorized'
@@ -246,11 +254,12 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
         isError: true,
       );
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _isUploadingLogo = false;
           _uploadProgress = null;
         });
+      }
       debugPrint('Unknown Upload Error: $e');
       _showSnack('Failed to upload logo: $e', isError: true);
     }
@@ -340,8 +349,7 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
     int totalFields = 6;
 
     if ((data['companyName'] ?? '').toString().isNotEmpty) score++;
-    if ((data['companyLogoUrl'] ?? data['logoUrl'] ?? '').toString().isNotEmpty)
-      score++;
+    if ((data['companyLogoUrl'] ?? data['logoUrl'] ?? '').toString().isNotEmpty) score++;
     if ((data['gstNo'] ?? '').toString().isNotEmpty) score++;
     if ((data['panNo'] ?? '').toString().isNotEmpty) score++;
     if ((data['industry'] ?? '').toString().isNotEmpty) score++;
@@ -474,6 +482,8 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
         return _buildWorkspaceSection();
       case _SettingsSection.access:
         return _buildAccessSection();
+      case _SettingsSection.integration:
+        return _buildIntegrationSection();
       case _SettingsSection.system:
         return _buildSystemSection();
       case _SettingsSection.danger:
@@ -576,7 +586,6 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 🔥 FIX: Clean URL Network Image
                       Stack(
                         alignment: Alignment.center,
                         children: [
@@ -591,7 +600,7 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
                             ),
                             child: logoUrl != null
                                 ? Image.network(
-                              logoUrl, // ❌ NO Cache Buster Strings
+                              logoUrl,
                               fit: BoxFit.contain,
                               errorBuilder: (context, error, stackTrace) {
                                 return const Icon(
@@ -894,10 +903,32 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
     );
   }
 
+  Widget _buildIntegrationSection() {
+    return _SectionPanel(
+      title: 'Integrations & Configuration',
+      subtitle: 'Manage external setups, business communications, and APIs.',
+      children: [
+        _ActionTile(
+          title: 'Email',
+          subtitle: 'Configure SMTP providers, connected email accounts, and core templates.',
+          icon: Icons.email_outlined,
+          enabled: isAdminOrManager,
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => ScreenEmailSettings(companyId: widget.companyId),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
   Widget _buildSystemSection() {
     return _SectionPanel(
       title: 'System',
-      subtitle: 'Logs, integrations, and workspace-level system controls.',
+      subtitle: 'Logs, security policies, and workspace-level system controls.',
       children: [
         if (canOpenAuditLogs)
           _ActionTile(
@@ -908,13 +939,6 @@ class _ScreenSettingsHomeState extends State<ScreenSettingsHome> {
             onTap: widget.onOpenAuditLogs,
           ),
         if (!isExportImport) ...[
-          _ActionTile(
-            title: 'Integrations',
-            subtitle: 'Connect external systems and future APIs.',
-            icon: Icons.hub_outlined,
-            enabled: isAdminOrManager,
-            onTap: () => _showComingSoon('Integrations'),
-          ),
           _ActionTile(
             title: 'Security Policies',
             subtitle:

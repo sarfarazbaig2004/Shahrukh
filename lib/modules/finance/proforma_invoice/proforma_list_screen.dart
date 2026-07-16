@@ -1,7 +1,34 @@
+// UI REVISION V2: Reference and Created columns removed; status is single-line; created date appears under creator.
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:QUIK/modules/finance/proforma_invoice/proforma_screen.dart';
 import 'package:QUIK/modules/finance/proforma_invoice/proforma_invoice_pdf_generator.dart';
+
+
+// =========================================================
+// ENTERPRISE PROFORMA WORKSPACE THEME
+// =========================================================
+const Color _zSlate50 = Color(0xFFF8FAFC);
+const Color _zSlate100 = Color(0xFFF1F5F9);
+const Color _zSlate200 = Color(0xFFE2E8F0);
+const Color _zSlate300 = Color(0xFFCBD5E1);
+const Color _zSlate400 = Color(0xFF94A3B8);
+const Color _zSlate500 = Color(0xFF64748B);
+const Color _zSlate600 = Color(0xFF475569);
+const Color _zSlate700 = Color(0xFF334155);
+const Color _zSlate800 = Color(0xFF1E293B);
+const Color _zSoftHoverBorder = Color(0xFFB8C7D9);
+const Color _zErpPrimaryBlue = Color(0xFF2F6EA5);
+
+const double _proformaGridMinWidth = 1040;
+const double _proformaGridHorizontalPadding = 12;
+const double _proformaGridActionWidth = 48;
+const int _proformaCustomerFlex = 34;
+const int _proformaStatusFlex = 10;
+const int _proformaItemsFlex = 19;
+const int _proformaAmountFlex = 14;
+const int _proformaOwnerFlex = 14;
+const int _proformaFollowUpFlex = 9;
 
 class ProformaListScreen extends StatefulWidget {
   final String companyId;
@@ -14,6 +41,8 @@ class ProformaListScreen extends StatefulWidget {
 
 class _ProformaListScreenState extends State<ProformaListScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  final ValueNotifier<String> _searchNotifier = ValueNotifier<String>('');
 
   String _searchText = '';
   String _statusFilter = 'All';
@@ -41,6 +70,8 @@ class _ProformaListScreenState extends State<ProformaListScreen> {
 
   @override
   void dispose() {
+    _searchNotifier.dispose();
+    _searchFocusNode.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -48,14 +79,6 @@ class _ProformaListScreenState extends State<ProformaListScreen> {
   // ==========================================
   // HELPER FUNCTIONS & FORMATTING
   // ==========================================
-
-  String _formatCompactDate(DateTime? date) {
-    if (date == null) return '-';
-    final d = date.day.toString().padLeft(2, '0');
-    final m = date.month.toString().padLeft(2, '0');
-    final y = date.year.toString();
-    return '$d/$m/$y';
-  }
 
   bool get _hasActiveFilters =>
       _statusFilter != 'All' || _sortOption != 'Date: Newest';
@@ -85,32 +108,32 @@ class _ProformaListScreenState extends State<ProformaListScreen> {
   }
 
   Future<bool> _confirmAction(
-    String title,
-    String content, {
-    String confirmText = 'Confirm',
-    bool isDestructive = false,
-  }) async {
+      String title,
+      String content, {
+        String confirmText = 'Confirm',
+        bool isDestructive = false,
+      }) async {
     return await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: Text(title),
-            content: Text(content),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: isDestructive ? Colors.red : Colors.blue,
-                  foregroundColor: Colors.white,
-                ),
-                onPressed: () => Navigator.pop(ctx, true),
-                child: Text(confirmText),
-              ),
-            ],
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(content),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
           ),
-        ) ??
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isDestructive ? Colors.red : Colors.blue,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(confirmText),
+          ),
+        ],
+      ),
+    ) ??
         false;
   }
 
@@ -147,9 +170,9 @@ class _ProformaListScreenState extends State<ProformaListScreen> {
 
       if (doc.exists && doc.data() != null) {
         final name =
-            (doc.data()!['name'] ?? doc.data()!['fullName'] ?? 'Unknown')
-                .toString()
-                .trim();
+        (doc.data()!['name'] ?? doc.data()!['fullName'] ?? 'Unknown')
+            .toString()
+            .trim();
         if (mounted) {
           setState(() {
             _userNamesCache[uid] = name.isNotEmpty ? name : 'Unknown';
@@ -176,10 +199,10 @@ class _ProformaListScreenState extends State<ProformaListScreen> {
   // ==========================================
 
   Future<void> _updateStatus(
-    String docId,
-    String newStatus, {
-    bool setApprovedAt = false,
-  }) async {
+      String docId,
+      String newStatus, {
+        bool setApprovedAt = false,
+      }) async {
     try {
       _showLoading(true);
       final updates = <String, dynamic>{
@@ -214,9 +237,9 @@ class _ProformaListScreenState extends State<ProformaListScreen> {
           .collection('proforma_invoices')
           .doc(docId)
           .update({
-            'isDeleted': true,
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
+        'isDeleted': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
       _showSnack('Proforma invoice deleted');
     } catch (e) {
       _showSnack('Error deleting: $e', isError: true);
@@ -266,9 +289,9 @@ class _ProformaListScreenState extends State<ProformaListScreen> {
   }
 
   Future<void> _convertToInvoice(
-    String docId,
-    Map<String, dynamic> data,
-  ) async {
+      String docId,
+      Map<String, dynamic> data,
+      ) async {
     try {
       _showLoading(true);
 
@@ -366,7 +389,7 @@ class _ProformaListScreenState extends State<ProformaListScreen> {
                       items: _statuses
                           .map(
                             (e) => DropdownMenuItem(value: e, child: Text(e)),
-                          )
+                      )
                           .toList(),
                       onChanged: (value) {
                         setModalState(() {
@@ -385,7 +408,7 @@ class _ProformaListScreenState extends State<ProformaListScreen> {
                       items: _sortOptions
                           .map(
                             (e) => DropdownMenuItem(value: e, child: Text(e)),
-                          )
+                      )
                           .toList(),
                       onChanged: (value) {
                         setModalState(() {
@@ -433,8 +456,8 @@ class _ProformaListScreenState extends State<ProformaListScreen> {
   }
 
   List<QueryDocumentSnapshot<Map<String, dynamic>>> _applyLocalFilters(
-    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
-  ) {
+      List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+      ) {
     final search = _searchText.trim().toLowerCase();
 
     var filtered = docs.where((doc) {
@@ -449,11 +472,11 @@ class _ProformaListScreenState extends State<ProformaListScreen> {
 
       final matchesSearch =
           search.isEmpty ||
-          piNumber.contains(search) ||
-          customer.contains(search);
+              piNumber.contains(search) ||
+              customer.contains(search);
       final matchesStatus =
           _statusFilter == 'All' ||
-          status.toLowerCase() == _statusFilter.toLowerCase();
+              status.toLowerCase() == _statusFilter.toLowerCase();
 
       return !isDeleted && matchesSearch && matchesStatus;
     }).toList();
@@ -467,12 +490,12 @@ class _ProformaListScreenState extends State<ProformaListScreen> {
             double.tryParse(
               (dataA['grandTotal'] ?? dataA['totalAmount'] ?? 0).toString(),
             ) ??
-            0;
+                0;
         final amtB =
             double.tryParse(
               (dataB['grandTotal'] ?? dataB['totalAmount'] ?? 0).toString(),
             ) ??
-            0;
+                0;
         return _sortOption.contains('High')
             ? amtB.compareTo(amtA)
             : amtA.compareTo(amtB);
@@ -490,6 +513,460 @@ class _ProformaListScreenState extends State<ProformaListScreen> {
     return filtered;
   }
 
+
+  void _onSearchChanged(String value) {
+    if (_searchNotifier.value == value) return;
+    _searchText = value;
+    _searchNotifier.value = value;
+  }
+
+  void _clearSearch() {
+    _searchController.clear();
+    _searchText = '';
+    _searchNotifier.value = '';
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _searchFocusNode.requestFocus();
+    });
+  }
+
+  Future<void> _openProformaEditor(String docId) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProformaScreen(
+          companyId: widget.companyId,
+          proformaId: docId,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openProformaPreview(
+      String docId,
+      Map<String, dynamic> data,
+      ) async {
+    final previewData = Map<String, dynamic>.from(data);
+    previewData['id'] = docId;
+
+    List<ProformaLocalItem> parsedItems = <ProformaLocalItem>[];
+    final rawItems = previewData['items'];
+    if (rawItems is List) {
+      try {
+        parsedItems = rawItems
+            .whereType<Map>()
+            .map(
+              (item) => ProformaLocalItem.fromMap(
+            Map<String, dynamic>.from(item),
+          ),
+        )
+            .toList();
+      } catch (_) {
+        parsedItems = <ProformaLocalItem>[];
+      }
+    }
+
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProformaPreviewScreen(
+          data: previewData,
+          items: parsedItems,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleProformaAction(
+      String value,
+      QueryDocumentSnapshot<Map<String, dynamic>> doc,
+      ) async {
+    final data = doc.data();
+
+    switch (value) {
+      case 'edit':
+        await _openProformaEditor(doc.id);
+        break;
+      case 'view_pdf':
+        await _openProformaPreview(doc.id, data);
+        break;
+      case 'approve':
+        final confirm = await _confirmAction(
+          'Approve Proforma',
+          'Are you sure you want to approve this proforma invoice?',
+        );
+        if (confirm) {
+          await _updateStatus(
+            doc.id,
+            'Approved',
+            setApprovedAt: true,
+          );
+        }
+        break;
+      case 'reject':
+        final confirm = await _confirmAction(
+          'Reject Proforma',
+          'Are you sure you want to reject this proforma invoice?',
+        );
+        if (confirm) {
+          await _updateStatus(doc.id, 'Rejected');
+        }
+        break;
+      case 'cancel':
+        final confirm = await _confirmAction(
+          'Cancel Proforma',
+          'Are you sure you want to cancel this proforma invoice?',
+        );
+        if (confirm) {
+          await _updateStatus(doc.id, 'Cancelled');
+        }
+        break;
+      case 'revise':
+        final confirm = await _confirmAction(
+          'Create Revision',
+          'Are you sure you want to create a new revision from this proforma?',
+        );
+        if (confirm) {
+          await _createRevision(doc.id, data);
+        }
+        break;
+      case 'convert':
+        final confirm = await _confirmAction(
+          'Convert to Invoice',
+          'Are you sure you want to convert this Proforma into a final Tax Invoice?',
+        );
+        if (confirm) {
+          await _convertToInvoice(doc.id, data);
+        }
+        break;
+      case 'delete':
+        final confirm = await _confirmAction(
+          'Delete Proforma',
+          'Are you sure you want to delete this proforma invoice?',
+          confirmText: 'Delete',
+          isDestructive: true,
+        );
+        if (confirm) {
+          await _deleteProforma(doc.id);
+        }
+        break;
+    }
+  }
+
+  Widget _buildWorkspaceHeader({
+    required String searchValue,
+    required int total,
+    required int draft,
+    required int sent,
+    required int approved,
+    required int converted,
+    required String totalValue,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: _zSlate200)),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final bool compactToolbar = constraints.maxWidth < 980;
+          final Widget searchBox = _buildToolbarSearchBox(searchValue);
+          final Widget kpiBar = _buildToolbarKpiBar(
+            total: total,
+            draft: draft,
+            sent: sent,
+            approved: approved,
+            converted: converted,
+            totalValue: totalValue,
+          );
+          final Widget actions = _buildToolbarActions();
+
+          if (compactToolbar) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                searchBox,
+                const SizedBox(height: 7),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: kpiBar,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    actions,
+                  ],
+                ),
+              ],
+            );
+          }
+
+          final double searchWidth = constraints.maxWidth < 1250 ? 280 : 330;
+          return Row(
+            children: [
+              SizedBox(width: searchWidth, child: searchBox),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: kpiBar,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              actions,
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildToolbarSearchBox(String searchValue) {
+    return SizedBox(
+      height: 30,
+      child: TextField(
+        controller: _searchController,
+        focusNode: _searchFocusNode,
+        textInputAction: TextInputAction.search,
+        onChanged: _onSearchChanged,
+        style: const TextStyle(fontSize: 11, color: _zSlate700),
+        decoration: InputDecoration(
+          hintText: 'Search proforma number or customer...',
+          hintStyle: const TextStyle(color: _zSlate400, fontSize: 10.8),
+          prefixIcon: const Icon(Icons.search, size: 14, color: _zSlate400),
+          prefixIconConstraints: const BoxConstraints(minWidth: 30),
+          suffixIconConstraints: const BoxConstraints(minWidth: 30),
+          suffixIcon: searchValue.trim().isEmpty
+              ? null
+              : IconButton(
+            tooltip: 'Clear search',
+            icon: const Icon(Icons.close, size: 13, color: _zSlate500),
+            padding: EdgeInsets.zero,
+            onPressed: _clearSearch,
+          ),
+          isDense: true,
+          filled: true,
+          fillColor: const Color(0xFFFBFCFE),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: const BorderSide(color: _zSlate200),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: const BorderSide(color: _zSlate200),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: const BorderSide(color: _zSlate300),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildToolbarKpiBar({
+    required int total,
+    required int draft,
+    required int sent,
+    required int approved,
+    required int converted,
+    required String totalValue,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _EnterpriseProformaKpi(title: 'Total', value: total.toString()),
+        const SizedBox(width: 16),
+        _EnterpriseProformaKpi(title: 'Value', value: totalValue),
+        const SizedBox(width: 16),
+        _EnterpriseProformaKpi(title: 'Draft', value: draft.toString()),
+        const SizedBox(width: 16),
+        _EnterpriseProformaKpi(title: 'Sent', value: sent.toString()),
+        const SizedBox(width: 16),
+        _EnterpriseProformaKpi(title: 'Approved', value: approved.toString()),
+        const SizedBox(width: 16),
+        _EnterpriseProformaKpi(title: 'Converted', value: converted.toString()),
+      ],
+    );
+  }
+
+  Widget _buildToolbarActions() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _ProformaToolbarButton(
+          icon: Icons.filter_list_rounded,
+          label: _hasActiveFilters ? 'Filters (Active)' : 'Filters',
+          isActive: _hasActiveFilters,
+          onTap: _openFilterSheet,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActiveFiltersSummary() {
+    if (!_hasActiveFilters) return const SizedBox.shrink();
+
+    final List<Widget> chips = <Widget>[];
+
+    Widget buildChip(String label, VoidCallback onClear) {
+      return Container(
+        height: 22,
+        padding: const EdgeInsets.only(left: 8, right: 5),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: _zSlate200),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+                color: _zSlate600,
+              ),
+            ),
+            const SizedBox(width: 4),
+            InkWell(
+              onTap: onClear,
+              borderRadius: BorderRadius.circular(8),
+              child: const Padding(
+                padding: EdgeInsets.all(1),
+                child: Icon(Icons.close, size: 11, color: _zSlate400),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_statusFilter != 'All') {
+      chips.add(
+        buildChip('Status: $_statusFilter', () {
+          setState(() => _statusFilter = 'All');
+        }),
+      );
+    }
+    if (_sortOption != 'Date: Newest') {
+      chips.add(
+        buildChip('Sort: $_sortOption', () {
+          setState(() => _sortOption = 'Date: Newest');
+        }),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+      decoration: const BoxDecoration(
+        color: _zSlate50,
+        border: Border(bottom: BorderSide(color: _zSlate100)),
+      ),
+      child: Wrap(
+        spacing: 5,
+        runSpacing: 5,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(right: 2),
+            child: Text(
+              'Active filters',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: _zSlate500,
+              ),
+            ),
+          ),
+          ...chips,
+          InkWell(
+            onTap: _resetFilters,
+            borderRadius: BorderRadius.circular(4),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              child: Text(
+                'Clear all',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: _zSlate600,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTableHeader() {
+    return Container(
+      height: 30,
+      padding: const EdgeInsets.symmetric(
+        horizontal: _proformaGridHorizontalPadding,
+      ),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF4F7FA),
+        border: Border(bottom: BorderSide(color: _zSlate300, width: 0.9)),
+      ),
+      child: const Row(
+        children: [
+          Expanded(
+            flex: _proformaCustomerFlex,
+            child: _ProformaHeaderText('Proforma / Customer'),
+          ),
+          Expanded(
+            flex: _proformaStatusFlex,
+            child: _ProformaHeaderText('Status'),
+          ),
+          Expanded(
+            flex: _proformaItemsFlex,
+            child: _ProformaHeaderText('Items'),
+          ),
+          Expanded(
+            flex: _proformaAmountFlex,
+            child: _ProformaHeaderText('Amount'),
+          ),
+          Expanded(
+            flex: _proformaOwnerFlex,
+            child: _ProformaHeaderText('Created By'),
+          ),
+          Expanded(
+            flex: _proformaFollowUpFlex,
+            child: _ProformaHeaderText('Follow-up'),
+          ),
+          SizedBox(
+            width: _proformaGridActionWidth,
+            child: Center(child: _ProformaHeaderText('Actions')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _compactMoney(double value) {
+    final double absolute = value.abs();
+    if (absolute >= 10000000) {
+      return '₹ ${(value / 10000000).toStringAsFixed(2)} Cr';
+    }
+    if (absolute >= 100000) {
+      return '₹ ${(value / 100000).toStringAsFixed(2)} L';
+    }
+    if (absolute >= 1000) {
+      return '₹ ${(value / 1000).toStringAsFixed(1)} K';
+    }
+    return '₹ ${value.toStringAsFixed(2)}';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Stack(
@@ -503,19 +980,27 @@ class _ProformaListScreenState extends State<ProformaListScreen> {
             backgroundColor: Colors.white,
             surfaceTintColor: Colors.transparent,
           ),
-          floatingActionButton: FloatingActionButton(
-            tooltip: 'Create Proforma Invoice',
-            backgroundColor: const Color(0xFF2563EB),
-            foregroundColor: Colors.white,
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ProformaScreen(companyId: widget.companyId),
-                ),
-              );
-            },
-            child: const Icon(Icons.add),
+          floatingActionButton: SizedBox(
+            width: 52,
+            height: 52,
+            child: FloatingActionButton(
+              tooltip: 'Create Proforma Invoice',
+              backgroundColor: _zErpPrimaryBlue,
+              foregroundColor: Colors.white,
+              elevation: 1,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ProformaScreen(companyId: widget.companyId),
+                  ),
+                );
+              },
+              child: const Icon(Icons.add, size: 18),
+            ),
           ),
           body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
             stream: FirebaseFirestore.instance
@@ -528,650 +1013,139 @@ class _ProformaListScreenState extends State<ProformaListScreen> {
                 return Center(
                   child: Text(
                     'Error loading proforma invoices:\n${snapshot.error}',
-                    style: const TextStyle(color: Colors.red),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Color(0xFF8A4F4F),
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 );
               }
 
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
+                return const _ProformaLoadingWorkspace();
               }
 
-              final allDocs = snapshot.data?.docs.toList() ?? [];
-              final filteredDocs = _applyLocalFilters(allDocs);
+              final allDocs = snapshot.data?.docs.toList() ??
+                  <QueryDocumentSnapshot<Map<String, dynamic>>>[];
 
-              int total = filteredDocs.length;
-              int draft = 0;
-              int sent = 0;
-              int approved = 0;
+              return ValueListenableBuilder<String>(
+                valueListenable: _searchNotifier,
+                builder: (context, searchValue, _) {
+                  final filteredDocs = _applyLocalFilters(allDocs);
 
-              for (final doc in filteredDocs) {
-                final status = (doc.data()['status'] ?? '')
-                    .toString()
-                    .toLowerCase();
-                if (status == 'draft') draft++;
-                if (status == 'sent') sent++;
-                if (status == 'approved') approved++;
-              }
+                  int draft = 0;
+                  int sent = 0;
+                  int approved = 0;
+                  int converted = 0;
+                  double totalValue = 0;
 
-              return Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
-                    child: Row(
-                      children: [
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 320),
-                          child: SizedBox(
-                            height: 38,
-                            child: TextField(
-                              controller: _searchController,
-                              onChanged: (value) {
-                                setState(() {
-                                  _searchText = value;
-                                });
-                              },
-                              decoration: InputDecoration(
-                                hintText: 'Search customer, number...',
-                                prefixIcon: const Icon(Icons.search, size: 18),
-                                suffixIcon: _searchText.trim().isEmpty
-                                    ? null
-                                    : IconButton(
-                                        tooltip: 'Clear',
-                                        icon: const Icon(Icons.close, size: 17),
-                                        onPressed: () {
-                                          _searchController.clear();
-                                          setState(() {
-                                            _searchText = '';
-                                          });
+                  for (final doc in filteredDocs) {
+                    final data = doc.data();
+                    final status = (data['status'] ?? '')
+                        .toString()
+                        .toLowerCase();
+                    totalValue += double.tryParse(
+                      (data['grandTotal'] ?? data['totalAmount'] ?? 0)
+                          .toString()
+                          .replaceAll(',', ''),
+                    ) ??
+                        0;
+
+                    if (status == 'draft') draft++;
+                    if (status == 'sent') sent++;
+                    if (status == 'approved') approved++;
+                    if (status == 'converted') converted++;
+                  }
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildWorkspaceHeader(
+                        searchValue: searchValue,
+                        total: filteredDocs.length,
+                        draft: draft,
+                        sent: sent,
+                        approved: approved,
+                        converted: converted,
+                        totalValue: _compactMoney(totalValue),
+                      ),
+                      _buildActiveFiltersSummary(),
+                      Expanded(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final double tableWidth =
+                            constraints.maxWidth < _proformaGridMinWidth
+                                ? _proformaGridMinWidth
+                                : constraints.maxWidth;
+
+                            return SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: SizedBox(
+                                width: tableWidth,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    _buildTableHeader(),
+                                    Expanded(
+                                      child: filteredDocs.isEmpty
+                                          ? _EmptyProformaState(
+                                        hasSearch:
+                                        searchValue.trim().isNotEmpty ||
+                                            _hasActiveFilters,
+                                        onReset: () {
+                                          _clearSearch();
+                                          _resetFilters();
+                                        },
+                                      )
+                                          : ListView.builder(
+                                        padding: const EdgeInsets.only(
+                                          bottom: 92,
+                                        ),
+                                        itemCount: filteredDocs.length,
+                                        itemBuilder: (context, index) {
+                                          final doc = filteredDocs[index];
+                                          return _EnterpriseProformaRow(
+                                            key: ValueKey(doc.id),
+                                            document: doc,
+                                            creatorName: _getCreatorName(
+                                              doc.data(),
+                                            ),
+                                            onEdit: () =>
+                                                _openProformaEditor(doc.id),
+                                            onView: () =>
+                                                _openProformaPreview(
+                                                  doc.id,
+                                                  doc.data(),
+                                                ),
+                                            onAction: (value) =>
+                                                _handleProformaAction(
+                                                  value,
+                                                  doc,
+                                                ),
+                                          );
                                         },
                                       ),
-                                isDense: true,
-                                filled: true,
-                                fillColor: Colors.grey.shade100,
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 8,
-                                ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: BorderSide.none,
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: BorderSide.none,
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: BorderSide.none,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          height: 38,
-                          width: 38,
-                          child: Material(
-                            color: Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(10),
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(10),
-                              onTap: _openFilterSheet,
-                              child: Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.tune_rounded,
-                                    size: 18,
-                                    color: Colors.grey.shade800,
-                                  ),
-                                  if (_hasActiveFilters)
-                                    Positioned(
-                                      right: 8,
-                                      top: 8,
-                                      child: Container(
-                                        width: 7,
-                                        height: 7,
-                                        decoration: BoxDecoration(
-                                          color: Colors.blue.shade700,
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
                                     ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                          ),
+                            );
+                          },
                         ),
-                        const Spacer(),
-                        _MiniStatText(label: 'Total', value: total.toString()),
-                        const SizedBox(width: 10),
-                        _MiniStatText(label: 'Draft', value: draft.toString()),
-                        const SizedBox(width: 10),
-                        _MiniStatText(label: 'Sent', value: sent.toString()),
-                        const SizedBox(width: 10),
-                        _MiniStatText(
-                          label: 'Approved',
-                          value: approved.toString(),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (_hasActiveFilters)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Filters applied',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade700,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: _resetFilters,
-                            child: const Text('Clear'),
-                          ),
-                        ],
                       ),
-                    ),
-                  Expanded(
-                    child: filteredDocs.isEmpty
-                        ? _EmptyProformaState(
-                            hasSearch:
-                                _searchText.trim().isNotEmpty ||
-                                _hasActiveFilters,
-                            onReset: () {
-                              _searchController.clear();
-                              setState(() {
-                                _searchText = '';
-                              });
-                              _resetFilters();
-                            },
-                          )
-                        : ListView.separated(
-                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 90),
-                            itemCount: filteredDocs.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(height: 8),
-                            itemBuilder: (context, index) {
-                              final doc = filteredDocs[index];
-                              final data = doc.data();
-
-                              final rawPINo = (data['proformaNumber'] ?? '')
-                                  .toString()
-                                  .trim();
-                              final proformaNo = rawPINo.isEmpty
-                                  ? 'Draft'
-                                  : rawPINo;
-
-                              final status = (data['status'] ?? 'Draft')
-                                  .toString();
-                              final customerName =
-                                  (data['customerName'] ??
-                                          data['clientName'] ??
-                                          'Unknown Customer')
-                                      .toString();
-
-                              final createdByName = _getCreatorName(data);
-
-                              String referenceRef = '';
-                              final refNumber = (data['referenceNumber'] ?? '')
-                                  .toString()
-                                  .trim();
-                              final qtNumber = (data['quotationNumber'] ?? '')
-                                  .toString()
-                                  .trim();
-                              final inqNumber = (data['inquiryNumber'] ?? '')
-                                  .toString()
-                                  .trim();
-
-                              if (refNumber.isNotEmpty) {
-                                referenceRef = refNumber;
-                              } else if (qtNumber.isNotEmpty) {
-                                referenceRef = qtNumber;
-                              } else if (inqNumber.isNotEmpty) {
-                                referenceRef = inqNumber;
-                              }
-
-                              final displayReference = referenceRef.isNotEmpty
-                                  ? '# $referenceRef'
-                                  : '';
-
-                              final grandTotal =
-                                  double.tryParse(
-                                    (data['grandTotal'] ??
-                                            data['totalAmount'] ??
-                                            0)
-                                        .toString(),
-                                  ) ??
-                                  0.0;
-                              final amountStr =
-                                  '₹ ${grandTotal.toStringAsFixed(2)}';
-
-                              DateTime? createdAt;
-                              if (data['createdAt'] is Timestamp) {
-                                createdAt = (data['createdAt'] as Timestamp)
-                                    .toDate();
-                              }
-
-                              DateTime? nextFollowUp;
-                              if (data['nextFollowUpDate'] is Timestamp) {
-                                nextFollowUp =
-                                    (data['nextFollowUpDate'] as Timestamp)
-                                        .toDate();
-                              }
-
-                              final statLw = status.toLowerCase();
-
-                              return Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: Colors.grey.shade200,
-                                    width: 0.8,
-                                  ),
-                                ),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(10),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          CircleAvatar(
-                                            radius: 18,
-                                            backgroundColor:
-                                                Colors.blue.shade50,
-                                            child: Text(
-                                              customerName.isNotEmpty
-                                                  ? customerName[0]
-                                                        .toUpperCase()
-                                                  : '?',
-                                              style: TextStyle(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w700,
-                                                color: Colors.blue.shade800,
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  proformaNo,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: const TextStyle(
-                                                    fontSize: 14.5,
-                                                    fontWeight: FontWeight.w700,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 1),
-                                                Text(
-                                                  customerName,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: TextStyle(
-                                                    fontSize: 12.5,
-                                                    color: Colors.grey.shade600,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          SizedBox(
-                                            width: 28,
-                                            height: 28,
-                                            child: PopupMenuButton<String>(
-                                              padding: EdgeInsets.zero,
-                                              tooltip: 'Actions',
-                                              icon: Icon(
-                                                Icons.more_vert,
-                                                size: 20,
-                                                color: Colors.grey.shade600,
-                                              ),
-                                              onSelected: (value) async {
-                                                switch (value) {
-                                                  case 'edit':
-                                                    Navigator.push(
-                                                      context,
-                                                      MaterialPageRoute(
-                                                        builder: (_) =>
-                                                            ProformaScreen(
-                                                              companyId: widget
-                                                                  .companyId,
-                                                              proformaId:
-                                                                  doc.id,
-                                                            ),
-                                                      ),
-                                                    );
-                                                    break;
-                                                  case 'view_pdf':
-                                                    final previewData =
-                                                        Map<
-                                                          String,
-                                                          dynamic
-                                                        >.from(data);
-                                                    previewData['id'] = doc.id;
-
-                                                    // Safely parse the dynamic items into the strictly typed List<ProformaLocalItem> required by the preview screen
-                                                    List<ProformaLocalItem>
-                                                    parsedItems = [];
-                                                    if (previewData['items'] !=
-                                                            null &&
-                                                        previewData['items']
-                                                            is List) {
-                                                      try {
-                                                        parsedItems =
-                                                            (previewData['items']
-                                                                    as List)
-                                                                .map((e) {
-                                                                  return ProformaLocalItem.fromMap(
-                                                                    Map<
-                                                                      String,
-                                                                      dynamic
-                                                                    >.from(
-                                                                      e as Map,
-                                                                    ),
-                                                                  );
-                                                                })
-                                                                .toList();
-                                                      } catch (_) {
-                                                        // Silent catch to prevent crash if mapping fails
-                                                      }
-                                                    }
-
-                                                    Navigator.push(
-                                                      context,
-                                                      MaterialPageRoute(
-                                                        builder: (_) =>
-                                                            ProformaPreviewScreen(
-                                                              data: previewData,
-                                                              items:
-                                                                  parsedItems,
-                                                            ),
-                                                      ),
-                                                    );
-                                                    break;
-                                                  case 'approve':
-                                                    final confirm =
-                                                        await _confirmAction(
-                                                          'Approve Proforma',
-                                                          'Are you sure you want to approve this proforma invoice?',
-                                                        );
-                                                    if (confirm) {
-                                                      await _updateStatus(
-                                                        doc.id,
-                                                        'Approved',
-                                                        setApprovedAt: true,
-                                                      );
-                                                    }
-                                                    break;
-                                                  case 'reject':
-                                                    final confirm =
-                                                        await _confirmAction(
-                                                          'Reject Proforma',
-                                                          'Are you sure you want to reject this proforma invoice?',
-                                                        );
-                                                    if (confirm) {
-                                                      await _updateStatus(
-                                                        doc.id,
-                                                        'Rejected',
-                                                      );
-                                                    }
-                                                    break;
-                                                  case 'cancel':
-                                                    final confirm =
-                                                        await _confirmAction(
-                                                          'Cancel Proforma',
-                                                          'Are you sure you want to cancel this proforma invoice?',
-                                                        );
-                                                    if (confirm) {
-                                                      await _updateStatus(
-                                                        doc.id,
-                                                        'Cancelled',
-                                                      );
-                                                    }
-                                                    break;
-                                                  case 'revise':
-                                                    final confirm =
-                                                        await _confirmAction(
-                                                          'Create Revision',
-                                                          'Are you sure you want to create a new revision from this proforma?',
-                                                        );
-                                                    if (confirm) {
-                                                      await _createRevision(
-                                                        doc.id,
-                                                        data,
-                                                      );
-                                                    }
-                                                    break;
-                                                  case 'convert':
-                                                    final confirm =
-                                                        await _confirmAction(
-                                                          'Convert to Invoice',
-                                                          'Are you sure you want to convert this Proforma into a final Tax Invoice?',
-                                                        );
-                                                    if (confirm) {
-                                                      await _convertToInvoice(
-                                                        doc.id,
-                                                        data,
-                                                      );
-                                                    }
-                                                    break;
-                                                  case 'delete':
-                                                    final confirm =
-                                                        await _confirmAction(
-                                                          'Delete Proforma',
-                                                          'Are you sure you want to delete this proforma invoice?',
-                                                          confirmText: 'Delete',
-                                                          isDestructive: true,
-                                                        );
-                                                    if (confirm) {
-                                                      await _deleteProforma(
-                                                        doc.id,
-                                                      );
-                                                    }
-                                                    break;
-                                                }
-                                              },
-                                              itemBuilder: (context) {
-                                                final List<
-                                                  PopupMenuEntry<String>
-                                                >
-                                                menuItems = [];
-
-                                                // Dynamic View / Edit Option
-                                                if (statLw == 'draft' ||
-                                                    statLw == 'rejected') {
-                                                  menuItems.add(
-                                                    const PopupMenuItem(
-                                                      value: 'edit',
-                                                      child: Text('Edit'),
-                                                    ),
-                                                  );
-                                                } else if (statLw == 'sent') {
-                                                  menuItems.add(
-                                                    const PopupMenuItem(
-                                                      value: 'edit',
-                                                      child: Text(
-                                                        'View / Edit',
-                                                      ),
-                                                    ),
-                                                  );
-                                                } else if (statLw ==
-                                                        'approved' ||
-                                                    statLw == 'converted' ||
-                                                    statLw == 'cancelled') {
-                                                  menuItems.add(
-                                                    const PopupMenuItem(
-                                                      value: 'view_pdf',
-                                                      child: Text('View'),
-                                                    ),
-                                                  );
-                                                } else {
-                                                  menuItems.add(
-                                                    const PopupMenuItem(
-                                                      value: 'edit',
-                                                      child: Text(
-                                                        'View / Edit',
-                                                      ),
-                                                    ),
-                                                  );
-                                                }
-
-                                                // Action Options
-                                                if (statLw == 'draft' ||
-                                                    statLw == 'sent') {
-                                                  menuItems.add(
-                                                    const PopupMenuItem(
-                                                      value: 'approve',
-                                                      child: Text('Approve'),
-                                                    ),
-                                                  );
-                                                  menuItems.add(
-                                                    const PopupMenuItem(
-                                                      value: 'reject',
-                                                      child: Text('Reject'),
-                                                    ),
-                                                  );
-                                                }
-
-                                                if (statLw != 'cancelled' &&
-                                                    statLw != 'converted') {
-                                                  menuItems.add(
-                                                    const PopupMenuItem(
-                                                      value: 'cancel',
-                                                      child: Text('Cancel'),
-                                                    ),
-                                                  );
-                                                }
-
-                                                menuItems.add(
-                                                  const PopupMenuItem(
-                                                    value: 'revise',
-                                                    child: Text(
-                                                      'Create Revision',
-                                                    ),
-                                                  ),
-                                                );
-
-                                                if (statLw != 'converted' &&
-                                                    statLw != 'cancelled' &&
-                                                    statLw != 'rejected') {
-                                                  menuItems.add(
-                                                    const PopupMenuItem(
-                                                      value: 'convert',
-                                                      child: Text(
-                                                        'Convert to Invoice',
-                                                      ),
-                                                    ),
-                                                  );
-                                                }
-
-                                                // Delete Option
-                                                menuItems.add(
-                                                  const PopupMenuDivider(),
-                                                );
-                                                menuItems.add(
-                                                  const PopupMenuItem(
-                                                    value: 'delete',
-                                                    child: Text(
-                                                      'Delete',
-                                                      style: TextStyle(
-                                                        color: Colors.red,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                );
-
-                                                return menuItems;
-                                              },
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Wrap(
-                                        spacing: 6,
-                                        runSpacing: 6,
-                                        children: [
-                                          _InfoChip(
-                                            label: status,
-                                            backgroundColor: _statusBg(status),
-                                            textColor: _statusFg(status),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Wrap(
-                                        spacing: 12,
-                                        runSpacing: 6,
-                                        crossAxisAlignment:
-                                            WrapCrossAlignment.center,
-                                        children: [
-                                          if (displayReference.isNotEmpty)
-                                            _InlineInfo(
-                                              icon: Icons.tag_outlined,
-                                              text: displayReference,
-                                            ),
-                                          _InlineInfo(
-                                            icon: Icons.person_outline,
-                                            text: createdByName,
-                                          ),
-                                          _InlineInfo(
-                                            icon: Icons.currency_rupee_outlined,
-                                            text: amountStr,
-                                          ),
-                                          _InlineInfo(
-                                            icon: Icons.add_circle_outline,
-                                            text:
-                                                'Created: ${_formatCompactDate(createdAt)}',
-                                          ),
-                                          if (nextFollowUp != null)
-                                            _InlineInfo(
-                                              icon: Icons.event_repeat_outlined,
-                                              text:
-                                                  'Next: ${_formatCompactDate(nextFollowUp)}',
-                                            ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                  ),
-                ],
+                    ],
+                  );
+                },
               );
             },
           ),
         ),
-
-        // GLOBAL LOADING OVERLAY
         if (_isLoading)
           Container(
-            color: Colors.black.withValues(alpha: 0.3),
+            color: Colors.black.withValues(alpha: 0.28),
             child: const Center(
-              child: CircularProgressIndicator(color: Colors.blue),
+              child: CircularProgressIndicator(color: _zErpPrimaryBlue),
             ),
           ),
       ],
@@ -1179,50 +1153,237 @@ class _ProformaListScreenState extends State<ProformaListScreen> {
   }
 }
 
-class _MiniStatText extends StatelessWidget {
+class _ProformaHeaderText extends StatelessWidget {
   final String label;
-  final String value;
 
-  const _MiniStatText({required this.label, required this.value});
+  const _ProformaHeaderText(this.label);
 
   @override
   Widget build(BuildContext context) {
     return Text(
-      '$label: $value',
-      style: TextStyle(
-        fontSize: 12,
-        color: Colors.grey.shade700,
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      softWrap: false,
+      style: const TextStyle(
+        fontSize: 10.1,
         fontWeight: FontWeight.w600,
+        color: _zSlate600,
+        letterSpacing: 0.04,
       ),
     );
   }
 }
 
-class _InlineInfo extends StatelessWidget {
+class _ProformaToolbarButton extends StatelessWidget {
   final IconData icon;
-  final String text;
+  final String label;
+  final VoidCallback onTap;
+  final bool isActive;
 
-  const _InlineInfo({required this.icon, required this.text});
+  const _ProformaToolbarButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.isActive = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 300),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: Colors.grey.shade600),
-          const SizedBox(width: 4),
-          Flexible(
-            child: Text(
-              text,
-              overflow: TextOverflow.ellipsis,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        height: 26,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          color: isActive ? _zSlate100 : Colors.white,
+          border: Border.all(color: isActive ? _zSlate300 : _zSlate200),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13, color: isActive ? _zSlate700 : _zSlate500),
+            const SizedBox(width: 6),
+            Text(
+              label,
               style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey.shade800,
+                fontSize: 10.5,
                 fontWeight: FontWeight.w500,
+                color: isActive ? _zSlate700 : _zSlate600,
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EnterpriseProformaKpi extends StatelessWidget {
+  final String title;
+  final String value;
+
+  const _EnterpriseProformaKpi({required this.title, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 10.2,
+            color: _zSlate500,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w700,
+            color: _zSlate700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProformaLoadingWorkspace extends StatelessWidget {
+  const _ProformaLoadingWorkspace();
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double tableWidth = constraints.maxWidth < _proformaGridMinWidth
+            ? _proformaGridMinWidth
+            : constraints.maxWidth;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              height: 42,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(bottom: BorderSide(color: _zSlate200)),
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(
+                  width: tableWidth,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Container(
+                        height: 30,
+                        color: const Color(0xFFF4F7FA),
+                      ),
+                      const Expanded(
+                        child: _ProformaSkeletonList(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ProformaSkeletonList extends StatelessWidget {
+  const _ProformaSkeletonList();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      itemCount: 12,
+      itemBuilder: (context, index) => _ProformaSkeletonRow(index: index),
+    );
+  }
+}
+
+class _ProformaSkeletonRow extends StatelessWidget {
+  final int index;
+
+  const _ProformaSkeletonRow({required this.index});
+
+  Widget _block(double width, {double height = 8}) {
+    return Container(
+      width: width * (0.78 + (index % 3) * 0.09),
+      height: height,
+      decoration: BoxDecoration(
+        color: _zSlate100,
+        borderRadius: BorderRadius.circular(3),
+      ),
+    );
+  }
+
+  Widget _twoBlocks(double first, double second) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _block(first, height: 9),
+        const SizedBox(height: 5),
+        _block(second, height: 7),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 54,
+      padding: const EdgeInsets.symmetric(
+        horizontal: _proformaGridHorizontalPadding,
+      ),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: _zSlate100)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            flex: _proformaCustomerFlex,
+            child: _twoBlocks(180, 130),
+          ),
+          Expanded(
+            flex: _proformaStatusFlex,
+            child: _block(65),
+          ),
+          Expanded(
+            flex: _proformaItemsFlex,
+            child: _twoBlocks(110, 70),
+          ),
+          Expanded(
+            flex: _proformaAmountFlex,
+            child: _twoBlocks(90, 58),
+          ),
+          Expanded(
+            flex: _proformaOwnerFlex,
+            child: _twoBlocks(90, 58),
+          ),
+          Expanded(
+            flex: _proformaFollowUpFlex,
+            child: _block(65),
+          ),
+          const SizedBox(
+            width: _proformaGridActionWidth,
+            child: Icon(Icons.more_vert, size: 15, color: _zSlate200),
           ),
         ],
       ),
@@ -1230,33 +1391,583 @@ class _InlineInfo extends StatelessWidget {
   }
 }
 
-class _InfoChip extends StatelessWidget {
-  final String label;
-  final Color backgroundColor;
-  final Color textColor;
+class _EnterpriseProformaRow extends StatefulWidget {
+  final QueryDocumentSnapshot<Map<String, dynamic>> document;
+  final String creatorName;
+  final VoidCallback onEdit;
+  final VoidCallback onView;
+  final ValueChanged<String> onAction;
 
-  const _InfoChip({
+  const _EnterpriseProformaRow({
+    super.key,
+    required this.document,
+    required this.creatorName,
+    required this.onEdit,
+    required this.onView,
+    required this.onAction,
+  });
+
+  @override
+  State<_EnterpriseProformaRow> createState() =>
+      _EnterpriseProformaRowState();
+}
+
+class _EnterpriseProformaRowState extends State<_EnterpriseProformaRow> {
+  bool _isHovered = false;
+
+  String _safeString(dynamic value, {String fallback = ''}) {
+    if (value == null) return fallback;
+    final String text = value.toString().trim();
+    if (text.isEmpty || text == 'null') return fallback;
+    return text;
+  }
+
+  double _toDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(
+      value?.toString().replaceAll(',', '').trim() ?? '',
+    ) ??
+        0;
+  }
+
+  DateTime? _toDate(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is String && value.trim().isNotEmpty) {
+      return DateTime.tryParse(value.trim());
+    }
+    return null;
+  }
+
+  String _dateText(dynamic value) {
+    final DateTime? date = _toDate(value);
+    if (date == null) return '-';
+    final d = date.day.toString().padLeft(2, '0');
+    final m = date.month.toString().padLeft(2, '0');
+    return '$d/$m/${date.year}';
+  }
+
+  String _titleCase(String value, {String fallback = '-'}) {
+    final String text = value.trim();
+    if (text.isEmpty) return fallback;
+    return text
+        .split(RegExp(r'[\s_]+'))
+        .where((part) => part.isNotEmpty)
+        .map(
+          (part) =>
+      '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}',
+    )
+        .join(' ');
+  }
+
+  String _quantityText(double value) {
+    if (value == value.truncateToDouble()) return value.toInt().toString();
+    return value.toStringAsFixed(2);
+  }
+
+  Color _statusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'approved':
+      case 'converted':
+        return const Color(0xFF56745D);
+      case 'sent':
+      case 'viewed':
+        return const Color(0xFF557495);
+      case 'rejected':
+      case 'cancelled':
+        return const Color(0xFF8A4F4F);
+      case 'draft':
+        return const Color(0xFF806B4B);
+      default:
+        return _zSlate600;
+    }
+  }
+
+  List<dynamic> _items(Map<String, dynamic> data) {
+    final raw = data['items'];
+    return raw is List ? raw : const <dynamic>[];
+  }
+
+  String _firstItemName(List<dynamic> items) {
+    if (items.isEmpty) return 'No items';
+    final first = items.first;
+    if (first is Map) {
+      return _safeString(
+        first['name'] ??
+            first['itemName'] ??
+            first['productName'] ??
+            first['description'],
+        fallback: 'Item',
+      );
+    }
+    return _safeString(first, fallback: 'Item');
+  }
+
+  double _totalQuantity(List<dynamic> items) {
+    double total = 0;
+    for (final item in items) {
+      if (item is Map) {
+        total += _toDouble(item['quantity'] ?? item['qty']);
+      }
+    }
+    return total;
+  }
+
+  String _firstUnit(List<dynamic> items) {
+    if (items.isEmpty || items.first is! Map) return '';
+    final first = items.first as Map;
+    return _safeString(first['uom'] ?? first['unit']);
+  }
+
+  String _money(double value) {
+    return '₹ ${value.toStringAsFixed(2)}';
+  }
+
+  Widget _twoLineText({
+    required String primary,
+    required String secondary,
+    Color primaryColor = _zSlate700,
+    Color secondaryColor = _zSlate500,
+    FontWeight primaryWeight = FontWeight.w500,
+    VoidCallback? onPrimaryTap,
+  }) {
+    final Widget primaryWidget = Text(
+      primary,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      softWrap: false,
+      style: TextStyle(
+        fontSize: 11,
+        height: 1.08,
+        color: primaryColor,
+        fontWeight: primaryWeight,
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (onPrimaryTap == null)
+            primaryWidget
+          else
+            InkWell(
+              onTap: onPrimaryTap,
+              borderRadius: BorderRadius.circular(3),
+              child: primaryWidget,
+            ),
+          const SizedBox(height: 3),
+          Text(
+            secondary,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            softWrap: false,
+            style: TextStyle(
+              fontSize: 9.8,
+              height: 1.05,
+              color: secondaryColor,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<PopupMenuEntry<String>> _buildMenu(String status) {
+    final String statLw = status.toLowerCase();
+    final List<PopupMenuEntry<String>> menuItems =
+    <PopupMenuEntry<String>>[];
+
+    if (statLw == 'draft' || statLw == 'rejected') {
+      menuItems.add(
+        const PopupMenuItem(
+          value: 'edit',
+          height: 32,
+          child: _ProformaMenuItem(
+            icon: Icons.edit_outlined,
+            label: 'Edit',
+          ),
+        ),
+      );
+    } else if (statLw == 'sent') {
+      menuItems.add(
+        const PopupMenuItem(
+          value: 'edit',
+          height: 32,
+          child: _ProformaMenuItem(
+            icon: Icons.edit_note_outlined,
+            label: 'View / Edit',
+          ),
+        ),
+      );
+    } else if (statLw == 'approved' ||
+        statLw == 'converted' ||
+        statLw == 'cancelled') {
+      menuItems.add(
+        const PopupMenuItem(
+          value: 'view_pdf',
+          height: 32,
+          child: _ProformaMenuItem(
+            icon: Icons.visibility_outlined,
+            label: 'View',
+          ),
+        ),
+      );
+    } else {
+      menuItems.add(
+        const PopupMenuItem(
+          value: 'edit',
+          height: 32,
+          child: _ProformaMenuItem(
+            icon: Icons.edit_note_outlined,
+            label: 'View / Edit',
+          ),
+        ),
+      );
+    }
+
+    if (statLw == 'draft' || statLw == 'sent') {
+      menuItems.add(const PopupMenuDivider(height: 8));
+      menuItems.add(
+        const PopupMenuItem(
+          value: 'approve',
+          height: 32,
+          child: _ProformaMenuItem(
+            icon: Icons.check_circle_outline,
+            label: 'Approve',
+          ),
+        ),
+      );
+      menuItems.add(
+        const PopupMenuItem(
+          value: 'reject',
+          height: 32,
+          child: _ProformaMenuItem(
+            icon: Icons.highlight_off_outlined,
+            label: 'Reject',
+          ),
+        ),
+      );
+    }
+
+    if (statLw != 'cancelled' && statLw != 'converted') {
+      menuItems.add(
+        const PopupMenuItem(
+          value: 'cancel',
+          height: 32,
+          child: _ProformaMenuItem(
+            icon: Icons.cancel_outlined,
+            label: 'Cancel',
+            destructive: true,
+          ),
+        ),
+      );
+    }
+
+    menuItems.add(const PopupMenuDivider(height: 8));
+    menuItems.add(
+      const PopupMenuItem(
+        value: 'revise',
+        height: 32,
+        child: _ProformaMenuItem(
+          icon: Icons.copy_all_outlined,
+          label: 'Create Revision',
+        ),
+      ),
+    );
+
+    if (statLw != 'converted' &&
+        statLw != 'cancelled' &&
+        statLw != 'rejected') {
+      menuItems.add(
+        const PopupMenuItem(
+          value: 'convert',
+          height: 32,
+          child: _ProformaMenuItem(
+            icon: Icons.receipt_long_outlined,
+            label: 'Convert to Invoice',
+          ),
+        ),
+      );
+    }
+
+    menuItems.add(const PopupMenuDivider(height: 8));
+    menuItems.add(
+      const PopupMenuItem(
+        value: 'delete',
+        height: 32,
+        child: _ProformaMenuItem(
+          icon: Icons.delete_outline,
+          label: 'Delete',
+          destructive: true,
+        ),
+      ),
+    );
+
+    return menuItems;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final data = widget.document.data();
+
+    final String proformaNo = _safeString(
+      data['proformaNumber'],
+      fallback: 'Draft',
+    );
+    final String customerName = _safeString(
+      data['customerName'] ?? data['clientName'],
+      fallback: 'Unknown Customer',
+    );
+    final String status = _safeString(data['status'], fallback: 'Draft');
+    final String statusLower = status.toLowerCase();
+
+    String reference = _safeString(data['referenceNumber']);
+    String referenceType = 'Reference';
+    if (reference.isEmpty) {
+      reference = _safeString(data['quotationNumber']);
+      referenceType = 'Quotation';
+    }
+    if (reference.isEmpty) {
+      reference = _safeString(data['inquiryNumber']);
+      referenceType = 'Inquiry';
+    }
+    if (reference.isEmpty) {
+      reference = '-';
+      referenceType = 'No linked reference';
+    }
+
+    final List<dynamic> items = _items(data);
+    final String firstItem = _firstItemName(items);
+    final double totalQuantity = _totalQuantity(items);
+    final String unit = _firstUnit(items);
+    final String itemSummary = items.isEmpty
+        ? 'No items'
+        : '$firstItem${items.length > 1 ? ' +${items.length - 1}' : ''}';
+    final String quantitySummary = items.isEmpty
+        ? '-'
+        : 'Qty ${_quantityText(totalQuantity)}${unit.isEmpty ? '' : ' $unit'}';
+
+    final double grandTotal = _toDouble(
+      data['grandTotal'] ?? data['totalAmount'],
+    );
+    final double advance = _toDouble(data['advanceAmount']);
+    final double balance = _toDouble(data['balanceAmount']);
+    final String amountSecondary = advance > 0 || balance > 0
+        ? 'Advance ${_money(advance)} • Bal ${_money(balance)}'
+        : '${items.length} item${items.length == 1 ? '' : 's'}';
+
+    final String createdDate = _dateText(data['createdAt']);
+    final String followUpDate = _dateText(data['nextFollowUpDate']);
+
+    final bool opensPreview = statusLower == 'approved' ||
+        statusLower == 'converted' ||
+        statusLower == 'cancelled';
+
+    return RepaintBoundary(
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+          height: 54,
+          padding: const EdgeInsets.symmetric(
+            horizontal: _proformaGridHorizontalPadding,
+          ),
+          decoration: BoxDecoration(
+            color: _isHovered ? const Color(0xFFFBFCFE) : Colors.white,
+            border: Border(
+              bottom: const BorderSide(color: _zSlate100),
+              left: BorderSide(
+                color: _isHovered ? _zSoftHoverBorder : Colors.transparent,
+                width: 2,
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                flex: _proformaCustomerFlex,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            flex: 3,
+                            child: InkWell(
+                              onTap: opensPreview ? widget.onView : widget.onEdit,
+                              borderRadius: BorderRadius.circular(3),
+                              child: Text(
+                                proformaNo,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 11.8,
+                                  height: 1.08,
+                                  fontWeight: FontWeight.w700,
+                                  color: _zErpPrimaryBlue,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            flex: 5,
+                            child: InkWell(
+                              onTap: opensPreview ? widget.onView : widget.onEdit,
+                              borderRadius: BorderRadius.circular(3),
+                              child: Text(
+                                customerName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 11.5,
+                                  height: 1.08,
+                                  fontWeight: FontWeight.w600,
+                                  color: _zSlate800,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        reference == '-'
+                            ? 'No source reference'
+                            : '$referenceType: $reference',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 9.8,
+                          height: 1.05,
+                          color: _zSlate500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: _proformaStatusFlex,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      _titleCase(status),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      softWrap: false,
+                      style: TextStyle(
+                        fontSize: 11,
+                        height: 1.08,
+                        color: _statusColor(status),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: _proformaItemsFlex,
+                child: _twoLineText(
+                  primary: itemSummary,
+                  secondary: quantitySummary,
+                ),
+              ),
+              Expanded(
+                flex: _proformaAmountFlex,
+                child: _twoLineText(
+                  primary: _money(grandTotal),
+                  secondary: amountSecondary,
+                  primaryColor: _zSlate800,
+                  primaryWeight: FontWeight.w700,
+                ),
+              ),
+              Expanded(
+                flex: _proformaOwnerFlex,
+                child: _twoLineText(
+                  primary: widget.creatorName,
+                  secondary: 'Created: $createdDate',
+                ),
+              ),
+              Expanded(
+                flex: _proformaFollowUpFlex,
+                child: Text(
+                  followUpDate,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10.7,
+                    color: followUpDate == '-' ? _zSlate400 : _zSlate600,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: _proformaGridActionWidth,
+                child: Center(
+                  child: PopupMenuButton<String>(
+                    padding: EdgeInsets.zero,
+                    tooltip: 'Actions',
+                    icon: Icon(
+                      Icons.more_vert,
+                      size: 16,
+                      color: _isHovered
+                          ? _zSlate600
+                          : _zSlate400.withValues(alpha: 0.62),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
+                      side: const BorderSide(color: _zSlate200),
+                    ),
+                    onSelected: widget.onAction,
+                    itemBuilder: (context) => _buildMenu(status),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProformaMenuItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool destructive;
+
+  const _ProformaMenuItem({
+    required this.icon,
     required this.label,
-    required this.backgroundColor,
-    required this.textColor,
+    this.destructive = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: textColor,
+    final Color color = destructive ? const Color(0xFF8A4F4F) : _zSlate700;
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: TextStyle(fontSize: 11.5, color: color),
         ),
-      ),
+      ],
     );
   }
 }
@@ -1269,99 +1980,51 @@ class _EmptyProformaState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(28),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight - 40),
-            child: IntrinsicHeight(
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircleAvatar(
-                      radius: 34,
-                      backgroundColor: Colors.blue.shade50,
-                      child: Icon(
-                        hasSearch
-                            ? Icons.search_off
-                            : Icons.request_quote_outlined,
-                        size: 34,
-                        color: Colors.blue.shade700,
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      hasSearch
-                          ? 'No matching proforma invoices found'
-                          : 'No proforma invoices found',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      hasSearch
-                          ? 'Try changing the search text or filter.'
-                          : 'Click the button above to create your first proforma invoice.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.grey.shade700,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    if (hasSearch)
-                      OutlinedButton(
-                        onPressed: onReset,
-                        child: const Text('Reset Filters'),
-                      ),
-                  ],
-                ),
-              ),
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.request_quote_outlined,
+              size: 44,
+              color: _zSlate300,
             ),
-          ),
-        );
-      },
+            const SizedBox(height: 14),
+            Text(
+              hasSearch
+                  ? 'No matching proforma invoices found'
+                  : 'No proforma invoices found',
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: _zSlate700,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              hasSearch
+                  ? 'Try adjusting the search text or active filters.'
+                  : 'Create a proforma invoice to begin tracking this workflow.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 12, color: _zSlate500),
+            ),
+            if (hasSearch) ...[
+              const SizedBox(height: 16),
+              OutlinedButton(
+                onPressed: onReset,
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: _zSlate300),
+                  foregroundColor: _zSlate700,
+                ),
+                child: const Text('Reset Filters'),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
-  }
-}
-
-Color _statusBg(String status) {
-  switch (status.toLowerCase()) {
-    case 'draft':
-      return Colors.orange.shade50;
-    case 'sent':
-    case 'viewed':
-      return Colors.blue.shade50;
-    case 'approved':
-    case 'converted':
-      return Colors.green.shade50;
-    case 'rejected':
-    case 'cancelled':
-      return Colors.red.shade50;
-    default:
-      return Colors.grey.shade100;
-  }
-}
-
-Color _statusFg(String status) {
-  switch (status.toLowerCase()) {
-    case 'draft':
-      return Colors.orange.shade800;
-    case 'sent':
-    case 'viewed':
-      return Colors.blue.shade800;
-    case 'approved':
-    case 'converted':
-      return Colors.green.shade800;
-    case 'rejected':
-    case 'cancelled':
-      return Colors.red.shade800;
-    default:
-      return Colors.grey.shade800;
   }
 }

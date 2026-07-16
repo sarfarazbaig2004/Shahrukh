@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import 'package:QUIK/modules/crm/shared/widgets/crm_workspace_widgets.dart';
+
 // ==========================================
 // ENTERPRISE HELPERS & SAFETY PARSERS
 // ==========================================
@@ -16,6 +18,29 @@ bool _safeBool(dynamic val) {
 
 String _safeString(dynamic val) {
   return (val ?? '').toString().trim();
+}
+
+String _normalizeActivityType(dynamic value) {
+  final normalized = _safeString(value)
+      .toLowerCase()
+      .replaceAll(RegExp(r'[\s-]+'), '_');
+
+  switch (normalized) {
+    case 'salesorder':
+      return 'sales_order';
+    case 'purchaseorder':
+      return 'purchase_order';
+    case 'proforma':
+    case 'proformainvoice':
+      return 'proforma_invoice';
+    case 'servicerequest':
+      return 'service_request';
+    case 'customer_visit':
+    case 'site_visit':
+      return 'visit';
+    default:
+      return normalized;
+  }
 }
 
 DateTime? _extractDate(dynamic value) {
@@ -95,6 +120,7 @@ class ScreensCustomerTimeline extends StatefulWidget {
   final String currentUserUid;
   final String currentUserName;
   final String customerName;
+  final bool embedded;
 
   const ScreensCustomerTimeline({
     super.key,
@@ -103,6 +129,7 @@ class ScreensCustomerTimeline extends StatefulWidget {
     required this.currentUserUid,
     required this.currentUserName,
     required this.customerName,
+    this.embedded = false,
   });
 
   @override
@@ -110,8 +137,12 @@ class ScreensCustomerTimeline extends StatefulWidget {
       _ScreensCustomerTimelineState();
 }
 
-class _ScreensCustomerTimelineState extends State<ScreensCustomerTimeline> {
+class _ScreensCustomerTimelineState extends State<ScreensCustomerTimeline>
+    with AutomaticKeepAliveClientMixin<ScreensCustomerTimeline> {
   final TextEditingController _searchController = TextEditingController();
+
+  late Stream<QuerySnapshot<Map<String, dynamic>>> _activitiesStream;
+  late Stream<DocumentSnapshot<Map<String, dynamic>>> _customerStream;
 
   String _searchQuery = '';
   String _modeFilter = '';
@@ -119,6 +150,28 @@ class _ScreensCustomerTimelineState extends State<ScreensCustomerTimeline> {
   String _dueFilter = '';
   String _activityTypeFilter = 'all';
   String _sortOrder = 'newest';
+
+  @override
+  void initState() {
+    super.initState();
+    _configureStreams();
+  }
+
+  @override
+  void didUpdateWidget(covariant ScreensCustomerTimeline oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.customerRef.path != widget.customerRef.path) {
+      _configureStreams();
+    }
+  }
+
+  void _configureStreams() {
+    _activitiesStream = widget.customerRef.collection('followUps').snapshots();
+    _customerStream = widget.customerRef.snapshots();
+  }
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void dispose() {
@@ -145,14 +198,23 @@ class _ScreensCustomerTimelineState extends State<ScreensCustomerTimeline> {
   // --- ACTIVITY TIMELINE HELPERS ---
 
   Color _getActivityColor(String type) {
-    switch (type.toLowerCase()) {
+    switch (_normalizeActivityType(type)) {
+      case 'inquiry':
+        return const Color(0xFF0EA5E9);
       case 'quotation':
         return const Color(0xFF8B5CF6);
+      case 'sales_order':
+        return const Color(0xFF2563EB);
+      case 'purchase_order':
+        return const Color(0xFF7C3AED);
+      case 'proforma_invoice':
+        return const Color(0xFF14B8A6);
       case 'invoice':
         return const Color(0xFF10B981);
       case 'dispatch':
         return const Color(0xFFF59E0B);
       case 'service':
+      case 'service_request':
         return const Color(0xFFEF4444);
       case 'note':
         return const Color(0xFFEAB308);
@@ -176,14 +238,23 @@ class _ScreensCustomerTimelineState extends State<ScreensCustomerTimeline> {
   }
 
   IconData _getActivityIcon(String type) {
-    switch (type.toLowerCase()) {
+    switch (_normalizeActivityType(type)) {
+      case 'inquiry':
+        return Icons.support_agent_outlined;
       case 'quotation':
         return Icons.request_quote_outlined;
+      case 'sales_order':
+        return Icons.shopping_cart_checkout_outlined;
+      case 'purchase_order':
+        return Icons.inventory_2_outlined;
+      case 'proforma_invoice':
+        return Icons.description_outlined;
       case 'invoice':
         return Icons.receipt_long_outlined;
       case 'dispatch':
         return Icons.local_shipping_outlined;
       case 'service':
+      case 'service_request':
         return Icons.build_outlined;
       case 'note':
         return Icons.note_alt_outlined;
@@ -208,19 +279,34 @@ class _ScreensCustomerTimelineState extends State<ScreensCustomerTimeline> {
   }
 
   String _getActivityTitle(Map<String, dynamic> data, String type) {
+    final customTitle = _safeString(data['activityTitle']);
+    if (customTitle.isNotEmpty) return customTitle;
+
+    final normalizedType = _normalizeActivityType(type);
     final mode = _safeString(data['followUpMode']);
-    if (type == 'followup' || type == 'call' || type == 'visit' || type == 'meeting') {
-      return mode.isEmpty ? type.toUpperCase() : mode;
+    if (normalizedType == 'followup' ||
+        normalizedType == 'call' ||
+        normalizedType == 'visit' ||
+        normalizedType == 'meeting') {
+      return mode.isEmpty
+          ? normalizedType.replaceAll('_', ' ').toUpperCase()
+          : mode;
     }
-    if (type == 'note') return 'Internal Note';
-    if (type == 'quotation') return 'Quotation Created';
-    if (type == 'invoice') return 'Invoice Generated';
-    if (type == 'dispatch') return 'Dispatch Scheduled';
-    if (type == 'service') return 'Service Record';
-    if (type == 'payment') return 'Payment Received';
-    if (type == 'email') return 'Email Sent';
-    if (type == 'document') return 'Document Attached';
-    return type.toUpperCase();
+    if (normalizedType == 'note') return 'Internal Note';
+    if (normalizedType == 'inquiry') return 'Inquiry Received';
+    if (normalizedType == 'quotation') return 'Quotation Activity';
+    if (normalizedType == 'sales_order') return 'Sales Order Activity';
+    if (normalizedType == 'purchase_order') return 'Purchase Order Activity';
+    if (normalizedType == 'proforma_invoice') return 'Proforma Invoice Activity';
+    if (normalizedType == 'invoice') return 'Invoice Activity';
+    if (normalizedType == 'dispatch') return 'Dispatch Activity';
+    if (normalizedType == 'service' || normalizedType == 'service_request') {
+      return 'Service Request Activity';
+    }
+    if (normalizedType == 'payment') return 'Payment Activity';
+    if (normalizedType == 'email') return 'Email Sent';
+    if (normalizedType == 'document') return 'Document Attached';
+    return normalizedType.replaceAll('_', ' ').toUpperCase();
   }
 
   void _openFutureModule(String moduleName) {
@@ -496,7 +582,13 @@ class _ScreensCustomerTimelineState extends State<ScreensCustomerTimeline> {
                                   selectedContactDesignation = '';
                                   return;
                                 }
-                                final selectedDoc = contactDocs.where((e) => e.id == value).firstOrNull;
+                                QueryDocumentSnapshot<Map<String, dynamic>>? selectedDoc;
+                                for (final contactDoc in contactDocs) {
+                                  if (contactDoc.id == value) {
+                                    selectedDoc = contactDoc;
+                                    break;
+                                  }
+                                }
                                 if (selectedDoc != null) {
                                   final data = selectedDoc.data();
                                   selectedContactName = _safeString(data['name']);
@@ -626,6 +718,10 @@ class _ScreensCustomerTimelineState extends State<ScreensCustomerTimeline> {
 
                       await activitiesRef.add({
                         'activityType': selectedType,
+                        'activitySource': 'manual',
+                        'entityType': 'customer',
+                        'entityId': widget.customerRef.id,
+                        'entityNumber': '',
                         'companyId': widget.companyId,
                         'customerId': widget.customerRef.id,
                         'customerName': widget.customerName,
@@ -767,7 +863,7 @@ class _ScreensCustomerTimelineState extends State<ScreensCustomerTimeline> {
     final filtered = docs.where((doc) {
       final data = doc.data();
 
-      final type = _safeString(data['activityType']).toLowerCase();
+      final type = _normalizeActivityType(data['activityType']);
       final mode = _safeString(data['followUpMode']).toLowerCase();
       final outcome = _safeString(data['outcome']).toLowerCase();
       final discussion = _safeString(data['discussion']).toLowerCase();
@@ -859,7 +955,7 @@ class _ScreensCustomerTimelineState extends State<ScreensCustomerTimeline> {
 
   Widget _buildCustomer360Header(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream: widget.customerRef.snapshots(),
+        stream: _customerStream,
         builder: (context, snapshot) {
           if (!snapshot.hasData || snapshot.data == null) {
             return const Padding(
@@ -960,6 +1056,48 @@ class _ScreensCustomerTimelineState extends State<ScreensCustomerTimeline> {
   }
 
   Widget _buildStickyActionBar() {
+    final actions = <CrmActionDefinition>[
+      CrmActionDefinition(
+        label: 'Log Call',
+        icon: Icons.phone_in_talk_outlined,
+        variant: CrmActionVariant.primary,
+        onPressed: () => _openAddActivityDialog(
+          defaultType: 'call',
+          defaultMode: 'Phone Call',
+        ),
+      ),
+      CrmActionDefinition(
+        label: 'Meeting',
+        icon: Icons.groups_outlined,
+        onPressed: () => _openAddActivityDialog(
+          defaultType: 'meeting',
+          defaultMode: 'Meeting',
+        ),
+      ),
+      CrmActionDefinition(
+        label: 'Add Note',
+        icon: Icons.note_alt_outlined,
+        onPressed: () => _openAddActivityDialog(
+          defaultType: 'note',
+          defaultMode: 'Internal Note',
+        ),
+      ),
+      CrmActionDefinition(
+        label: 'Customer Visit',
+        icon: Icons.directions_car_outlined,
+        onPressed: () => _openAddActivityDialog(
+          defaultType: 'visit',
+          defaultMode: 'Site Visit',
+        ),
+      ),
+      CrmActionDefinition(
+        label: 'More Actions',
+        icon: Icons.add_box_outlined,
+        variant: CrmActionVariant.subtle,
+        onPressed: () => _openFutureModule('Create Document'),
+      ),
+    ];
+
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -968,60 +1106,10 @@ class _ScreensCustomerTimelineState extends State<ScreensCustomerTimeline> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ElevatedButton.icon(
-              onPressed: () => _openAddActivityDialog(defaultType: 'call', defaultMode: 'Phone Call'),
-              icon: const Icon(Icons.phone_in_talk_outlined, size: 16),
-              label: const Text('Log Call'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2563EB), foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                elevation: 0,
-              ),
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton.icon(
-              onPressed: () => _openAddActivityDialog(defaultType: 'meeting', defaultMode: 'Meeting'),
-              icon: const Icon(Icons.groups_outlined, size: 16),
-              label: const Text('Meeting'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF334155),
-                side: const BorderSide(color: Color(0xFFE2E8F0)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton.icon(
-              onPressed: () => _openAddActivityDialog(defaultType: 'note', defaultMode: 'Internal Note'),
-              icon: const Icon(Icons.note_alt_outlined, size: 16),
-              label: const Text('Add Note'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF334155),
-                side: const BorderSide(color: Color(0xFFE2E8F0)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton.icon(
-              onPressed: () => _openAddActivityDialog(defaultType: 'visit', defaultMode: 'Site Visit'),
-              icon: const Icon(Icons.directions_car_outlined, size: 16),
-              label: const Text('Visit'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF334155),
-                side: const BorderSide(color: Color(0xFFE2E8F0)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton.icon(
-              onPressed: () => _openFutureModule('Create Document'),
-              icon: const Icon(Icons.add_box_outlined, size: 16),
-              label: const Text('More'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF334155),
-                side: const BorderSide(color: Color(0xFFE2E8F0)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-            ),
+            for (int index = 0; index < actions.length; index++) ...[
+              if (index > 0) const SizedBox(width: 8),
+              CrmActionButton.fromDefinition(actions[index], compact: true),
+            ],
           ],
         ),
       ),
@@ -1031,12 +1119,18 @@ class _ScreensCustomerTimelineState extends State<ScreensCustomerTimeline> {
   Widget _buildQuickFilters() {
     final Map<String, String> filters = {
       'all': 'All Activities',
+      'inquiry': 'Inquiries',
+      'quotation': 'Quotations',
+      'sales_order': 'Sales Orders',
+      'purchase_order': 'Purchase Orders',
+      'proforma_invoice': 'Proforma',
+      'invoice': 'Invoices',
+      'dispatch': 'Dispatches',
+      'service_request': 'Service',
       'call': 'Calls',
       'meeting': 'Meetings',
-      'note': 'Notes',
-      'quotation': 'Quotations',
-      'invoice': 'Invoices',
       'visit': 'Visits',
+      'note': 'Notes',
     };
 
     return Container(
@@ -1204,14 +1298,256 @@ class _ScreensCustomerTimelineState extends State<ScreensCustomerTimeline> {
     return timelineItems;
   }
 
+  Widget _buildSearchAndFilterRow() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _searchController,
+              onChanged: (value) => setState(() => _searchQuery = value),
+              decoration: InputDecoration(
+                hintText: 'Search activities, notes, contacts or owners...',
+                hintStyle: const TextStyle(fontSize: 13),
+                prefixIcon: const Icon(Icons.search, size: 17),
+                suffixIcon: _searchQuery.trim().isEmpty
+                    ? null
+                    : IconButton(
+                  tooltip: 'Clear search',
+                  icon: const Icon(Icons.close, size: 17),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() => _searchQuery = '');
+                  },
+                ),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 13,
+                ),
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Material(
+            color: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+              side: const BorderSide(color: Color(0xFFE2E8F0)),
+            ),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: _openFilterSheet,
+              child: Padding(
+                padding: const EdgeInsets.all(11),
+                child: Stack(
+                  alignment: Alignment.center,
+                  clipBehavior: Clip.none,
+                  children: [
+                    const Icon(
+                      Icons.tune_rounded,
+                      size: 20,
+                      color: Color(0xFF475569),
+                    ),
+                    if (_hasActiveFilters)
+                      Positioned(
+                        right: -4,
+                        top: -4,
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF2563EB),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAppliedFiltersBar() {
+    if (!_hasActiveFilters) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.filter_alt_outlined,
+            size: 14,
+            color: Color(0xFF64748B),
+          ),
+          const SizedBox(width: 6),
+          const Expanded(
+            child: Text(
+              'Advanced filters are applied',
+              style: TextStyle(
+                fontSize: 11,
+                color: Color(0xFF64748B),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: _resetFilters,
+            style: TextButton.styleFrom(
+              minimumSize: Size.zero,
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text('Clear all', style: TextStyle(fontSize: 11)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimelineContent(
+      List<QueryDocumentSnapshot<Map<String, dynamic>>> allDocs,
+      ) {
+    final filteredDocs = _applyFiltersAndSort(allDocs);
+    final timelineItems = _buildTimelineData(filteredDocs);
+
+    return CustomScrollView(
+      key: const PageStorageKey<String>('customer_timeline_scroll'),
+      primary: true,
+      slivers: [
+        if (!widget.embedded) ...[
+          SliverToBoxAdapter(child: _buildCustomer360Header(allDocs)),
+          const SliverToBoxAdapter(
+            child: Divider(height: 1, color: Color(0xFFE2E8F0)),
+          ),
+        ],
+        SliverToBoxAdapter(child: _buildStickyActionBar()),
+        SliverToBoxAdapter(child: _buildQuickFilters()),
+        SliverToBoxAdapter(child: _buildSearchAndFilterRow()),
+        if (_hasActiveFilters)
+          SliverToBoxAdapter(child: _buildAppliedFiltersBar()),
+        if (_activityTypeFilter == 'all' && _searchQuery.isEmpty)
+          SliverToBoxAdapter(child: _buildNextActionPanel(allDocs)),
+        if (timelineItems.isEmpty)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: _EmptyTimelineState(
+              hasSearch:
+              _searchQuery.trim().isNotEmpty || _hasActiveFilters,
+              onReset: () {
+                _searchController.clear();
+                _resetFilters();
+              },
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                  final item = timelineItems[index];
+
+                  if (item is _TimelineHeader) {
+                    return Padding(
+                      padding: const EdgeInsets.only(
+                        left: 48,
+                        top: 16,
+                        bottom: 12,
+                      ),
+                      child: Text(
+                        item.title,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.2,
+                          color: Color(0xFF94A3B8),
+                        ),
+                      ),
+                    );
+                  }
+
+                  if (item is _TimelineActivity) {
+                    return _buildTimelineNode(item);
+                  }
+
+                  return const SizedBox.shrink();
+                },
+                childCount: timelineItems.length,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildTimelineBody() {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1100),
+        child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: _activitiesStream,
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    'Failed to load timeline:\n${snapshot.error}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ),
+              );
+            }
+
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                !snapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final allDocs = snapshot.data?.docs ??
+                <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+            return _buildTimelineContent(allDocs);
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final activitiesRef = widget.customerRef.collection('followUps');
+    super.build(context);
+
+    final content = ColoredBox(
+      color: const Color(0xFFF8FAFC),
+      child: _buildTimelineBody(),
+    );
+
+    if (widget.embedded) return content;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('CRM Timeline', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+        title: const Text(
+          'CRM Timeline',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFF0F172A),
         elevation: 0,
@@ -1224,145 +1560,7 @@ class _ScreensCustomerTimelineState extends State<ScreensCustomerTimeline> {
           const SizedBox(width: 8),
         ],
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1000),
-          child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            stream: activitiesRef.snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                return Center(
-                  child: Text('Failed to load timeline:\n${snapshot.error}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.red)),
-                );
-              }
-
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              final allDocs = snapshot.data?.docs ?? [];
-              final filteredDocs = _applyFiltersAndSort(allDocs);
-              final timelineItems = _buildTimelineData(filteredDocs);
-
-              return Column(
-                children: [
-                  _buildCustomer360Header(allDocs),
-                  const Divider(height: 1, color: Color(0xFFE2E8F0)),
-                  _buildStickyActionBar(),
-                  _buildQuickFilters(),
-
-                  // Filters & Search Row
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _searchController,
-                            onChanged: (value) => setState(() => _searchQuery = value),
-                            decoration: InputDecoration(
-                              hintText: 'Search activities, notes...',
-                              hintStyle: const TextStyle(fontSize: 13),
-                              prefixIcon: const Icon(Icons.search, size: 16),
-                              suffixIcon: _searchQuery.trim().isEmpty ? null : IconButton(
-                                icon: const Icon(Icons.close, size: 16),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  setState(() => _searchQuery = '');
-                                },
-                              ),
-                              isDense: true,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                              filled: true, fillColor: Colors.white,
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFFE2E8F0)),
-                          ),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(8),
-                            onTap: _openFilterSheet,
-                            child: Padding(
-                              padding: const EdgeInsets.all(10.0),
-                              child: Stack(
-                                alignment: Alignment.center,
-                                clipBehavior: Clip.none,
-                                children: [
-                                  const Icon(Icons.tune_rounded, size: 20, color: Color(0xFF475569)),
-                                  if (_hasActiveFilters)
-                                    Positioned(
-                                        right: -4, top: -4,
-                                        child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF2563EB), shape: BoxShape.circle))
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (_hasActiveFilters)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Row(
-                        children: [
-                          Expanded(child: Text('Filters applied', style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w600))),
-                          TextButton(
-                            onPressed: _resetFilters,
-                            style: TextButton.styleFrom(minimumSize: Size.zero, padding: EdgeInsets.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                            child: const Text('Clear All', style: TextStyle(fontSize: 11)),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                  if (_activityTypeFilter == 'all' && _searchQuery.isEmpty) _buildNextActionPanel(allDocs),
-
-                  // Timeline List
-                  Expanded(
-                    child: timelineItems.isEmpty
-                        ? _EmptyTimelineState(
-                      hasSearch: _searchQuery.trim().isNotEmpty || _hasActiveFilters,
-                      onReset: () {
-                        _searchController.clear();
-                        _resetFilters();
-                      },
-                    )
-                        : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
-                      itemCount: timelineItems.length,
-                      itemBuilder: (context, index) {
-                        final item = timelineItems[index];
-
-                        if (item is _TimelineHeader) {
-                          return Padding(
-                            padding: const EdgeInsets.only(left: 48, top: 16, bottom: 12),
-                            child: Text(
-                              item.title,
-                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2, color: Color(0xFF94A3B8)),
-                            ),
-                          );
-                        } else if (item is _TimelineActivity) {
-                          return _buildTimelineNode(item);
-                        }
-                        return const SizedBox.shrink();
-                      },
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
+      body: content,
     );
   }
 
@@ -1370,7 +1568,10 @@ class _ScreensCustomerTimelineState extends State<ScreensCustomerTimeline> {
     final doc = item.doc;
     final data = doc.data();
 
-    final activityType = _safeString(data['activityType']).isEmpty ? 'followup' : _safeString(data['activityType']);
+    final rawActivityType = _safeString(data['activityType']);
+    final activityType = rawActivityType.isEmpty
+        ? 'followup'
+        : _normalizeActivityType(rawActivityType);
     final iconData = _getActivityIcon(activityType);
     final color = _getActivityColor(activityType);
     final isPinned = _safeBool(data['isPinned']);
@@ -1504,6 +1705,9 @@ class _ActivityCardState extends State<_ActivityCard> {
     final nextAction = _safeString(widget.data['nextAction']);
 
     final contactName = _safeString(widget.data['contactName']);
+    final entityNumber = _safeString(widget.data['entityNumber']).isNotEmpty
+        ? _safeString(widget.data['entityNumber'])
+        : _safeString(widget.data['documentNumber']);
 
     final dueMeta = widget.parentState._buildDueMeta(nextFollowUpDate: nextFollowUpDate);
 
@@ -1568,13 +1772,19 @@ class _ActivityCardState extends State<_ActivityCard> {
             ),
           ),
 
-          if (outcome.isNotEmpty || dueMeta != null)
+          if (entityNumber.isNotEmpty || outcome.isNotEmpty || dueMeta != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Wrap(
                 spacing: 6,
                 runSpacing: 6,
                 children: [
+                  if (entityNumber.isNotEmpty)
+                    _MiniChip(
+                      label: entityNumber,
+                      background: const Color(0xFFEFF6FF),
+                      foreground: const Color(0xFF1D4ED8),
+                    ),
                   if (outcome.isNotEmpty && outcome != 'Completed')
                     _MiniChip(label: outcome, background: const Color(0xFFF1F5F9), foreground: const Color(0xFF475569)),
                   if (dueMeta != null)
@@ -1605,18 +1815,28 @@ class _ActivityCardState extends State<_ActivityCard> {
             const SizedBox(height: 12),
           ],
 
-          if (widget.activityType == 'document' || widget.activityType == 'quotation' || widget.activityType == 'invoice')
+          if ({
+            'document',
+            'inquiry',
+            'quotation',
+            'sales_order',
+            'purchase_order',
+            'proforma_invoice',
+            'invoice',
+            'dispatch',
+            'service_request',
+          }.contains(widget.activityType))
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: Container(
+                width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(border: Border.all(color: const Color(0xFFE2E8F0)), borderRadius: BorderRadius.circular(6)),
                 child: Row(
-                  mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(Icons.picture_as_pdf_outlined, size: 16, color: Color(0xFFDC2626)),
                     const SizedBox(width: 8),
-                    Flexible(
+                    Expanded(
                       child: Text('${title}_Document.pdf', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF334155)), overflow: TextOverflow.ellipsis),
                     ),
                   ],
@@ -1679,7 +1899,10 @@ class _ActivityCardState extends State<_ActivityCard> {
                         children: [
                           const Icon(Icons.person_outline, size: 12, color: Color(0xFF94A3B8)),
                           const SizedBox(width: 4),
-                          Flexible(child: Text(contactName, style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis)),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 220),
+                            child: Text(contactName, style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis),
+                          ),
                         ],
                       )
                   ],
@@ -1715,7 +1938,8 @@ class _MetaText extends StatelessWidget {
       children: [
         Icon(icon, size: 12, color: const Color(0xFF64748B)),
         const SizedBox(width: 4),
-        Flexible(
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 240),
           child: Text(text, style: const TextStyle(fontSize: 11, color: Color(0xFF475569), fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis),
         ),
       ],

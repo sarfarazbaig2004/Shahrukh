@@ -52,6 +52,8 @@ const Map<String, List<String>> inviteDesignationOptionsByDepartment = {
     'Admin Manager',
   ],
   'Management': [
+    'Chief Executive Officer (CEO)',
+    'Managing Director (MD)',
     'General Manager',
     'Business Head',
     'Vice President',

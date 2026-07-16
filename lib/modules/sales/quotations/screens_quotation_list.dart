@@ -10,6 +10,31 @@ const Color primaryColor = Color(0xFF1E3A8A);
 const Color accentColor = Color(0xFF2563EB);
 const Color backgroundLight = Color(0xFFF8FAFC);
 
+// Enterprise quotation workspace palette.
+const Color _zSlate50 = Color(0xFFF8FAFC);
+const Color _zSlate100 = Color(0xFFF1F5F9);
+const Color _zSlate200 = Color(0xFFE2E8F0);
+const Color _zSlate300 = Color(0xFFCBD5E1);
+const Color _zSlate400 = Color(0xFF94A3B8);
+const Color _zSlate500 = Color(0xFF64748B);
+const Color _zSlate600 = Color(0xFF475569);
+const Color _zSlate700 = Color(0xFF334155);
+const Color _zSlate800 = Color(0xFF1E293B);
+const Color _zSlate900 = Color(0xFF0F172A);
+const Color _zSoftHoverBorder = Color(0xFFB8C7D9);
+const Color _zErpPrimaryBlue = Color(0xFF2F6EA5);
+
+const double _quotationGridMinWidth = 1180;
+const double _quotationGridHorizontalPadding = 12;
+const double _quotationGridActionWidth = 48;
+const int _quotationCustomerFlex = 30;
+const int _quotationStatusFlex = 11;
+const int _quotationItemsFlex = 18;
+const int _quotationAmountFlex = 12;
+const int _quotationOwnerFlex = 12;
+const int _quotationCreatedFlex = 9;
+const int _quotationFollowUpFlex = 9;
+
 const String _kCollectionCompanies = 'companies';
 const String _kCollectionUsers = 'users';
 const String _kCollectionQuotations = 'quotations';
@@ -853,591 +878,751 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
   bool get _hasActiveFilters =>
       _statusFilter != 'All' || _sortOption != 'Date: Newest';
 
+
+  Widget _buildWorkspaceHeader({
+    required String searchValue,
+    required int totalQuotes,
+    required int sent,
+    required int approved,
+    required int converted,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: _zSlate200)),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final bool compactToolbar = constraints.maxWidth < 980;
+          final Widget searchBox = _buildToolbarSearchBox(searchValue);
+          final Widget kpiBar = _buildToolbarKpiBar(
+            totalQuotes: totalQuotes,
+            sent: sent,
+            approved: approved,
+            converted: converted,
+          );
+          final Widget actions = _buildToolbarActions();
+
+          if (compactToolbar) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                searchBox,
+                const SizedBox(height: 7),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: kpiBar,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    actions,
+                  ],
+                ),
+              ],
+            );
+          }
+
+          final double searchWidth =
+          constraints.maxWidth < 1250 ? 280 : 330;
+
+          return Row(
+            children: [
+              SizedBox(width: searchWidth, child: searchBox),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: kpiBar,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              actions,
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildToolbarSearchBox(String searchValue) {
+    return SizedBox(
+      height: 30,
+      child: TextField(
+        controller: _searchController,
+        focusNode: _searchFocusNode,
+        textInputAction: TextInputAction.search,
+        onChanged: _onSearchChanged,
+        style: const TextStyle(
+          fontSize: 11,
+          color: _zSlate700,
+        ),
+        decoration: InputDecoration(
+          hintText: 'Search quotation, customer, inquiry, item...',
+          hintStyle: const TextStyle(
+            color: _zSlate400,
+            fontSize: 10.8,
+          ),
+          prefixIcon: const Icon(
+            Icons.search,
+            size: 14,
+            color: _zSlate400,
+          ),
+          prefixIconConstraints: const BoxConstraints(minWidth: 30),
+          suffixIconConstraints: const BoxConstraints(minWidth: 30),
+          suffixIcon: searchValue.trim().isEmpty
+              ? null
+              : IconButton(
+            tooltip: 'Clear search',
+            icon: const Icon(
+              Icons.close,
+              size: 13,
+              color: _zSlate500,
+            ),
+            padding: EdgeInsets.zero,
+            onPressed: _clearSearch,
+          ),
+          isDense: true,
+          filled: true,
+          fillColor: const Color(0xFFFBFCFE),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 9,
+            vertical: 7,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: const BorderSide(color: _zSlate200),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: const BorderSide(color: _zSlate200),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: const BorderSide(color: _zSlate300),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildToolbarKpiBar({
+    required int totalQuotes,
+    required int sent,
+    required int approved,
+    required int converted,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _EnterpriseQuotationKpi(
+          title: 'Total',
+          value: totalQuotes.toString(),
+        ),
+        const SizedBox(width: 16),
+        _EnterpriseQuotationKpi(
+          title: 'Sent',
+          value: sent.toString(),
+        ),
+        const SizedBox(width: 16),
+        _EnterpriseQuotationKpi(
+          title: 'Approved',
+          value: approved.toString(),
+        ),
+        const SizedBox(width: 16),
+        _EnterpriseQuotationKpi(
+          title: 'Converted',
+          value: converted.toString(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildToolbarActions() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _QuotationToolbarButton(
+          icon: Icons.filter_list_rounded,
+          label: _hasActiveFilters ? 'Filters (Active)' : 'Filters',
+          isActive: _hasActiveFilters,
+          onTap: _openFilterSheet,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActiveFiltersSummary() {
+    final List<Widget> chips = [];
+
+    Widget buildChip(String label, VoidCallback onClear) {
+      return Container(
+        height: 22,
+        padding: const EdgeInsets.only(left: 8, right: 5),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: _zSlate200),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+                color: _zSlate600,
+              ),
+            ),
+            const SizedBox(width: 4),
+            InkWell(
+              onTap: onClear,
+              borderRadius: BorderRadius.circular(8),
+              child: const Padding(
+                padding: EdgeInsets.all(1),
+                child: Icon(
+                  Icons.close,
+                  size: 11,
+                  color: _zSlate400,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_statusFilter != 'All') {
+      chips.add(
+        buildChip(
+          'Status: $_statusFilter',
+              () => setState(() => _statusFilter = 'All'),
+        ),
+      );
+    }
+
+    if (_sortOption != 'Date: Newest') {
+      chips.add(
+        buildChip(
+          'Sort: $_sortOption',
+              () => setState(() => _sortOption = 'Date: Newest'),
+        ),
+      );
+    }
+
+    if (chips.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 5, 12, 5),
+      decoration: const BoxDecoration(
+        color: _zSlate50,
+        border: Border(bottom: BorderSide(color: _zSlate100)),
+      ),
+      child: Wrap(
+        spacing: 5,
+        runSpacing: 5,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(right: 2),
+            child: Text(
+              'Active filters',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: _zSlate500,
+              ),
+            ),
+          ),
+          ...chips,
+          InkWell(
+            onTap: _resetFilters,
+            borderRadius: BorderRadius.circular(4),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              child: Text(
+                'Clear all',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: _zSlate600,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuotationTableHeader() {
+    return Container(
+      height: 30,
+      padding: const EdgeInsets.symmetric(
+        horizontal: _quotationGridHorizontalPadding,
+      ),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF4F7FA),
+        border: Border(
+          bottom: BorderSide(color: _zSlate300, width: 0.9),
+        ),
+      ),
+      child: const Row(
+        children: [
+          Expanded(
+            flex: _quotationCustomerFlex,
+            child: _QuotationHeaderText('Quotation / Customer'),
+          ),
+          Expanded(
+            flex: _quotationStatusFlex,
+            child: _QuotationHeaderText('Status'),
+          ),
+          Expanded(
+            flex: _quotationItemsFlex,
+            child: _QuotationHeaderText('Items'),
+          ),
+          Expanded(
+            flex: _quotationAmountFlex,
+            child: _QuotationHeaderText('Amount'),
+          ),
+          Expanded(
+            flex: _quotationOwnerFlex,
+            child: _QuotationHeaderText('Created By'),
+          ),
+          Expanded(
+            flex: _quotationCreatedFlex,
+            child: _QuotationHeaderText('Created'),
+          ),
+          Expanded(
+            flex: _quotationFollowUpFlex,
+            child: _QuotationHeaderText('Follow-up'),
+          ),
+          SizedBox(
+            width: _quotationGridActionWidth,
+            child: Center(child: _QuotationHeaderText('Actions')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuotationEmptyState({
+    required bool hasSearchOrFilters,
+  }) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              hasSearchOrFilters
+                  ? Icons.search_off_outlined
+                  : Icons.request_quote_outlined,
+              size: 42,
+              color: _zSlate300,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              hasSearchOrFilters
+                  ? 'No matching quotations found'
+                  : 'No quotations found',
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: _zSlate700,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              hasSearchOrFilters
+                  ? 'Try changing the search text or active filters.'
+                  : 'Create a quotation to begin managing your sales proposals.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 11.5,
+                color: _zSlate500,
+              ),
+            ),
+            if (hasSearchOrFilters) ...[
+              const SizedBox(height: 14),
+              OutlinedButton(
+                onPressed: () {
+                  _clearSearch();
+                  _resetFilters();
+                },
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _zSlate700,
+                  side: const BorderSide(color: _zSlate300),
+                  visualDensity: VisualDensity.compact,
+                ),
+                child: const Text(
+                  'Reset Search & Filters',
+                  style: TextStyle(fontSize: 11),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuotationError(Object? error) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.error_outline,
+              size: 34,
+              color: Color(0xFF9A5A5A),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Unable to load quotations',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: _zSlate800,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              error?.toString() ?? 'Unknown data loading error.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 11,
+                color: _zSlate500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoadingContext) {
       return const Scaffold(
         backgroundColor: Colors.white,
-        body: Center(child: CircularProgressIndicator()),
+        body: Center(
+          child: CircularProgressIndicator(
+            color: _zSlate400,
+            strokeWidth: 2,
+          ),
+        ),
       );
     }
+
     if (_errorMessage != null) {
       return Scaffold(
         backgroundColor: Colors.white,
         body: Center(
-          child: Text(
-            _errorMessage!,
-            style: const TextStyle(
-              color: Colors.red,
-              fontWeight: FontWeight.bold,
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              _errorMessage!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFF9A5A5A),
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ),
       );
     }
+
     if (_primaryQuery == null) {
       return const Scaffold(
         backgroundColor: Colors.white,
-        body: Center(child: Text('System initialization failed')),
+        body: Center(
+          child: Text(
+            'System initialization failed',
+            style: TextStyle(color: _zSlate600),
+          ),
+        ),
       );
     }
 
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        elevation: 0,
-        toolbarHeight: 6,
-        automaticallyImplyLeading: false,
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-      ),
-      floatingActionButton: FloatingActionButton(
-        tooltip: 'New Quote',
-        backgroundColor: const Color(0xFF2563EB),
-        foregroundColor: Colors.white,
-        onPressed: _openCreateQuotation,
-        child: const Icon(Icons.add),
+      floatingActionButton: SizedBox(
+        width: 52,
+        height: 52,
+        child: FloatingActionButton(
+          tooltip: 'New Quotation',
+          backgroundColor: _zErpPrimaryBlue,
+          foregroundColor: Colors.white,
+          elevation: 1,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          onPressed: _openCreateQuotation,
+          child: const Icon(Icons.add, size: 19),
+        ),
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: _primaryQuery!.snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return Center(
-              child: Text(
-                'Error loading quotations:\n${snapshot.error}',
-                style: const TextStyle(color: Colors.red),
-              ),
-            );
-          }
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return _buildQuotationError(snapshot.error);
           }
 
-          final docs = snapshot.data?.docs ?? [];
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildWorkspaceHeader(
+                  searchValue: _searchNotifier.value,
+                  totalQuotes: 0,
+                  sent: 0,
+                  approved: 0,
+                  converted: 0,
+                ),
+                _buildQuotationTableHeader(),
+                const Expanded(
+                  child: _QuotationSkeletonList(),
+                ),
+              ],
+            );
+          }
+
+          final docs = snapshot.data?.docs ??
+              <QueryDocumentSnapshot<Map<String, dynamic>>>[];
 
           return ValueListenableBuilder<String>(
             valueListenable: _searchNotifier,
             builder: (context, searchValue, _) {
               final filteredDocs = _applyLocalFilters(docs);
 
-              int totalQuotes = filteredDocs.length;
               int approved = 0;
               int converted = 0;
               int sent = 0;
 
               for (final doc in filteredDocs) {
-                final status = (doc.data()['status'] ?? '')
-                    .toString()
-                    .toLowerCase();
-                final approvalStatus = (doc.data()['approvalStatus'] ?? '')
-                    .toString()
-                    .toLowerCase();
+                final data = doc.data();
+                final status =
+                _safeString(data['status']).toLowerCase();
+                final approvalStatus =
+                _safeString(data['approvalStatus']).toLowerCase();
 
                 if (status == 'sent') sent++;
-                if (status == 'approved' || approvalStatus == 'approved')
+                if (status == 'approved' ||
+                    approvalStatus == 'approved') {
                   approved++;
+                }
                 if (status == 'converted') converted++;
               }
 
               return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: SizedBox(
-                            height: 38,
-                            child: TextField(
-                              controller: _searchController,
-                              focusNode: _searchFocusNode,
-                              textInputAction: TextInputAction.search,
-                              onChanged: _onSearchChanged,
-                              decoration: InputDecoration(
-                                hintText: 'Search quotation, customer...',
-                                prefixIcon: const Icon(Icons.search, size: 18),
-                                suffixIcon: searchValue.trim().isEmpty
-                                    ? null
-                                    : IconButton(
-                                  tooltip: 'Clear',
-                                  icon: const Icon(Icons.close, size: 17),
-                                  onPressed: _clearSearch,
-                                ),
-                                isDense: true,
-                                filled: true,
-                                fillColor: Colors.grey.shade100,
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 8,
-                                ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: BorderSide.none,
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: BorderSide.none,
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: BorderSide.none,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          height: 38,
-                          width: 38,
-                          child: Material(
-                            color: Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(10),
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(10),
-                              onTap: _openFilterSheet,
-                              child: Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.tune_rounded,
-                                    size: 18,
-                                    color: Colors.grey.shade800,
-                                  ),
-                                  if (_hasActiveFilters)
-                                    Positioned(
-                                      right: 8,
-                                      top: 8,
-                                      child: Container(
-                                        width: 7,
-                                        height: 7,
-                                        decoration: BoxDecoration(
-                                          color: Colors.blue.shade700,
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                  _buildWorkspaceHeader(
+                    searchValue: searchValue,
+                    totalQuotes: filteredDocs.length,
+                    sent: sent,
+                    approved: approved,
+                    converted: converted,
                   ),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
-                        _MiniStatText(
-                          label: 'Total',
-                          value: totalQuotes.toString(),
-                        ),
-                        const SizedBox(width: 14),
-                        _MiniStatText(label: 'Sent', value: sent.toString()),
-                        const SizedBox(width: 14),
-                        _MiniStatText(
-                          label: 'Approved',
-                          value: approved.toString(),
-                        ),
-                        const SizedBox(width: 14),
-                        _MiniStatText(
-                          label: 'Converted',
-                          value: converted.toString(),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (_hasActiveFilters)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Filters applied',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade700,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: _resetFilters,
-                            style: TextButton.styleFrom(
-                              minimumSize: Size.zero,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: const Text(
-                              'Clear Filters',
-                              style: TextStyle(fontSize: 12),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  const SizedBox(height: 8),
+                  _buildActiveFiltersSummary(),
                   Expanded(
-                    child: filteredDocs.isEmpty
-                        ? _EmptyQuotationsState(
-                      hasSearch:
-                      searchValue.trim().isNotEmpty ||
-                          _hasActiveFilters,
-                      onReset: () {
-                        _clearSearch();
-                        _resetFilters();
-                      },
-                    )
-                        : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 90),
-                      itemCount: filteredDocs.length,
-                      separatorBuilder: (_, __) =>
-                      const SizedBox(height: 8),
-                      itemBuilder: (context, index) {
-                        final doc = filteredDocs[index];
-                        final data = doc.data();
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final double tableWidth =
+                        constraints.maxWidth < _quotationGridMinWidth
+                            ? _quotationGridMinWidth
+                            : constraints.maxWidth;
 
-                        final rawQNo =
-                            data['quoteNumber']?.toString().trim() ?? '';
-                        final qNo = rawQNo.isEmpty ? 'Draft' : rawQNo;
-                        final version =
-                            data['version']?.toString() ?? '1';
-                        final customer =
-                            data['clientName']?.toString() ??
-                                'Unknown Customer';
-
-                        final amt = _money(data['grandTotal']);
-                        final status =
-                            data['status']?.toString() ?? 'Draft';
-                        final approval =
-                            data['approvalStatus']?.toString() ??
-                                'Pending';
-                        final paymentStat =
-                            data['paymentStatus']?.toString() ??
-                                'Pending';
-                        final inqRef =
-                        (data['inquiryRefNo'] ??
-                            data['inquiryNumber'] ??
-                            data['inquiryId'] ??
-                            '')
-                            .toString();
-
-                        bool isCancelled =
-                            status.toLowerCase() == 'cancelled';
-                        bool isApproved =
-                            status.toLowerCase() == 'approved' ||
-                                approval.toLowerCase() == 'approved';
-                        bool isConverted =
-                            status.toLowerCase() == 'converted';
-
-                        bool canEdit =
-                            !isCancelled && !isApproved && !isConverted;
-                        bool isConverting =
-                            _convertingDocs[doc.id] == true;
-
-                        final String createdByUid = _parseSafeString(
-                          data['createdBy'],
-                        );
-                        final String explicitlyStoredName = _safeString(
-                          data['createdByName'],
-                        );
-
-                        final Timestamp? createdAtRaw = _safeTimestamp(
-                          data['createdAt'],
-                        );
-                        final Timestamp? nextFollowUpRaw = _safeTimestamp(
-                          data['nextFollowUpDate'],
-                        );
-
-                        return Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: Colors.grey.shade200,
-                              width: 0.8,
-                            ),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(10),
+                        return SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: SizedBox(
+                            width: tableWidth,
                             child: Column(
                               crossAxisAlignment:
-                              CrossAxisAlignment.start,
+                              CrossAxisAlignment.stretch,
                               children: [
-                                Row(
-                                  crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 18,
-                                      backgroundColor:
-                                      Colors.blue.shade50,
-                                      child: Text(
-                                        customer.isNotEmpty
-                                            ? customer[0].toUpperCase()
-                                            : '?',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w700,
-                                          color: Colors.blue.shade800,
-                                        ),
-                                      ),
+                                _buildQuotationTableHeader(),
+                                Expanded(
+                                  child: filteredDocs.isEmpty
+                                      ? _buildQuotationEmptyState(
+                                    hasSearchOrFilters:
+                                    searchValue.trim().isNotEmpty ||
+                                        _hasActiveFilters,
+                                  )
+                                      : ListView.builder(
+                                    physics:
+                                    const AlwaysScrollableScrollPhysics(),
+                                    padding: const EdgeInsets.only(
+                                      bottom: 92,
                                     ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            '$qNo (v$version)',
-                                            maxLines: 1,
-                                            overflow:
-                                            TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              fontSize: 14.5,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 1),
-                                          Text(
-                                            customer,
-                                            maxLines: 1,
-                                            overflow:
-                                            TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              fontSize: 12.5,
-                                              color: Colors.grey.shade600,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    SizedBox(
-                                      width: 28,
-                                      height: 28,
-                                      child: PopupMenuButton<String>(
-                                        padding: EdgeInsets.zero,
-                                        tooltip: 'Actions',
-                                        icon: Icon(
-                                          Icons.more_vert,
-                                          size: 20,
-                                          color: Colors.grey.shade600,
+                                    itemCount: filteredDocs.length,
+                                    itemBuilder: (context, index) {
+                                      final doc = filteredDocs[index];
+                                      final data = doc.data();
+
+                                      final String rawQNo =
+                                      _safeString(
+                                        data['quoteNumber'],
+                                      );
+                                      final String qNo =
+                                      rawQNo.isEmpty
+                                          ? 'Draft'
+                                          : rawQNo;
+                                      final String version =
+                                      _safeString(
+                                        data['version'],
+                                        fallback: '1',
+                                      );
+                                      final String customer =
+                                      _safeString(
+                                        data['clientName'] ??
+                                            data['customerName'] ??
+                                            data['companyName'],
+                                        fallback:
+                                        'Unknown Customer',
+                                      );
+                                      final String status =
+                                      _safeString(
+                                        data['status'],
+                                        fallback: 'Draft',
+                                      );
+                                      final String approval =
+                                      _safeString(
+                                        data['approvalStatus'],
+                                        fallback: 'Pending',
+                                      );
+                                      final String paymentStatus =
+                                      _safeString(
+                                        data['paymentStatus'],
+                                        fallback: 'Pending',
+                                      );
+                                      final String inquiryRef =
+                                      _safeString(
+                                        data['inquiryRefNo'] ??
+                                            data['inquiryNumber'] ??
+                                            data['inquiryId'],
+                                      );
+
+                                      final bool isCancelled =
+                                          status.toLowerCase() ==
+                                              'cancelled';
+                                      final bool isApproved =
+                                          status.toLowerCase() ==
+                                              'approved' ||
+                                              approval.toLowerCase() ==
+                                                  'approved';
+                                      final bool isConverted =
+                                          status.toLowerCase() ==
+                                              'converted';
+                                      final bool canEdit =
+                                          !isCancelled &&
+                                              !isApproved &&
+                                              !isConverted;
+                                      final bool isConverting =
+                                          _convertingDocs[doc.id] ==
+                                              true;
+
+                                      final String createdByUid =
+                                      _parseSafeString(
+                                        data['createdBy'],
+                                      );
+                                      final String storedCreatorName =
+                                      _safeString(
+                                        data['createdByName'],
+                                      );
+
+                                      final DateTime? createdAt =
+                                      _safeTimestamp(
+                                        data['createdAt'],
+                                      )?.toDate();
+                                      final DateTime? nextFollowUp =
+                                      _safeTimestamp(
+                                        data['nextFollowUpDate'],
+                                      )?.toDate();
+
+                                      return _EnterpriseQuotationRow(
+                                        key: ValueKey(doc.id),
+                                        quotationNumber: qNo,
+                                        version: version,
+                                        customer: customer,
+                                        inquiryReference: inquiryRef,
+                                        status: status,
+                                        approvalStatus: approval,
+                                        paymentStatus: paymentStatus,
+                                        amount:
+                                        _money(data['grandTotal']),
+                                        items: data['items'] is List
+                                            ? List<dynamic>.from(
+                                          data['items'] as List,
+                                        )
+                                            : const <dynamic>[],
+                                        createdAtText:
+                                        _formatCompactDate(
+                                          createdAt,
                                         ),
-                                        onSelected: (val) {
-                                          if (val == 'view') {
-                                            _openQuotationPreview(data);
-                                          } else if (val == 'edit') {
+                                        followUpText:
+                                        _formatCompactDate(
+                                          nextFollowUp,
+                                        ),
+                                        storedCreatorName:
+                                        storedCreatorName,
+                                        creatorNameFuture:
+                                        storedCreatorName.isEmpty
+                                            ? _getUserName(
+                                          createdByUid,
+                                        )
+                                            : null,
+                                        canEdit: canEdit,
+                                        isCancelled: isCancelled,
+                                        isApproved: isApproved,
+                                        isConverted: isConverted,
+                                        isConverting: isConverting,
+                                        onView: () =>
+                                            _openQuotationPreview(
+                                              data,
+                                            ),
+                                        onEdit: () =>
                                             _openQuotationForEdit(
                                               doc.id,
                                               data,
-                                            );
-                                          } else if (val == 'approve') {
+                                            ),
+                                        onApprove: () =>
                                             _updateApproval(
                                               doc.id,
                                               'Approved',
-                                            );
-                                          } else if (val == 'reject') {
+                                            ),
+                                        onReject: () =>
                                             _updateApproval(
                                               doc.id,
                                               'Rejected',
-                                            );
-                                          } else if (val == 'convert') {
+                                            ),
+                                        onConvert: () =>
                                             _convertToSalesOrder(
                                               doc.id,
                                               data,
-                                            );
-                                          } else if (val == 'revision') {
-                                            _createRevision(doc.id, data);
-                                          } else if (val == 'cancel') {
-                                            _cancelQuotation(doc.id);
-                                          }
-                                        },
-                                        itemBuilder: (context) {
-                                          List<PopupMenuEntry<String>>
-                                          items = [
-                                            const PopupMenuItem(
-                                              value: 'view',
-                                              child: Text(
-                                                'View Quotation',
-                                              ),
                                             ),
-                                          ];
-
-                                          if (canEdit) {
-                                            items.add(
-                                              const PopupMenuItem(
-                                                value: 'edit',
-                                                child: Text(
-                                                  'Edit Quotation',
-                                                ),
-                                              ),
-                                            );
-                                          }
-
-                                          if (!isCancelled) {
-                                            items.add(
-                                              const PopupMenuDivider(),
-                                            );
-
-                                            if (approval.toLowerCase() !=
-                                                'approved' &&
-                                                approval.toLowerCase() !=
-                                                    'rejected') {
-                                              items.add(
-                                                const PopupMenuItem(
-                                                  value: 'approve',
-                                                  child: Text('Approve'),
-                                                ),
-                                              );
-                                              items.add(
-                                                const PopupMenuItem(
-                                                  value: 'reject',
-                                                  child: Text('Reject'),
-                                                ),
-                                              );
-                                            }
-
-                                            if (!isConverted &&
-                                                isApproved &&
-                                                !isConverting) {
-                                              items.add(
-                                                const PopupMenuItem(
-                                                  value: 'convert',
-                                                  child: Text(
-                                                    'Convert to Sales Order',
-                                                  ),
-                                                ),
-                                              );
-                                            }
-
-                                            if (isApproved && !isConverted) {
-                                              items.add(
-                                                const PopupMenuItem(
-                                                  value: 'revision',
-                                                  child: Text(
-                                                    'Create Revision',
-                                                  ),
-                                                ),
-                                              );
-                                            }
-
-                                            items.add(
-                                              const PopupMenuDivider(),
-                                            );
-                                            items.add(
-                                              const PopupMenuItem(
-                                                value: 'cancel',
-                                                child: Text(
-                                                  'Cancel',
-                                                  style: TextStyle(
-                                                    color: Colors.red,
-                                                  ),
-                                                ),
-                                              ),
-                                            );
-                                          }
-
-                                          return items;
-                                        },
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                Wrap(
-                                  spacing: 6,
-                                  runSpacing: 6,
-                                  children: [
-                                    _InfoChip(
-                                      label: status,
-                                      backgroundColor:
-                                      _getQuotationStatusBg(status),
-                                      textColor: _getQuotationStatusFg(
-                                        status,
-                                      ),
-                                    ),
-                                    if (approval != 'Pending')
-                                      _InfoChip(
-                                        label: approval,
-                                        backgroundColor:
-                                        _getQuotationStatusBg(
-                                          approval,
-                                          isApproval: true,
-                                        ),
-                                        textColor: _getQuotationStatusFg(
-                                          approval,
-                                          isApproval: true,
-                                        ),
-                                      ),
-                                    if (status.toLowerCase() ==
-                                        'converted')
-                                      _InfoChip(
-                                        label: paymentStat,
-                                        backgroundColor:
-                                        _getQuotationStatusBg(
-                                          paymentStat,
-                                          isPayment: true,
-                                        ),
-                                        textColor: _getQuotationStatusFg(
-                                          paymentStat,
-                                          isPayment: true,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                Wrap(
-                                  spacing: 12,
-                                  runSpacing: 6,
-                                  crossAxisAlignment:
-                                  WrapCrossAlignment.center,
-                                  children: [
-                                    if (inqRef.isNotEmpty)
-                                      _InlineInfo(
-                                        icon: Icons.tag_outlined,
-                                        text: 'INQ: $inqRef',
-                                      ),
-                                    if (explicitlyStoredName.isNotEmpty)
-                                      _InlineInfo(
-                                        icon: Icons.person_outline,
-                                        text: explicitlyStoredName,
-                                      )
-                                    else
-                                      FutureBuilder<String>(
-                                        future: _getUserName(
-                                          createdByUid,
-                                        ),
-                                        builder: (context, snapshot) {
-                                          return _InlineInfo(
-                                            icon: Icons.person_outline,
-                                            text: snapshot.data ?? '...',
-                                          );
-                                        },
-                                      ),
-                                    _InlineInfo(
-                                      icon: Icons.currency_rupee_outlined,
-                                      text: amt,
-                                    ),
-                                    _InlineInfo(
-                                      icon: Icons.add_circle_outline,
-                                      text:
-                                      'Created: ${_formatCompactDate(createdAtRaw?.toDate())}',
-                                    ),
-                                    if (nextFollowUpRaw != null)
-                                      _InlineInfo(
-                                        icon: Icons.event_repeat_outlined,
-                                        text:
-                                        'Next: ${_formatCompactDate(nextFollowUpRaw.toDate())}',
-                                      ),
-                                  ],
+                                        onRevision: () =>
+                                            _createRevision(
+                                              doc.id,
+                                              data,
+                                            ),
+                                        onCancel: () =>
+                                            _cancelQuotation(doc.id),
+                                      );
+                                    },
+                                  ),
                                 ),
                               ],
                             ),
@@ -1454,203 +1639,903 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
       ),
     );
   }
-
-  Color _getQuotationStatusBg(
-      String status, {
-        bool isApproval = false,
-        bool isPayment = false,
-      }) {
-    String s = status.toLowerCase();
-    if (isPayment) {
-      if (s == 'paid') return Colors.green.shade50;
-      if (s == 'partial') return Colors.orange.shade50;
-      return Colors.red.shade50;
-    } else {
-      if (s == 'draft') return Colors.orange.shade50;
-      if (s == 'sent' || s == 'viewed') return Colors.blue.shade50;
-      if (s == 'approved' || s == 'converted') return Colors.green.shade50;
-      if (s == 'rejected') return Colors.red.shade50;
-      if (s == 'follow-up' || s == 'negotiation') return Colors.purple.shade50;
-      if (s == 'cancelled') return Colors.red.shade100;
-      return Colors.grey.shade100;
-    }
-  }
-
-  Color _getQuotationStatusFg(
-      String status, {
-        bool isApproval = false,
-        bool isPayment = false,
-      }) {
-    String s = status.toLowerCase();
-    if (isPayment) {
-      if (s == 'paid') return Colors.green.shade800;
-      if (s == 'partial') return Colors.orange.shade800;
-      return Colors.red.shade800;
-    } else {
-      if (s == 'draft') return Colors.orange.shade800;
-      if (s == 'sent' || s == 'viewed') return Colors.blue.shade800;
-      if (s == 'approved' || s == 'converted') return Colors.green.shade800;
-      if (s == 'rejected') return Colors.red.shade800;
-      if (s == 'follow-up' || s == 'negotiation') return Colors.purple.shade800;
-      if (s == 'cancelled') return Colors.red.shade900;
-      return Colors.grey.shade800;
-    }
-  }
 }
 
-class _MiniStatText extends StatelessWidget {
+class _QuotationHeaderText extends StatelessWidget {
   final String label;
-  final String value;
 
-  const _MiniStatText({required this.label, required this.value});
+  const _QuotationHeaderText(this.label);
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade200),
+    return Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      softWrap: false,
+      style: const TextStyle(
+        fontSize: 10.1,
+        fontWeight: FontWeight.w600,
+        color: _zSlate600,
+        letterSpacing: 0.04,
       ),
-      child: Text(
-        '$label: $value',
-        style: TextStyle(
-          fontSize: 12,
-          color: Colors.grey.shade800,
-          fontWeight: FontWeight.w600,
+    );
+  }
+}
+
+class _QuotationToolbarButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool isActive;
+
+  const _QuotationToolbarButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.isActive = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        height: 26,
+        padding: const EdgeInsets.symmetric(horizontal: 9),
+        decoration: BoxDecoration(
+          color: isActive ? _zSlate100 : Colors.white,
+          border: Border.all(
+            color: isActive ? _zSlate300 : _zSlate200,
+          ),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 13,
+              color: isActive ? _zSlate700 : _zSlate500,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w500,
+                color: isActive ? _zSlate700 : _zSlate600,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _InlineInfo extends StatelessWidget {
-  final IconData icon;
-  final String text;
+class _EnterpriseQuotationKpi extends StatelessWidget {
+  final String title;
+  final String value;
 
-  const _InlineInfo({required this.icon, required this.text});
+  const _EnterpriseQuotationKpi({
+    required this.title,
+    required this.value,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 300),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 10.2,
+            color: _zSlate500,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w700,
+            color: _zSlate700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _QuotationSkeletonList extends StatelessWidget {
+  const _QuotationSkeletonList();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: 12,
+      itemBuilder: (context, index) {
+        return _QuotationSkeletonRow(index: index);
+      },
+    );
+  }
+}
+
+class _QuotationSkeletonRow extends StatelessWidget {
+  final int index;
+
+  const _QuotationSkeletonRow({required this.index});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 54,
+      padding: const EdgeInsets.symmetric(
+        horizontal: _quotationGridHorizontalPadding,
+      ),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(color: _zSlate100),
+        ),
+      ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: Colors.grey.shade600),
-          const SizedBox(width: 4),
-          Flexible(
-            child: Text(
-              text,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey.shade800,
-                fontWeight: FontWeight.w500,
-              ),
+          Expanded(
+            flex: _quotationCustomerFlex,
+            child: _buildDoubleBlock(150, 100),
+          ),
+          Expanded(
+            flex: _quotationStatusFlex,
+            child: _buildDoubleBlock(66, 46),
+          ),
+          Expanded(
+            flex: _quotationItemsFlex,
+            child: _buildDoubleBlock(100, 54),
+          ),
+          Expanded(
+            flex: _quotationAmountFlex,
+            child: _buildDoubleBlock(76, 40),
+          ),
+          Expanded(
+            flex: _quotationOwnerFlex,
+            child: _buildDoubleBlock(78, 42),
+          ),
+          Expanded(
+            flex: _quotationCreatedFlex,
+            child: _buildBlock(58),
+          ),
+          Expanded(
+            flex: _quotationFollowUpFlex,
+            child: _buildBlock(58),
+          ),
+          const SizedBox(
+            width: _quotationGridActionWidth,
+            child: Icon(
+              Icons.more_vert,
+              size: 15,
+              color: _zSlate200,
             ),
           ),
         ],
       ),
     );
   }
+
+  Widget _buildDoubleBlock(double firstWidth, double secondWidth) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildBlock(firstWidth),
+        const SizedBox(height: 5),
+        _buildBlock(secondWidth, height: 7),
+      ],
+    );
+  }
+
+  Widget _buildBlock(double baseWidth, {double height = 9}) {
+    final double width =
+        baseWidth * (0.76 + (index % 3) * 0.1);
+
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: _zSlate100,
+        borderRadius: BorderRadius.circular(3),
+      ),
+    );
+  }
 }
 
-class _InfoChip extends StatelessWidget {
-  final String label;
-  final Color backgroundColor;
-  final Color textColor;
+class _EnterpriseQuotationRow extends StatefulWidget {
+  final String quotationNumber;
+  final String version;
+  final String customer;
+  final String inquiryReference;
+  final String status;
+  final String approvalStatus;
+  final String paymentStatus;
+  final String amount;
+  final List<dynamic> items;
+  final String createdAtText;
+  final String followUpText;
+  final String storedCreatorName;
+  final Future<String>? creatorNameFuture;
 
-  const _InfoChip({
-    required this.label,
-    required this.backgroundColor,
-    required this.textColor,
+  final bool canEdit;
+  final bool isCancelled;
+  final bool isApproved;
+  final bool isConverted;
+  final bool isConverting;
+
+  final VoidCallback onView;
+  final VoidCallback onEdit;
+  final VoidCallback onApprove;
+  final VoidCallback onReject;
+  final VoidCallback onConvert;
+  final VoidCallback onRevision;
+  final VoidCallback onCancel;
+
+  const _EnterpriseQuotationRow({
+    super.key,
+    required this.quotationNumber,
+    required this.version,
+    required this.customer,
+    required this.inquiryReference,
+    required this.status,
+    required this.approvalStatus,
+    required this.paymentStatus,
+    required this.amount,
+    required this.items,
+    required this.createdAtText,
+    required this.followUpText,
+    required this.storedCreatorName,
+    required this.creatorNameFuture,
+    required this.canEdit,
+    required this.isCancelled,
+    required this.isApproved,
+    required this.isConverted,
+    required this.isConverting,
+    required this.onView,
+    required this.onEdit,
+    required this.onApprove,
+    required this.onReject,
+    required this.onConvert,
+    required this.onRevision,
+    required this.onCancel,
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(999),
+  State<_EnterpriseQuotationRow> createState() =>
+      _EnterpriseQuotationRowState();
+}
+
+class _EnterpriseQuotationRowState
+    extends State<_EnterpriseQuotationRow> {
+  bool _isHovered = false;
+
+  String _safeString(dynamic value, {String fallback = ''}) {
+    if (value == null) return fallback;
+    final text = value.toString().trim();
+    return text.isEmpty || text == 'null' ? fallback : text;
+  }
+
+  double _toDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(
+      value?.toString().replaceAll(',', '').trim() ?? '',
+    ) ??
+        0;
+  }
+
+  String _quantityText(double quantity) {
+    if (quantity == quantity.truncateToDouble()) {
+      return quantity.toInt().toString();
+    }
+    return quantity.toStringAsFixed(2);
+  }
+
+  Color _statusColor(String value) {
+    switch (value.trim().toLowerCase()) {
+      case 'approved':
+      case 'converted':
+      case 'paid':
+        return const Color(0xFF56745D);
+      case 'rejected':
+      case 'cancelled':
+        return const Color(0xFF8A4F4F);
+      case 'sent':
+      case 'viewed':
+        return const Color(0xFF557495);
+      case 'follow-up':
+      case 'follow up':
+      case 'negotiation':
+        return const Color(0xFF726482);
+      case 'draft':
+        return const Color(0xFF806B4B);
+      case 'partial':
+        return const Color(0xFF8A6A42);
+      default:
+        return _zSlate600;
+    }
+  }
+
+  String _firstItemName() {
+    if (widget.items.isEmpty) return '-';
+
+    final first = widget.items.first;
+    if (first is Map) {
+      return _safeString(
+        first['name'] ??
+            first['itemName'] ??
+            first['productName'] ??
+            first['description'],
+        fallback: 'Item',
+      );
+    }
+
+    return _safeString(first, fallback: 'Item');
+  }
+
+  double _totalQuantity() {
+    double total = 0;
+
+    for (final item in widget.items) {
+      if (item is Map) {
+        total += _toDouble(item['quantity'] ?? item['qty']);
+      }
+    }
+
+    return total;
+  }
+
+  String _itemUnit() {
+    if (widget.items.isEmpty) return '';
+
+    final first = widget.items.first;
+    if (first is Map) {
+      return _safeString(first['uom'] ?? first['unit']);
+    }
+
+    return '';
+  }
+
+  Widget _buildQuotationCustomerCell() {
+    final String versionSuffix =
+    widget.version.trim().isEmpty ? '' : ' v${widget.version}';
+    final String inquiryText = widget.inquiryReference.trim().isEmpty
+        ? 'Direct quotation'
+        : 'Inquiry: ${widget.inquiryReference}';
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 10),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              InkWell(
+                onTap: widget.onView,
+                borderRadius: BorderRadius.circular(3),
+                child: Text(
+                  '${widget.quotationNumber}$versionSuffix',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11.8,
+                    height: 1.08,
+                    fontWeight: FontWeight.w700,
+                    color: _zErpPrimaryBlue,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: InkWell(
+                  onTap: widget.onView,
+                  borderRadius: BorderRadius.circular(3),
+                  child: Text(
+                    widget.customer,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11.7,
+                      height: 1.08,
+                      fontWeight: FontWeight.w600,
+                      color: _zSlate800,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            inquiryText,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 9.8,
+              height: 1.05,
+              color: _zSlate500,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+        ],
       ),
-      child: Text(
-        label,
+    );
+  }
+
+  Widget _buildStatusCell() {
+    final String cleanStatus =
+    widget.status.trim().isEmpty ? 'Draft' : widget.status.trim();
+    final String approval =
+    widget.approvalStatus.trim().isEmpty
+        ? 'Pending'
+        : widget.approvalStatus.trim();
+
+    String secondary = '';
+    if (widget.isConverted) {
+      secondary = widget.paymentStatus.trim().isEmpty
+          ? 'Payment Pending'
+          : 'Payment ${widget.paymentStatus}';
+    } else if (approval.toLowerCase() != 'pending' &&
+        approval.toLowerCase() != cleanStatus.toLowerCase()) {
+      secondary = approval;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 5,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: _statusColor(cleanStatus),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 5),
+              Expanded(
+                child: Text(
+                  cleanStatus,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10.8,
+                    height: 1.08,
+                    fontWeight: FontWeight.w600,
+                    color: _statusColor(cleanStatus),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (secondary.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              secondary,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 9.6,
+                height: 1.05,
+                color: _statusColor(
+                  widget.isConverted
+                      ? widget.paymentStatus
+                      : approval,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildItemsCell() {
+    if (widget.items.isEmpty) {
+      return const Text(
+        '-',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: TextStyle(
           fontSize: 11,
+          color: _zSlate300,
+        ),
+      );
+    }
+
+    final String firstName = _firstItemName();
+    final int extraItems = widget.items.length - 1;
+    final double totalQuantity = _totalQuantity();
+    final String unit = _itemUnit();
+    final String quantityLine = totalQuantity > 0
+        ? 'Qty ${_quantityText(totalQuantity)}${unit.isEmpty ? '' : ' $unit'}'
+        : '${widget.items.length} item${widget.items.length == 1 ? '' : 's'}';
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 10),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$firstName${extraItems > 0 ? ' +$extraItems' : ''}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 10.9,
+              height: 1.08,
+              color: _zSlate700,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            quantityLine,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 9.8,
+              height: 1.05,
+              color: _zSlate500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAmountCell() {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Text(
+        widget.amount,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          fontSize: 11.2,
+          height: 1.08,
           fontWeight: FontWeight.w700,
-          color: textColor,
+          color: _zSlate800,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCreatorCell() {
+    if (widget.storedCreatorName.trim().isNotEmpty) {
+      return _creatorText(widget.storedCreatorName);
+    }
+
+    final future = widget.creatorNameFuture;
+    if (future == null) return _creatorText('Unknown');
+
+    return FutureBuilder<String>(
+      future: future,
+      builder: (context, snapshot) {
+        return _creatorText(snapshot.data ?? '...');
+      },
+    );
+  }
+
+  Widget _creatorText(String value) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Text(
+        value,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          fontSize: 10.8,
+          height: 1.08,
+          color: _zSlate600,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDateCell(String value, {bool mutedWhenEmpty = false}) {
+    final bool empty = value.trim().isEmpty || value == '-';
+
+    return Text(
+      empty ? '-' : value,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        fontSize: 10.7,
+        height: 1.08,
+        color: empty && mutedWhenEmpty ? _zSlate300 : _zSlate600,
+        fontWeight: FontWeight.w500,
+      ),
+    );
+  }
+
+  List<PopupMenuEntry<String>> _buildActionItems() {
+    final List<PopupMenuEntry<String>> items = [
+      const PopupMenuItem<String>(
+        value: 'view',
+        height: 32,
+        child: _QuotationMenuItem(
+          icon: Icons.visibility_outlined,
+          label: 'View Quotation',
+        ),
+      ),
+    ];
+
+    if (widget.canEdit) {
+      items.add(
+        const PopupMenuItem<String>(
+          value: 'edit',
+          height: 32,
+          child: _QuotationMenuItem(
+            icon: Icons.edit_outlined,
+            label: 'Edit Quotation',
+          ),
+        ),
+      );
+    }
+
+    if (!widget.isCancelled) {
+      items.add(const PopupMenuDivider(height: 8));
+
+      final String approval =
+      widget.approvalStatus.trim().toLowerCase();
+
+      if (approval != 'approved' && approval != 'rejected') {
+        items.add(
+          const PopupMenuItem<String>(
+            value: 'approve',
+            height: 32,
+            child: _QuotationMenuItem(
+              icon: Icons.check_circle_outline,
+              label: 'Approve',
+            ),
+          ),
+        );
+        items.add(
+          const PopupMenuItem<String>(
+            value: 'reject',
+            height: 32,
+            child: _QuotationMenuItem(
+              icon: Icons.highlight_off_outlined,
+              label: 'Reject',
+            ),
+          ),
+        );
+      }
+
+      if (!widget.isConverted &&
+          widget.isApproved &&
+          !widget.isConverting) {
+        items.add(
+          const PopupMenuItem<String>(
+            value: 'convert',
+            height: 32,
+            child: _QuotationMenuItem(
+              icon: Icons.shopping_cart_checkout_outlined,
+              label: 'Convert to Sales Order',
+            ),
+          ),
+        );
+      }
+
+      if (widget.isConverting) {
+        items.add(
+          const PopupMenuItem<String>(
+            enabled: false,
+            height: 32,
+            child: _QuotationMenuItem(
+              icon: Icons.sync,
+              label: 'Preparing Sales Order...',
+            ),
+          ),
+        );
+      }
+
+      if (widget.isApproved && !widget.isConverted) {
+        items.add(
+          const PopupMenuItem<String>(
+            value: 'revision',
+            height: 32,
+            child: _QuotationMenuItem(
+              icon: Icons.copy_all_outlined,
+              label: 'Create Revision',
+            ),
+          ),
+        );
+      }
+
+      items.add(const PopupMenuDivider(height: 8));
+      items.add(
+        const PopupMenuItem<String>(
+          value: 'cancel',
+          height: 32,
+          child: _QuotationMenuItem(
+            icon: Icons.cancel_outlined,
+            label: 'Cancel Quotation',
+            danger: true,
+          ),
+        ),
+      );
+    }
+
+    return items;
+  }
+
+  void _handleAction(String value) {
+    switch (value) {
+      case 'view':
+        widget.onView();
+        break;
+      case 'edit':
+        widget.onEdit();
+        break;
+      case 'approve':
+        widget.onApprove();
+        break;
+      case 'reject':
+        widget.onReject();
+        break;
+      case 'convert':
+        widget.onConvert();
+        break;
+      case 'revision':
+        widget.onRevision();
+        break;
+      case 'cancel':
+        widget.onCancel();
+        break;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RepaintBoundary(
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 110),
+          curve: Curves.easeOut,
+          height: 54,
+          padding: const EdgeInsets.symmetric(
+            horizontal: _quotationGridHorizontalPadding,
+          ),
+          decoration: BoxDecoration(
+            color: _isHovered
+                ? const Color(0xFFFBFCFE)
+                : Colors.white,
+            border: Border(
+              bottom: const BorderSide(
+                color: _zSlate100,
+                width: 1,
+              ),
+              left: BorderSide(
+                color: _isHovered
+                    ? _zSoftHoverBorder
+                    : Colors.transparent,
+                width: 2,
+              ),
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                flex: _quotationCustomerFlex,
+                child: _buildQuotationCustomerCell(),
+              ),
+              Expanded(
+                flex: _quotationStatusFlex,
+                child: _buildStatusCell(),
+              ),
+              Expanded(
+                flex: _quotationItemsFlex,
+                child: _buildItemsCell(),
+              ),
+              Expanded(
+                flex: _quotationAmountFlex,
+                child: _buildAmountCell(),
+              ),
+              Expanded(
+                flex: _quotationOwnerFlex,
+                child: _buildCreatorCell(),
+              ),
+              Expanded(
+                flex: _quotationCreatedFlex,
+                child: _buildDateCell(
+                  widget.createdAtText,
+                  mutedWhenEmpty: true,
+                ),
+              ),
+              Expanded(
+                flex: _quotationFollowUpFlex,
+                child: _buildDateCell(
+                  widget.followUpText,
+                  mutedWhenEmpty: true,
+                ),
+              ),
+              SizedBox(
+                width: _quotationGridActionWidth,
+                child: Center(
+                  child: PopupMenuButton<String>(
+                    tooltip: 'Quotation actions',
+                    padding: EdgeInsets.zero,
+                    icon: Icon(
+                      Icons.more_vert,
+                      size: 16,
+                      color: _isHovered
+                          ? _zSlate600
+                          : _zSlate400.withValues(alpha: 0.62),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(5),
+                      side: const BorderSide(color: _zSlate200),
+                    ),
+                    onSelected: _handleAction,
+                    itemBuilder: (_) => _buildActionItems(),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _EmptyQuotationsState extends StatelessWidget {
-  final bool hasSearch;
-  final VoidCallback onReset;
+class _QuotationMenuItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool danger;
 
-  const _EmptyQuotationsState({required this.hasSearch, required this.onReset});
+  const _QuotationMenuItem({
+    required this.icon,
+    required this.label,
+    this.danger = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(28),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight - 40),
-            child: IntrinsicHeight(
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircleAvatar(
-                      radius: 34,
-                      backgroundColor: Colors.blue.shade50,
-                      child: Icon(
-                        hasSearch ? Icons.search_off : Icons.inbox_outlined,
-                        size: 34,
-                        color: Colors.blue.shade700,
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      hasSearch
-                          ? 'No matching quotations found'
-                          : 'No quotations found',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      hasSearch
-                          ? 'Try changing the search text or filter.'
-                          : 'No quotation records are available yet.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.grey.shade700,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    if (hasSearch)
-                      OutlinedButton(
-                        onPressed: onReset,
-                        child: const Text('Reset Filters'),
-                      ),
-                  ],
-                ),
-              ),
+    final Color color =
+    danger ? const Color(0xFF8A5F5F) : _zSlate700;
+
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11.5,
+              color: color,
             ),
           ),
-        );
-      },
+        ),
+      ],
     );
   }
 }

@@ -21,6 +21,33 @@ const Color _zDanger = Color(0xFFEF4444);
 const Color _zSuccess = Color(0xFF10B981);
 const Color _zWarning = Color(0xFFF59E0B);
 
+// Enterprise sales-order workspace palette.
+const Color _zSlate50 = Color(0xFFF8FAFC);
+const Color _zSlate100 = Color(0xFFF1F5F9);
+const Color _zSlate200 = Color(0xFFE2E8F0);
+const Color _zSlate300 = Color(0xFFCBD5E1);
+const Color _zSlate400 = Color(0xFF94A3B8);
+const Color _zSlate500 = Color(0xFF64748B);
+const Color _zSlate600 = Color(0xFF475569);
+const Color _zSlate700 = Color(0xFF334155);
+const Color _zSlate800 = Color(0xFF1E293B);
+const Color _zSoftHoverBorder = Color(0xFFB8C7D9);
+const Color _zInquiryBlue = Color(0xFF5F7FA3);
+const Color _zErpPrimaryBlue = Color(0xFF2F6EA5);
+
+const double _salesOrderGridMinWidth = 1320;
+const double _salesOrderGridHorizontalPadding = 12;
+const double _salesOrderGridActionWidth = 48;
+const int _salesOrderCustomerFlex = 28;
+const int _salesOrderStatusFlex = 11;
+const int _salesOrderDispatchFlex = 12;
+const int _salesOrderItemsFlex = 15;
+const int _salesOrderAmountFlex = 10;
+const int _salesOrderOwnerFlex = 11;
+const int _salesOrderCreatedFlex = 8;
+const int _salesOrderUpdatedFlex = 8;
+const int _salesOrderPoFlex = 9;
+
 // =========================================================
 // HELPER METHODS
 // =========================================================
@@ -257,7 +284,7 @@ class _SalesOrderListScreenState extends State<SalesOrderListScreen> {
         _errorMessage = 'Network error. Please check your internet connection.';
       } else if (e.code == 'permission-denied') {
         _errorMessage =
-            'Access denied. You do not have permission to view these records.';
+        'Access denied. You do not have permission to view these records.';
       } else {
         _errorMessage = 'Unable to load sales orders. Please contact support.';
       }
@@ -339,8 +366,8 @@ class _SalesOrderListScreenState extends State<SalesOrderListScreen> {
   }
 
   Map<String, dynamic> prepareSalesOrderForPdf(
-    Map<String, dynamic> mergedData,
-  ) {
+      Map<String, dynamic> mergedData,
+      ) {
     mergedData['documentType'] = 'Sales Order';
 
     DateTime? date;
@@ -397,7 +424,7 @@ class _SalesOrderListScreenState extends State<SalesOrderListScreen> {
       context: context,
       barrierDismissible: false,
       builder: (_) =>
-          const Center(child: CircularProgressIndicator(color: _zPrimary)),
+      const Center(child: CircularProgressIndicator(color: _zPrimary)),
     );
 
     try {
@@ -450,9 +477,9 @@ class _SalesOrderListScreenState extends State<SalesOrderListScreen> {
             companyData['companyLogoUrl'] ?? companyData['logoUrl'] ?? '';
         preparedData['companyGst'] ??=
             companyData['companyGst'] ??
-            companyData['gstin'] ??
-            companyData['gstNo'] ??
-            '';
+                companyData['gstin'] ??
+                companyData['gstNo'] ??
+                '';
         preparedData['companyPan'] ??=
             companyData['companyPan'] ?? companyData['pan'] ?? '';
         preparedData['companyIec'] ??=
@@ -487,14 +514,14 @@ class _SalesOrderListScreenState extends State<SalesOrderListScreen> {
           id: itemMap['id']?.toString() ?? '',
           productId: itemMap['productId']?.toString() ?? '',
           name:
-              itemMap['name']?.toString() ??
+          itemMap['name']?.toString() ??
               itemMap['itemName']?.toString() ??
               'Item',
           description: itemMap['description']?.toString() ?? '',
           hsnCode: itemMap['hsnCode']?.toString() ?? '',
           quantity: _parseSafeDouble(itemMap['quantity']),
           uom:
-              itemMap['unit']?.toString() ??
+          itemMap['unit']?.toString() ??
               itemMap['uom']?.toString() ??
               'Nos',
           unitPrice: _parseSafeDouble(
@@ -620,7 +647,7 @@ class _SalesOrderListScreenState extends State<SalesOrderListScreen> {
         context: context,
         barrierDismissible: false,
         builder: (ctx) =>
-            const Center(child: CircularProgressIndicator(color: _zPrimary)),
+        const Center(child: CircularProgressIndicator(color: _zPrimary)),
       );
 
       Uint8List fileBytes;
@@ -734,11 +761,11 @@ class _SalesOrderListScreenState extends State<SalesOrderListScreen> {
   }
 
   Future<void> _updateOrderField(
-    String docId,
-    Map<String, dynamic> updates,
-    String logType,
-    String logNote,
-  ) async {
+      String docId,
+      Map<String, dynamic> updates,
+      String logType,
+      String logNote,
+      ) async {
     try {
       final docRef = FirebaseFirestore.instance
           .collection('companies')
@@ -856,7 +883,7 @@ class _SalesOrderListScreenState extends State<SalesOrderListScreen> {
     selectedDispatch = selectedDispatch.isEmpty
         ? 'Pending'
         : selectedDispatch[0].toUpperCase() +
-              selectedDispatch.substring(1).toLowerCase();
+        selectedDispatch.substring(1).toLowerCase();
     if (![
       'Pending',
       'Packed',
@@ -899,7 +926,7 @@ class _SalesOrderListScreenState extends State<SalesOrderListScreen> {
                       items: ['Pending', 'Packed', 'Shipped', 'Delivered']
                           .map(
                             (e) => DropdownMenuItem(value: e, child: Text(e)),
-                          )
+                      )
                           .toList(),
                       onChanged: (val) =>
                           setDialogState(() => selectedDispatch = val!),
@@ -1086,7 +1113,7 @@ class _SalesOrderListScreenState extends State<SalesOrderListScreen> {
                       items: _statusOptions
                           .map(
                             (e) => DropdownMenuItem(value: e, child: Text(e)),
-                          )
+                      )
                           .toList(),
                       onChanged: (value) {
                         setModalState(() {
@@ -1105,7 +1132,7 @@ class _SalesOrderListScreenState extends State<SalesOrderListScreen> {
                       items: _sortOptions
                           .map(
                             (e) => DropdownMenuItem(value: e, child: Text(e)),
-                          )
+                      )
                           .toList(),
                       onChanged: (value) {
                         setModalState(() {
@@ -1154,27 +1181,447 @@ class _SalesOrderListScreenState extends State<SalesOrderListScreen> {
     );
   }
 
+  Widget _buildWorkspaceHeader({
+    required int totalOrders,
+    required String formattedRevenue,
+    required int confirmedCount,
+    required int dispatchPendingCount,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: _zSlate200)),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final bool compactToolbar = constraints.maxWidth < 980;
+          final Widget searchBox = _buildToolbarSearchBox();
+          final Widget kpiBar = _buildToolbarKpiBar(
+            totalOrders: totalOrders,
+            formattedRevenue: formattedRevenue,
+            confirmedCount: confirmedCount,
+            dispatchPendingCount: dispatchPendingCount,
+          );
+          final Widget actions = _buildToolbarActions();
+
+          if (compactToolbar) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                searchBox,
+                const SizedBox(height: 7),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: kpiBar,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    actions,
+                  ],
+                ),
+              ],
+            );
+          }
+
+          final double searchWidth = constraints.maxWidth < 1250 ? 280 : 330;
+
+          return Row(
+            children: [
+              SizedBox(width: searchWidth, child: searchBox),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: kpiBar,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              actions,
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildToolbarSearchBox() {
+    return SizedBox(
+      height: 30,
+      child: TextField(
+        controller: _searchController,
+        textInputAction: TextInputAction.search,
+        onChanged: _onSearchChanged,
+        style: const TextStyle(fontSize: 11, color: _zSlate700),
+        decoration: InputDecoration(
+          hintText: 'Search sales order or customer...',
+          hintStyle: const TextStyle(color: _zSlate400, fontSize: 10.8),
+          prefixIcon: const Icon(Icons.search, size: 14, color: _zSlate400),
+          prefixIconConstraints: const BoxConstraints(minWidth: 30),
+          suffixIconConstraints: const BoxConstraints(minWidth: 30),
+          suffixIcon: _searchQuery.trim().isEmpty
+              ? null
+              : IconButton(
+            tooltip: 'Clear search',
+            icon: const Icon(Icons.close, size: 13, color: _zSlate500),
+            padding: EdgeInsets.zero,
+            onPressed: () {
+              _debounce?.cancel();
+              _searchController.clear();
+              setState(() => _searchQuery = '');
+            },
+          ),
+          isDense: true,
+          filled: true,
+          fillColor: const Color(0xFFFBFCFE),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: const BorderSide(color: _zSlate200),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: const BorderSide(color: _zSlate200),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: const BorderSide(color: _zSlate300),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildToolbarKpiBar({
+    required int totalOrders,
+    required String formattedRevenue,
+    required int confirmedCount,
+    required int dispatchPendingCount,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _EnterpriseSalesOrderKpi(title: 'Total', value: totalOrders.toString()),
+        const SizedBox(width: 16),
+        _EnterpriseSalesOrderKpi(title: 'Revenue', value: formattedRevenue),
+        const SizedBox(width: 16),
+        _EnterpriseSalesOrderKpi(
+          title: 'Confirmed',
+          value: confirmedCount.toString(),
+        ),
+        const SizedBox(width: 16),
+        _EnterpriseSalesOrderKpi(
+          title: 'Dispatch Pending',
+          value: dispatchPendingCount.toString(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildToolbarActions() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _SalesOrderToolbarButton(
+          icon: Icons.refresh_rounded,
+          label: 'Refresh',
+          onTap: _fetchInitialData,
+        ),
+        const SizedBox(width: 6),
+        _SalesOrderToolbarButton(
+          icon: Icons.filter_list_rounded,
+          label: _hasActiveFilters ? 'Filters (Active)' : 'Filters',
+          isActive: _hasActiveFilters,
+          onTap: _openFilterSheet,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActiveFiltersSummary() {
+    final List<Widget> chips = [];
+
+    Widget buildChip(String label, VoidCallback onClear) {
+      return Container(
+        height: 22,
+        padding: const EdgeInsets.only(left: 8, right: 5),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: _zSlate200),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+                color: _zSlate600,
+              ),
+            ),
+            const SizedBox(width: 4),
+            InkWell(
+              onTap: onClear,
+              borderRadius: BorderRadius.circular(8),
+              child: const Padding(
+                padding: EdgeInsets.all(1),
+                child: Icon(Icons.close, size: 11, color: _zSlate400),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_selectedStatus != 'All') {
+      chips.add(
+        buildChip('Status: $_selectedStatus', () {
+          setState(() => _selectedStatus = 'All');
+          _fetchInitialData();
+        }),
+      );
+    }
+
+    if (_selectedSort != 'Latest') {
+      chips.add(
+        buildChip('Sort: $_selectedSort', () {
+          setState(() => _selectedSort = 'Latest');
+          _fetchInitialData();
+        }),
+      );
+    }
+
+    if (chips.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 5, 12, 5),
+      decoration: const BoxDecoration(
+        color: _zSlate50,
+        border: Border(bottom: BorderSide(color: _zSlate100)),
+      ),
+      child: Wrap(
+        spacing: 5,
+        runSpacing: 5,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(right: 2),
+            child: Text(
+              'Active filters',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: _zSlate500,
+              ),
+            ),
+          ),
+          ...chips,
+          InkWell(
+            onTap: _resetFilters,
+            borderRadius: BorderRadius.circular(4),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              child: Text(
+                'Clear all',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: _zSlate600,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSalesOrderTableHeader() {
+    return Container(
+      height: 30,
+      padding: const EdgeInsets.symmetric(horizontal: _salesOrderGridHorizontalPadding),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF4F7FA),
+        border: Border(bottom: BorderSide(color: _zSlate300, width: 0.9)),
+      ),
+      child: const Row(
+        children: [
+          Expanded(
+            flex: _salesOrderCustomerFlex,
+            child: _SalesOrderHeaderText('Sales Order / Customer'),
+          ),
+          Expanded(
+            flex: _salesOrderStatusFlex,
+            child: _SalesOrderHeaderText('Order State'),
+          ),
+          Expanded(
+            flex: _salesOrderDispatchFlex,
+            child: _SalesOrderHeaderText('Dispatch'),
+          ),
+          Expanded(
+            flex: _salesOrderItemsFlex,
+            child: _SalesOrderHeaderText('Items'),
+          ),
+          Expanded(
+            flex: _salesOrderAmountFlex,
+            child: _SalesOrderHeaderText('Amount'),
+          ),
+          Expanded(
+            flex: _salesOrderOwnerFlex,
+            child: _SalesOrderHeaderText('Created By'),
+          ),
+          Expanded(
+            flex: _salesOrderCreatedFlex,
+            child: _SalesOrderHeaderText('Created'),
+          ),
+          Expanded(
+            flex: _salesOrderUpdatedFlex,
+            child: _SalesOrderHeaderText('Updated'),
+          ),
+          Expanded(
+            flex: _salesOrderPoFlex,
+            child: _SalesOrderHeaderText('Customer PO'),
+          ),
+          SizedBox(
+            width: _salesOrderGridActionWidth,
+            child: Center(child: _SalesOrderHeaderText('Actions')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSalesOrderEmptyState({required bool hasSearchOrFilters}) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              hasSearchOrFilters
+                  ? Icons.search_off_outlined
+                  : Icons.receipt_long_outlined,
+              size: 42,
+              color: _zSlate300,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              hasSearchOrFilters
+                  ? 'No matching sales orders found'
+                  : 'No sales orders found',
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: _zSlate700,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              hasSearchOrFilters
+                  ? 'Try changing the search text or active filters.'
+                  : 'Confirmed quotation conversions will appear here.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 11.5, color: _zSlate500),
+            ),
+            if (hasSearchOrFilters) ...[
+              const SizedBox(height: 14),
+              OutlinedButton(
+                onPressed: () {
+                  _debounce?.cancel();
+                  _searchController.clear();
+                  setState(() => _searchQuery = '');
+                  _resetFilters();
+                },
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _zSlate700,
+                  side: const BorderSide(color: _zSlate300),
+                  visualDensity: VisualDensity.compact,
+                ),
+                child: const Text(
+                  'Reset Search & Filters',
+                  style: TextStyle(fontSize: 11),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSalesOrderError(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, size: 34, color: Color(0xFF9A5A5A)),
+            const SizedBox(height: 10),
+            const Text(
+              'Unable to load sales orders',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: _zSlate800,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 11, color: _zSlate500),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton(
+              onPressed: _fetchInitialData,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _zSlate700,
+                side: const BorderSide(color: _zSlate300),
+                visualDensity: VisualDensity.compact,
+              ),
+              child: const Text('Retry', style: TextStyle(fontSize: 11)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading && _salesOrders.isEmpty) {
-      return const Scaffold(
+      return Scaffold(
         backgroundColor: Colors.white,
-        body: Center(child: CircularProgressIndicator()),
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildWorkspaceHeader(
+              totalOrders: 0,
+              formattedRevenue: '₹0',
+              confirmedCount: 0,
+              dispatchPendingCount: 0,
+            ),
+            _buildSalesOrderTableHeader(),
+            const Expanded(child: _SalesOrderSkeletonList()),
+          ],
+        ),
       );
     }
 
     if (_errorMessage != null && _salesOrders.isEmpty) {
       return Scaffold(
         backgroundColor: Colors.white,
-        body: Center(
-          child: Text(
-            _errorMessage!,
-            style: const TextStyle(
-              color: Colors.red,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
+        body: _buildSalesOrderError(_errorMessage!),
       );
     }
 
@@ -1184,16 +1631,20 @@ class _SalesOrderListScreenState extends State<SalesOrderListScreen> {
     int confirmedCount = 0;
     int dispatchPendingCount = 0;
 
-    for (var doc in filteredDocs) {
+    for (final doc in filteredDocs) {
       final data = doc.data();
       totalRevenue += _parseSafeDouble(
         data['grandTotal'] ?? data['totalAmount'] ?? data['amount'],
       );
-      final st = _parseSafeString(data['status']).toLowerCase();
-      final dst = _parseSafeString(data['dispatchStatus']).toLowerCase();
+      final String status = _parseSafeString(data['status']).toLowerCase();
+      final String dispatchStatus = _parseSafeString(
+        data['dispatchStatus'],
+      ).toLowerCase();
 
-      if (st == 'confirmed') confirmedCount++;
-      if (st == 'confirmed' && dst != 'delivered') dispatchPendingCount++;
+      if (status == 'confirmed') confirmedCount++;
+      if (status == 'confirmed' && dispatchStatus != 'delivered') {
+        dispatchPendingCount++;
+      }
     }
 
     final String formattedRevenue = NumberFormat.compactCurrency(
@@ -1203,191 +1654,117 @@ class _SalesOrderListScreenState extends State<SalesOrderListScreen> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        elevation: 0,
-        toolbarHeight: 6,
-        automaticallyImplyLeading: false,
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-      ),
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
-            child: Row(
-              children: [
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 320),
-                  child: SizedBox(
-                    height: 38,
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: _onSearchChanged,
-                      decoration: InputDecoration(
-                        hintText: 'Search order or customer...',
-                        prefixIcon: const Icon(Icons.search, size: 18),
-                        suffixIcon: _searchQuery.trim().isEmpty
-                            ? null
-                            : IconButton(
-                                tooltip: 'Clear',
-                                icon: const Icon(Icons.close, size: 17),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  _onSearchChanged('');
-                                },
-                              ),
-                        isDense: true,
-                        filled: true,
-                        fillColor: Colors.grey.shade100,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 8,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide.none,
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide.none,
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  height: 38,
-                  width: 38,
-                  child: Material(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(10),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(10),
-                      onTap: _openFilterSheet,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Icon(
-                            Icons.tune_rounded,
-                            size: 18,
-                            color: Colors.grey.shade800,
-                          ),
-                          if (_hasActiveFilters)
-                            Positioned(
-                              right: 8,
-                              top: 8,
-                              child: Container(
-                                width: 7,
-                                height: 7,
-                                decoration: BoxDecoration(
-                                  color: Colors.blue.shade700,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const Spacer(),
-                _MiniStatText(label: 'Total', value: totalOrders.toString()),
-                const SizedBox(width: 10),
-                _MiniStatText(label: 'Rev', value: formattedRevenue),
-                const SizedBox(width: 10),
-                _MiniStatText(
-                  label: 'Confirmed',
-                  value: confirmedCount.toString(),
-                ),
-                const SizedBox(width: 10),
-                _MiniStatText(
-                  label: 'Disp Pend',
-                  value: dispatchPendingCount.toString(),
-                ),
-              ],
-            ),
+          _buildWorkspaceHeader(
+            totalOrders: totalOrders,
+            formattedRevenue: formattedRevenue,
+            confirmedCount: confirmedCount,
+            dispatchPendingCount: dispatchPendingCount,
           ),
-          if (_hasActiveFilters)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+          _buildActiveFiltersSummary(),
+          if (_errorMessage != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              color: const Color(0xFFFFF8F8),
               child: Row(
                 children: [
+                  const Icon(Icons.warning_amber_rounded, size: 14, color: Color(0xFF9A5A5A)),
+                  const SizedBox(width: 7),
                   Expanded(
                     child: Text(
-                      'Filters applied',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade700,
-                        fontWeight: FontWeight.w500,
-                      ),
+                      _errorMessage!,
+                      style: const TextStyle(fontSize: 10.5, color: Color(0xFF7F4D4D)),
                     ),
                   ),
                   TextButton(
-                    onPressed: _resetFilters,
-                    child: const Text('Clear'),
+                    onPressed: _fetchInitialData,
+                    style: TextButton.styleFrom(
+                      minimumSize: Size.zero,
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text('Retry', style: TextStyle(fontSize: 10.5)),
                   ),
                 ],
               ),
             ),
           Expanded(
-            child: filteredDocs.isEmpty
-                ? _EmptyOrdersState(
-                    hasSearch:
-                        _searchQuery.trim().isNotEmpty || _hasActiveFilters,
-                    onReset: () {
-                      _searchController.clear();
-                      setState(() {
-                        _searchQuery = '';
-                      });
-                      _resetFilters();
-                    },
-                  )
-                : RefreshIndicator(
-                    onRefresh: _fetchInitialData,
-                    child: ListView.separated(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 90),
-                      itemCount: filteredDocs.length + (_hasMore ? 1 : 0),
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
-                      itemBuilder: (context, index) {
-                        if (index == filteredDocs.length) {
-                          return const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 24),
-                            child: Center(
-                              child: CircularProgressIndicator(strokeWidth: 2),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final double tableWidth = constraints.maxWidth < _salesOrderGridMinWidth
+                    ? _salesOrderGridMinWidth
+                    : constraints.maxWidth;
+
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SizedBox(
+                    width: tableWidth,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildSalesOrderTableHeader(),
+                        Expanded(
+                          child: filteredDocs.isEmpty
+                              ? _buildSalesOrderEmptyState(
+                            hasSearchOrFilters:
+                            _searchQuery.trim().isNotEmpty || _hasActiveFilters,
+                          )
+                              : RefreshIndicator(
+                            onRefresh: _fetchInitialData,
+                            child: ListView.builder(
+                              controller: _scrollController,
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              padding: const EdgeInsets.only(bottom: 92),
+                              itemCount: filteredDocs.length + (_hasMore ? 1 : 0),
+                              itemBuilder: (context, index) {
+                                if (index == filteredDocs.length) {
+                                  return const SizedBox(
+                                    height: 48,
+                                    child: Center(
+                                      child: SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: _zSlate400,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }
+
+                                final doc = filteredDocs[index];
+                                final data = doc.data();
+
+                                return _EnterpriseSalesOrderRow(
+                                  key: ValueKey(doc.id),
+                                  document: doc,
+                                  nameResolver: _getUserName,
+                                  onViewTap: () => _openSalesOrderPreview(data),
+                                  onDispatchTap: () => _showDispatchDialog(doc),
+                                  onApproveTap: () => _showApprovalDialog(doc),
+                                  onCancelTap: () => _cancelOrder(doc),
+                                  onUploadPOTap: () => _handlePOUpload(doc.id),
+                                  onViewPOTap: () {
+                                    final poData = data['purchaseOrder'];
+                                    if (poData is Map && poData['url'] != null) {
+                                      _viewPO(poData['url'].toString());
+                                    }
+                                  },
+                                  onCreateProformaTap: () => _createProformaInvoice(data),
+                                );
+                              },
                             ),
-                          );
-                        }
-
-                        final doc = filteredDocs[index];
-                        final data = doc.data();
-
-                        return _SalesOrderCard(
-                          key: ValueKey(doc.id),
-                          document: doc,
-                          nameResolver: _getUserName,
-                          onViewTap: () => _openSalesOrderPreview(data),
-                          onDispatchTap: () => _showDispatchDialog(doc),
-                          onApproveTap: () => _showApprovalDialog(doc),
-                          onCancelTap: () => _cancelOrder(doc),
-                          onUploadPOTap: () => _handlePOUpload(doc.id),
-                          onViewPOTap: () {
-                            final poData = data['purchaseOrder'];
-                            if (poData != null && poData['url'] != null) {
-                              _viewPO(poData['url']);
-                            }
-                          },
-                          onCreateProformaTap: () =>
-                              _createProformaInvoice(data),
-                        );
-                      },
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                );
+              },
+            ),
           ),
         ],
       ),
@@ -1395,7 +1772,182 @@ class _SalesOrderListScreenState extends State<SalesOrderListScreen> {
   }
 }
 
-class _SalesOrderCard extends StatelessWidget {
+class _SalesOrderHeaderText extends StatelessWidget {
+  final String label;
+
+  const _SalesOrderHeaderText(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      softWrap: false,
+      style: const TextStyle(
+        fontSize: 10.1,
+        fontWeight: FontWeight.w600,
+        color: _zSlate600,
+        letterSpacing: 0.04,
+      ),
+    );
+  }
+}
+
+class _SalesOrderToolbarButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool isActive;
+
+  const _SalesOrderToolbarButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.isActive = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        height: 26,
+        padding: const EdgeInsets.symmetric(horizontal: 9),
+        decoration: BoxDecoration(
+          color: isActive ? _zSlate100 : Colors.white,
+          border: Border.all(color: isActive ? _zSlate300 : _zSlate200),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13, color: isActive ? _zSlate700 : _zSlate500),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w500,
+                color: isActive ? _zSlate700 : _zSlate600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EnterpriseSalesOrderKpi extends StatelessWidget {
+  final String title;
+  final String value;
+
+  const _EnterpriseSalesOrderKpi({required this.title, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 10.2,
+            color: _zSlate500,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w700,
+            color: _zSlate700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SalesOrderSkeletonList extends StatelessWidget {
+  const _SalesOrderSkeletonList();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: 12,
+      itemBuilder: (context, index) => _SalesOrderSkeletonRow(index: index),
+    );
+  }
+}
+
+class _SalesOrderSkeletonRow extends StatelessWidget {
+  final int index;
+
+  const _SalesOrderSkeletonRow({required this.index});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 54,
+      padding: const EdgeInsets.symmetric(horizontal: _salesOrderGridHorizontalPadding),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: _zSlate100)),
+      ),
+      child: Row(
+        children: [
+          Expanded(flex: _salesOrderCustomerFlex, child: _buildDoubleBlock(150, 105)),
+          Expanded(flex: _salesOrderStatusFlex, child: _buildDoubleBlock(66, 48)),
+          Expanded(flex: _salesOrderDispatchFlex, child: _buildDoubleBlock(72, 54)),
+          Expanded(flex: _salesOrderItemsFlex, child: _buildDoubleBlock(100, 58)),
+          Expanded(flex: _salesOrderAmountFlex, child: _buildDoubleBlock(78, 42)),
+          Expanded(flex: _salesOrderOwnerFlex, child: _buildDoubleBlock(78, 48)),
+          Expanded(flex: _salesOrderCreatedFlex, child: _buildBlock(58)),
+          Expanded(flex: _salesOrderUpdatedFlex, child: _buildBlock(58)),
+          Expanded(flex: _salesOrderPoFlex, child: _buildDoubleBlock(60, 45)),
+          const SizedBox(
+            width: _salesOrderGridActionWidth,
+            child: Icon(Icons.more_vert, size: 15, color: _zSlate200),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDoubleBlock(double firstWidth, double secondWidth) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildBlock(firstWidth),
+        const SizedBox(height: 5),
+        _buildBlock(secondWidth, height: 7),
+      ],
+    );
+  }
+
+  Widget _buildBlock(double baseWidth, {double height = 9}) {
+    final double width = baseWidth * (0.76 + (index % 3) * 0.1);
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: _zSlate100,
+        borderRadius: BorderRadius.circular(3),
+      ),
+    );
+  }
+}
+
+class _EnterpriseSalesOrderRow extends StatefulWidget {
   final QueryDocumentSnapshot<Map<String, dynamic>> document;
   final Future<String> Function(String) nameResolver;
   final VoidCallback onViewTap;
@@ -1406,7 +1958,7 @@ class _SalesOrderCard extends StatelessWidget {
   final VoidCallback onViewPOTap;
   final VoidCallback onCreateProformaTap;
 
-  const _SalesOrderCard({
+  const _EnterpriseSalesOrderRow({
     super.key,
     required this.document,
     required this.nameResolver,
@@ -1420,473 +1972,538 @@ class _SalesOrderCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final data = document.data();
-
-    final String soNumber = _parseSafeString(
-      data['salesOrderNumber'] ?? data['soNumber'] ?? data['orderNumber'],
-      fallback: 'Draft SO',
-    );
-    final String customerName = _parseSafeString(
-      data['customerName'] ??
-          data['clientName'] ??
-          data['partyName'] ??
-          data['customer'],
-      fallback: 'Unknown Customer',
-    );
-    final String status = _parseSafeString(
-      data['status'],
-      fallback: 'draft',
-    ).toLowerCase();
-    final String approvalStatus = _parseSafeString(
-      data['approvalStatus'],
-      fallback: 'pending',
-    ).toLowerCase();
-    final String dispatchStatus = _parseSafeString(
-      data['dispatchStatus'],
-      fallback: 'pending',
-    ).toLowerCase();
-    final double grandTotal = _parseSafeDouble(
-      data['grandTotal'] ?? data['totalAmount'] ?? data['amount'],
-    );
-
-    DateTime? date;
-    final dateRaw = data['date'] ?? data['createdAt'] ?? data['soDate'];
-    if (dateRaw != null && dateRaw is Timestamp) {
-      date = dateRaw.toDate();
-    }
-
-    final formattedDate = date != null
-        ? DateFormat('dd/MM/yyyy').format(date)
-        : '-';
-    final formattedAmount = NumberFormat.currency(
-      symbol: '₹',
-      locale: 'en_IN',
-      decimalDigits: grandTotal.truncateToDouble() == grandTotal ? 0 : 2,
-    ).format(grandTotal);
-
-    final bool canCancel =
-        status != 'completed' &&
-        dispatchStatus != 'shipped' &&
-        dispatchStatus != 'delivered' &&
-        status != 'cancelled';
-    final bool canDispatch =
-        approvalStatus == 'approved' && status == 'confirmed';
-    final bool canApprove =
-        status != 'cancelled' &&
-        status != 'completed' &&
-        approvalStatus != 'approved' &&
-        approvalStatus != 'rejected';
-
-    final Map<String, dynamic>? poData = data['purchaseOrder'];
-    final bool hasPO =
-        poData != null && _parseSafeString(poData['url']).isNotEmpty;
-
-    final String createdByUid = _parseSafeString(data['createdBy']);
-    final String explicitlyStoredName =
-        data['createdByName']?.toString().trim() ?? '';
-
-    String formattedUpdatedAt = '--';
-    final updatedAtRaw = data['updatedAt'];
-    if (updatedAtRaw != null && updatedAtRaw is Timestamp) {
-      formattedUpdatedAt = DateFormat(
-        'dd/MM/yyyy',
-      ).format(updatedAtRaw.toDate());
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade200, width: 0.8),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: Colors.blue.shade50,
-                  child: Text(
-                    customerName.isNotEmpty
-                        ? customerName[0].toUpperCase()
-                        : '?',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.blue.shade800,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              soNumber,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 14.5,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          if (hasPO)
-                            const Padding(
-                              padding: EdgeInsets.only(left: 6.0),
-                              child: Icon(
-                                Icons.attachment_rounded,
-                                size: 14,
-                                color: Colors.blue,
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 1),
-                      Text(
-                        customerName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          color: Colors.grey.shade600,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(
-                  width: 28,
-                  height: 28,
-                  child: PopupMenuButton<String>(
-                    padding: EdgeInsets.zero,
-                    tooltip: 'Actions',
-                    icon: Icon(
-                      Icons.more_vert,
-                      size: 20,
-                      color: Colors.grey.shade600,
-                    ),
-                    onSelected: (value) {
-                      if (value == 'view') onViewTap();
-                      if (value == 'dispatch') onDispatchTap();
-                      if (value == 'approve') onApproveTap();
-                      if (value == 'cancel') onCancelTap();
-                      if (value == 'view_po') onViewPOTap();
-                      if (value == 'upload_po') onUploadPOTap();
-                      if (value == 'create_proforma') onCreateProformaTap();
-                    },
-                    itemBuilder: (BuildContext context) => [
-                      const PopupMenuItem(
-                        value: 'view',
-                        child: Text('View Details'),
-                      ),
-                      const PopupMenuDivider(),
-                      if (hasPO)
-                        const PopupMenuItem(
-                          value: 'view_po',
-                          child: Text(
-                            'View PO',
-                            style: TextStyle(
-                              color: Colors.blue,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      PopupMenuItem(
-                        value: 'upload_po',
-                        child: Text(
-                          hasPO ? 'Replace PO' : 'Upload PO',
-                          style: TextStyle(
-                            color: hasPO ? Colors.grey.shade700 : Colors.blue,
-                          ),
-                        ),
-                      ),
-                      const PopupMenuDivider(),
-                      const PopupMenuItem(
-                        value: 'create_proforma',
-                        child: Text('Create Proforma Invoice'),
-                      ),
-                      const PopupMenuDivider(),
-                      if (canApprove)
-                        const PopupMenuItem(
-                          value: 'approve',
-                          child: Text('Approve / Reject'),
-                        ),
-                      if (canDispatch)
-                        const PopupMenuItem(
-                          value: 'dispatch',
-                          child: Text('Update Dispatch'),
-                        ),
-                      if (canCancel)
-                        const PopupMenuItem(
-                          value: 'cancel',
-                          child: Text(
-                            'Cancel Order',
-                            style: TextStyle(color: Colors.red),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                _StatusBadge(status: status, type: 'Order'),
-                _StatusBadge(status: approvalStatus, type: 'Approval'),
-                _StatusBadge(status: dispatchStatus, type: 'Dispatch'),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 12,
-              runSpacing: 6,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                if (_parseSafeString(
-                  data['referenceQuotationId'] ?? data['quotationId'],
-                ).isNotEmpty)
-                  _InlineInfo(
-                    icon: Icons.tag_outlined,
-                    text:
-                        'Ref: ${_parseSafeString(data['referenceQuotationId'] ?? data['quotationId'])}',
-                  ),
-                _InlineInfo(
-                  icon: Icons.currency_rupee_outlined,
-                  text: formattedAmount,
-                ),
-                if (explicitlyStoredName.isNotEmpty)
-                  _InlineInfo(
-                    icon: Icons.person_outline,
-                    text: explicitlyStoredName,
-                  )
-                else
-                  FutureBuilder<String>(
-                    future: nameResolver(createdByUid),
-                    builder: (context, snapshot) {
-                      return _InlineInfo(
-                        icon: Icons.person_outline,
-                        text: snapshot.data ?? '...',
-                      );
-                    },
-                  ),
-                _InlineInfo(
-                  icon: Icons.add_circle_outline,
-                  text: 'Created: $formattedDate',
-                ),
-                if (formattedUpdatedAt != '--')
-                  _InlineInfo(
-                    icon: Icons.edit_outlined,
-                    text: 'Updated: $formattedUpdatedAt',
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  State<_EnterpriseSalesOrderRow> createState() => _EnterpriseSalesOrderRowState();
 }
 
-class _StatusBadge extends StatelessWidget {
-  final String status;
-  final String type;
+class _EnterpriseSalesOrderRowState extends State<_EnterpriseSalesOrderRow> {
+  bool _isHovered = false;
 
-  const _StatusBadge({required this.status, required this.type});
-
-  @override
-  Widget build(BuildContext context) {
-    Color bgColor = Colors.grey.shade100;
-    Color textColor = Colors.grey.shade700;
-    String displayStatus = status.toUpperCase();
-
-    final s = status.toLowerCase();
-
-    if (type == 'Approval') {
-      if (s == 'approved') {
-        bgColor = Colors.green.shade50;
-        textColor = Colors.green.shade700;
-      } else if (s == 'rejected') {
-        bgColor = Colors.red.shade50;
-        textColor = Colors.red.shade700;
-      } else {
-        bgColor = Colors.orange.shade50;
-        textColor = Colors.orange.shade800;
-        displayStatus = 'PENDING APPR';
-      }
-    } else if (type == 'Dispatch') {
-      if (s == 'delivered') {
-        bgColor = Colors.green.shade50;
-        textColor = Colors.green.shade700;
-      } else if (s == 'shipped') {
-        bgColor = Colors.blue.shade50;
-        textColor = Colors.blue.shade700;
-      } else if (s == 'packed') {
-        bgColor = Colors.purple.shade50;
-        textColor = Colors.purple.shade700;
-      } else {
-        bgColor = Colors.grey.shade100;
-        textColor = Colors.grey.shade700;
-        displayStatus = 'DISP PENDING';
-      }
-    } else {
-      if (s == 'confirmed') {
-        bgColor = Colors.blue.shade50;
-        textColor = Colors.blue.shade700;
-      } else if (s == 'completed') {
-        bgColor = Colors.green.shade50;
-        textColor = Colors.green.shade700;
-      } else if (s == 'cancelled') {
-        bgColor = Colors.red.shade50;
-        textColor = Colors.red.shade700;
-      }
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        displayStatus,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: textColor,
-        ),
-      ),
-    );
+  String _safeString(dynamic value, {String fallback = ''}) {
+    if (value == null) return fallback;
+    final String text = value.toString().trim();
+    if (text.isEmpty || text == 'null' || text == '-') return fallback;
+    return text;
   }
-}
 
-class _MiniStatText extends StatelessWidget {
-  final String label;
-  final String value;
+  double _toDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString().replaceAll(',', '').trim() ?? '') ?? 0;
+  }
 
-  const _MiniStatText({required this.label, required this.value});
+  DateTime? _toDate(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is String && value.trim().isNotEmpty) {
+      return DateTime.tryParse(value.trim());
+    }
+    return null;
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      '$label: $value',
+  String _dateText(dynamic value) {
+    final DateTime? date = _toDate(value);
+    return date == null ? '-' : DateFormat('dd/MM/yyyy').format(date);
+  }
+
+  String _quantityText(double value) {
+    if (value == value.truncateToDouble()) return value.toInt().toString();
+    return value.toStringAsFixed(2);
+  }
+
+  Color _stateColor(String value) {
+    switch (value.trim().toLowerCase()) {
+      case 'approved':
+      case 'completed':
+      case 'delivered':
+        return const Color(0xFF56745D);
+      case 'confirmed':
+      case 'shipped':
+        return const Color(0xFF557495);
+      case 'packed':
+        return const Color(0xFF726482);
+      case 'rejected':
+      case 'cancelled':
+        return const Color(0xFF8A4F4F);
+      case 'draft':
+      case 'pending':
+        return const Color(0xFF806B4B);
+      default:
+        return _zSlate600;
+    }
+  }
+
+  String _titleCase(String value, {String fallback = '-'}) {
+    final String text = value.trim();
+    if (text.isEmpty) return fallback;
+    return text
+        .split(RegExp(r'[\s_]+'))
+        .where((part) => part.isNotEmpty)
+        .map((part) => '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}')
+        .join(' ');
+  }
+
+  Widget _twoLineText({
+    required String primary,
+    required String secondary,
+    Color primaryColor = _zSlate700,
+    Color secondaryColor = _zSlate500,
+    FontWeight primaryWeight = FontWeight.w500,
+    VoidCallback? onPrimaryTap,
+  }) {
+    final Widget primaryWidget = Text(
+      primary,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      softWrap: false,
       style: TextStyle(
-        fontSize: 12,
-        color: Colors.grey.shade700,
-        fontWeight: FontWeight.w600,
+        fontSize: 11,
+        height: 1.08,
+        color: primaryColor,
+        fontWeight: primaryWeight,
       ),
     );
-  }
-}
 
-class _InlineInfo extends StatelessWidget {
-  final IconData icon;
-  final String text;
-
-  const _InlineInfo({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 300),
-      child: Row(
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Column(
         mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 14, color: Colors.grey.shade600),
-          const SizedBox(width: 4),
-          Flexible(
-            child: Text(
-              text,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey.shade800,
-                fontWeight: FontWeight.w500,
-              ),
+          if (onPrimaryTap == null)
+            primaryWidget
+          else
+            InkWell(
+              onTap: onPrimaryTap,
+              borderRadius: BorderRadius.circular(3),
+              child: primaryWidget,
+            ),
+          const SizedBox(height: 3),
+          Text(
+            secondary,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            softWrap: false,
+            style: TextStyle(
+              fontSize: 9.8,
+              height: 1.05,
+              color: secondaryColor,
+              fontWeight: FontWeight.w400,
             ),
           ),
         ],
       ),
     );
   }
-}
 
-class _EmptyOrdersState extends StatelessWidget {
-  final bool hasSearch;
-  final VoidCallback onReset;
+  List<dynamic> _items(Map<String, dynamic> data) {
+    final dynamic raw = data['items'];
+    return raw is List ? raw : const <dynamic>[];
+  }
 
-  const _EmptyOrdersState({required this.hasSearch, required this.onReset});
+  String _firstItemName(List<dynamic> items) {
+    if (items.isEmpty) return '-';
+    final dynamic first = items.first;
+    if (first is Map) {
+      return _safeString(
+        first['name'] ?? first['itemName'] ?? first['productName'] ?? first['description'],
+        fallback: 'Item',
+      );
+    }
+    return _safeString(first, fallback: 'Item');
+  }
+
+  double _totalQuantity(List<dynamic> items) {
+    double total = 0;
+    for (final dynamic item in items) {
+      if (item is Map) total += _toDouble(item['quantity'] ?? item['qty']);
+    }
+    return total;
+  }
+
+  String _firstUnit(List<dynamic> items) {
+    if (items.isEmpty || items.first is! Map) return '';
+    final Map first = items.first as Map;
+    return _safeString(first['uom'] ?? first['unit']);
+  }
+
+  Widget _buildCreatorCell(String storedName, String uid) {
+    if (storedName.isNotEmpty) {
+      return _twoLineText(primary: storedName, secondary: 'Order owner');
+    }
+
+    return FutureBuilder<String>(
+      future: widget.nameResolver(uid),
+      builder: (context, snapshot) {
+        return _twoLineText(
+          primary: snapshot.data ?? 'Loading...',
+          secondary: 'Order owner',
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(28),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight - 40),
-            child: IntrinsicHeight(
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircleAvatar(
-                      radius: 34,
-                      backgroundColor: Colors.blue.shade50,
-                      child: Icon(
-                        hasSearch ? Icons.search_off : Icons.inbox_outlined,
-                        size: 34,
-                        color: Colors.blue.shade700,
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      hasSearch
-                          ? 'No matching orders found'
-                          : 'No orders found',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      hasSearch
-                          ? 'Try changing the search text or filter.'
-                          : 'No sales order records are available yet.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.grey.shade700,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    if (hasSearch)
-                      OutlinedButton(
-                        onPressed: onReset,
-                        child: const Text('Reset Filters'),
-                      ),
-                  ],
-                ),
+    final Map<String, dynamic> data = widget.document.data();
+
+    final String soNumber = _safeString(
+      data['salesOrderNumber'] ?? data['soNumber'] ?? data['orderNumber'],
+      fallback: 'Draft SO',
+    );
+    final String customerName = _safeString(
+      data['customerName'] ?? data['clientName'] ?? data['partyName'] ?? data['customer'],
+      fallback: 'Unknown Customer',
+    );
+    final String quotationRef = _safeString(
+      data['referenceQuotationNumber'] ??
+          data['quotationNumber'] ??
+          data['quoteNumber'] ??
+          data['referenceQuotationId'] ??
+          data['quotationId'],
+      fallback: 'Direct order',
+    );
+
+    final String status = _safeString(data['status'], fallback: 'draft').toLowerCase();
+    final String approvalStatus = _safeString(
+      data['approvalStatus'],
+      fallback: 'pending',
+    ).toLowerCase();
+    final String dispatchStatus = _safeString(
+      data['dispatchStatus'],
+      fallback: 'pending',
+    ).toLowerCase();
+
+    final String transporter = _safeString(data['transporterName']);
+    final String vehicle = _safeString(data['vehicleNumber']);
+    final String dispatchDetail = transporter.isNotEmpty
+        ? transporter
+        : vehicle.isNotEmpty
+        ? vehicle
+        : dispatchStatus == 'pending'
+        ? 'Awaiting dispatch'
+        : 'Logistics not entered';
+
+    final List<dynamic> items = _items(data);
+    final String firstItem = _firstItemName(items);
+    final double totalQty = _totalQuantity(items);
+    final String unit = _firstUnit(items);
+    final String itemSummary = items.isEmpty
+        ? 'No items'
+        : '$firstItem${items.length > 1 ? ' +${items.length - 1}' : ''}';
+    final String quantitySummary = items.isEmpty
+        ? '-'
+        : 'Qty ${_quantityText(totalQty)}${unit.isEmpty ? '' : ' $unit'}';
+
+    final double grandTotal = _toDouble(
+      data['grandTotal'] ?? data['totalAmount'] ?? data['amount'],
+    );
+    final String formattedAmount = NumberFormat.currency(
+      symbol: '₹',
+      locale: 'en_IN',
+      decimalDigits: grandTotal.truncateToDouble() == grandTotal ? 0 : 2,
+    ).format(grandTotal);
+
+    final String createdDate = _dateText(data['date'] ?? data['createdAt'] ?? data['soDate']);
+    final String updatedDate = _dateText(data['updatedAt']);
+    final String createdByUid = _safeString(data['createdBy']);
+    final String storedCreatorName = _safeString(data['createdByName']);
+
+    final Map<String, dynamic>? poData = data['purchaseOrder'] is Map
+        ? Map<String, dynamic>.from(data['purchaseOrder'] as Map)
+        : null;
+    final bool hasPO = poData != null && _safeString(poData['url']).isNotEmpty;
+    final String poFileName = hasPO
+        ? _safeString(poData['fileName'], fallback: 'Attachment available')
+        : 'Not uploaded';
+
+    final bool canCancel = status != 'completed' &&
+        dispatchStatus != 'shipped' &&
+        dispatchStatus != 'delivered' &&
+        status != 'cancelled';
+    final bool canDispatch = approvalStatus == 'approved' && status == 'confirmed';
+    final bool canApprove = status != 'cancelled' &&
+        status != 'completed' &&
+        approvalStatus != 'approved' &&
+        approvalStatus != 'rejected';
+
+    return RepaintBoundary(
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+          height: 54,
+          padding: const EdgeInsets.symmetric(horizontal: _salesOrderGridHorizontalPadding),
+          decoration: BoxDecoration(
+            color: _isHovered ? const Color(0xFFFBFCFE) : Colors.white,
+            border: Border(
+              bottom: const BorderSide(color: _zSlate100),
+              left: BorderSide(
+                color: _isHovered ? _zSoftHoverBorder : Colors.transparent,
+                width: 2,
               ),
             ),
           ),
-        );
-      },
+          child: Row(
+            children: [
+              Expanded(
+                flex: _salesOrderCustomerFlex,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            flex: 3,
+                            child: InkWell(
+                              onTap: widget.onViewTap,
+                              borderRadius: BorderRadius.circular(3),
+                              child: Text(
+                                soNumber,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 11.8,
+                                  height: 1.08,
+                                  fontWeight: FontWeight.w700,
+                                  color: _zErpPrimaryBlue,
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (hasPO) ...[
+                            const SizedBox(width: 5),
+                            const Icon(Icons.attachment_rounded, size: 12, color: _zInquiryBlue),
+                          ],
+                          const SizedBox(width: 7),
+                          Expanded(
+                            flex: 5,
+                            child: InkWell(
+                              onTap: widget.onViewTap,
+                              borderRadius: BorderRadius.circular(3),
+                              child: Text(
+                                customerName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 11.5,
+                                  height: 1.08,
+                                  fontWeight: FontWeight.w600,
+                                  color: _zSlate800,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        quotationRef == 'Direct order' ? quotationRef : 'Quotation: $quotationRef',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 9.8,
+                          height: 1.05,
+                          color: _zSlate500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: _salesOrderStatusFlex,
+                child: _twoLineText(
+                  primary: _titleCase(status),
+                  secondary: 'Approval: ${_titleCase(approvalStatus)}',
+                  primaryColor: _stateColor(status),
+                  secondaryColor: _stateColor(approvalStatus),
+                  primaryWeight: FontWeight.w600,
+                ),
+              ),
+              Expanded(
+                flex: _salesOrderDispatchFlex,
+                child: _twoLineText(
+                  primary: _titleCase(dispatchStatus),
+                  secondary: dispatchDetail,
+                  primaryColor: _stateColor(dispatchStatus),
+                  primaryWeight: FontWeight.w600,
+                ),
+              ),
+              Expanded(
+                flex: _salesOrderItemsFlex,
+                child: _twoLineText(primary: itemSummary, secondary: quantitySummary),
+              ),
+              Expanded(
+                flex: _salesOrderAmountFlex,
+                child: _twoLineText(
+                  primary: formattedAmount,
+                  secondary: '${items.length} item${items.length == 1 ? '' : 's'}',
+                  primaryColor: _zSlate800,
+                  primaryWeight: FontWeight.w700,
+                ),
+              ),
+              Expanded(
+                flex: _salesOrderOwnerFlex,
+                child: _buildCreatorCell(storedCreatorName, createdByUid),
+              ),
+              Expanded(
+                flex: _salesOrderCreatedFlex,
+                child: Text(
+                  createdDate,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 10.7, color: _zSlate600, fontWeight: FontWeight.w500),
+                ),
+              ),
+              Expanded(
+                flex: _salesOrderUpdatedFlex,
+                child: Text(
+                  updatedDate,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 10.7, color: _zSlate600, fontWeight: FontWeight.w500),
+                ),
+              ),
+              Expanded(
+                flex: _salesOrderPoFlex,
+                child: InkWell(
+                  onTap: hasPO ? widget.onViewPOTap : widget.onUploadPOTap,
+                  borderRadius: BorderRadius.circular(3),
+                  child: _twoLineText(
+                    primary: hasPO ? 'Attached' : 'Missing',
+                    secondary: poFileName,
+                    primaryColor: hasPO ? const Color(0xFF557495) : const Color(0xFF806B4B),
+                    primaryWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: _salesOrderGridActionWidth,
+                child: Center(
+                  child: PopupMenuButton<String>(
+                    padding: EdgeInsets.zero,
+                    tooltip: 'Actions',
+                    icon: Icon(
+                      Icons.more_vert,
+                      size: 16,
+                      color: _isHovered ? _zSlate600 : _zSlate400.withValues(alpha: 0.62),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
+                      side: const BorderSide(color: _zSlate200),
+                    ),
+                    onSelected: (value) {
+                      if (value == 'view') widget.onViewTap();
+                      if (value == 'dispatch') widget.onDispatchTap();
+                      if (value == 'approve') widget.onApproveTap();
+                      if (value == 'cancel') widget.onCancelTap();
+                      if (value == 'view_po') widget.onViewPOTap();
+                      if (value == 'upload_po') widget.onUploadPOTap();
+                      if (value == 'create_proforma') widget.onCreateProformaTap();
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'view',
+                        height: 32,
+                        child: Row(
+                          children: [
+                            Icon(Icons.visibility_outlined, size: 14, color: _zSlate600),
+                            SizedBox(width: 8),
+                            Text('View Sales Order', style: TextStyle(fontSize: 11.5, color: _zSlate700)),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuDivider(height: 8),
+                      if (hasPO)
+                        const PopupMenuItem(
+                          value: 'view_po',
+                          height: 32,
+                          child: Row(
+                            children: [
+                              Icon(Icons.attach_file_rounded, size: 14, color: _zInquiryBlue),
+                              SizedBox(width: 8),
+                              Text('View Customer PO', style: TextStyle(fontSize: 11.5, color: _zSlate700)),
+                            ],
+                          ),
+                        ),
+                      PopupMenuItem(
+                        value: 'upload_po',
+                        height: 32,
+                        child: Row(
+                          children: [
+                            const Icon(Icons.upload_file_outlined, size: 14, color: _zSlate600),
+                            const SizedBox(width: 8),
+                            Text(
+                              hasPO ? 'Replace Customer PO' : 'Upload Customer PO',
+                              style: const TextStyle(fontSize: 11.5, color: _zSlate700),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuDivider(height: 8),
+                      const PopupMenuItem(
+                        value: 'create_proforma',
+                        height: 32,
+                        child: Row(
+                          children: [
+                            Icon(Icons.request_quote_outlined, size: 14, color: _zSlate600),
+                            SizedBox(width: 8),
+                            Text('Create Proforma Invoice', style: TextStyle(fontSize: 11.5, color: _zSlate700)),
+                          ],
+                        ),
+                      ),
+                      if (canApprove || canDispatch || canCancel)
+                        const PopupMenuDivider(height: 8),
+                      if (canApprove)
+                        const PopupMenuItem(
+                          value: 'approve',
+                          height: 32,
+                          child: Row(
+                            children: [
+                              Icon(Icons.verified_outlined, size: 14, color: _zSlate600),
+                              SizedBox(width: 8),
+                              Text('Approve / Reject', style: TextStyle(fontSize: 11.5, color: _zSlate700)),
+                            ],
+                          ),
+                        ),
+                      if (canDispatch)
+                        const PopupMenuItem(
+                          value: 'dispatch',
+                          height: 32,
+                          child: Row(
+                            children: [
+                              Icon(Icons.local_shipping_outlined, size: 14, color: _zSlate600),
+                              SizedBox(width: 8),
+                              Text('Update Dispatch', style: TextStyle(fontSize: 11.5, color: _zSlate700)),
+                            ],
+                          ),
+                        ),
+                      if (canCancel)
+                        const PopupMenuItem(
+                          value: 'cancel',
+                          height: 32,
+                          child: Row(
+                            children: [
+                              Icon(Icons.cancel_outlined, size: 14, color: Color(0xFF8A4F4F)),
+                              SizedBox(width: 8),
+                              Text('Cancel Order', style: TextStyle(fontSize: 11.5, color: Color(0xFF8A4F4F))),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
