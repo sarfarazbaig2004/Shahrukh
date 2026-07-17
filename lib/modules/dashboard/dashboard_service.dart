@@ -74,8 +74,37 @@ class DashboardService {
   double _parseDouble(dynamic value) {
     if (value == null) return 0.0;
     if (value is num) return value.toDouble();
-    if (value is String) return double.tryParse(value) ?? 0.0;
+    if (value is String) {
+      final cleaned = value
+          .replaceAll(',', '')
+          .replaceAll('₹', '')
+          .replaceAll(RegExp(r'[^0-9.\-]'), '')
+          .trim();
+      if (cleaned.isEmpty || cleaned == '-' || cleaned == '.') return 0.0;
+      return double.tryParse(cleaned) ?? 0.0;
+    }
     return 0.0;
+  }
+
+  double _firstAmount(Map<String, dynamic> data, List<String> keys) {
+    for (final key in keys) {
+      final amount = _parseDouble(data[key]);
+      if (amount != 0) return amount;
+    }
+    return 0.0;
+  }
+
+  bool _isDeleted(Map<String, dynamic> data) {
+    return data['isDeleted'] == true || data['isActive'] == false;
+  }
+
+  bool _isOldRevision(Map<String, dynamic> data) {
+    return data['isLatest'] == false;
+  }
+
+  bool _isCancelledOrRejected(String status) {
+    final s = status.toLowerCase().trim();
+    return s == 'cancelled' || s == 'canceled' || s == 'rejected';
   }
 
   DateTime _parseDate(dynamic value) {
@@ -96,49 +125,118 @@ class DashboardService {
             .doc(companyId)
             .collection('tax_invoices')
             .get();
+
+        final salesOrdersSnap = await _db
+            .collection('companies')
+            .doc(companyId)
+            .collection('sales_orders')
+            .get();
+
         final quotesSnap = await _db
             .collection('companies')
             .doc(companyId)
             .collection('quotations')
             .get();
-        final inquiriesSnap = await _db
-            .collection('companies')
-            .doc(companyId)
-            .collection('inquiries')
-            .get();
 
-        double revenue = 0;
+        double invoiceRevenue = 0;
         double outstanding = 0;
 
-        for (var doc in invoicesSnap.docs) {
+        for (final doc in invoicesSnap.docs) {
           final data = doc.data();
-          if (data['isDeleted'] == true) continue;
-          revenue += _parseDouble(data['totalAmount']);
-          outstanding += _parseDouble(data['outstandingAmount']);
+          if (_isDeleted(data)) continue;
+
+          final total = _firstAmount(data, [
+            'totalAmount',
+            'finalTotal',
+            'grandTotal',
+            'invoiceTotal',
+            'netAmount',
+            'amount',
+          ]);
+
+          invoiceRevenue += total;
+
+          final explicitOutstanding = _firstAmount(data, [
+            'outstandingAmount',
+            'balanceAmount',
+            'dueAmount',
+            'pendingAmount',
+            'amountDue',
+          ]);
+
+          final paymentStatus = (data['paymentStatus'] ?? data['status'] ?? '')
+              .toString()
+              .toLowerCase();
+
+          if (explicitOutstanding != 0) {
+            outstanding += explicitOutstanding;
+          } else if (paymentStatus.contains('unpaid') ||
+              paymentStatus.contains('pending') ||
+              paymentStatus.contains('partial')) {
+            outstanding += total;
+          }
         }
 
+        // Fallback for companies where tax invoice module is not yet used.
+        // Do not double count: use Sales Orders only when invoice revenue is zero.
+        double salesOrderRevenue = 0;
+        if (invoiceRevenue == 0) {
+          for (final doc in salesOrdersSnap.docs) {
+            final data = doc.data();
+            if (_isDeleted(data)) continue;
+
+            final status = (data['status'] ?? '').toString().toLowerCase();
+            if (_isCancelledOrRejected(status)) continue;
+
+            salesOrderRevenue += _firstAmount(data, [
+              'finalTotal',
+              'grandTotal',
+              'totalAmount',
+              'orderTotal',
+              'netAmount',
+              'amount',
+            ]);
+          }
+        }
+
+        int latestQuoteCount = 0;
         int activeQuotes = 0;
-        for (var doc in quotesSnap.docs) {
-          final status = (doc.data()['status'] ?? '').toString().toLowerCase();
-          if (status != 'converted' &&
-              status != 'rejected' &&
-              doc.data()['isDeleted'] != true) {
+        int convertedQuotes = 0;
+
+        for (final doc in quotesSnap.docs) {
+          final data = doc.data();
+          if (_isDeleted(data) || _isOldRevision(data)) continue;
+
+          latestQuoteCount++;
+
+          final status = (data['status'] ?? '').toString().toLowerCase();
+          final convertedFlag =
+              data['convertedToSalesOrder'] == true ||
+              data['convertedToSalesOrderId'] != null;
+
+          if (status == 'converted' || convertedFlag) {
+            convertedQuotes++;
+            continue;
+          }
+
+          if (!_isCancelledOrRejected(status)) {
             activeQuotes++;
           }
         }
 
-        int totalInquiries = inquiriesSnap.docs
-            .where((d) => d.data()['isDeleted'] != true)
-            .length;
-        double conversionRate = totalInquiries > 0
-            ? (activeQuotes / totalInquiries) * 100
+        final revenue = invoiceRevenue != 0
+            ? invoiceRevenue
+            : salesOrderRevenue;
+
+        final conversionRate = latestQuoteCount > 0
+            ? ((convertedQuotes / latestQuoteCount) * 100).clamp(0, 100)
             : 0.0;
 
         return DashboardKpiData(
           totalRevenue: revenue,
           totalOutstanding: outstanding,
           activeQuotes: activeQuotes,
-          conversionRate: conversionRate,
+          conversionRate: conversionRate.toDouble(),
         );
       } catch (e) {
         return DashboardKpiData(
