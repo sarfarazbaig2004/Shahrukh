@@ -69,7 +69,6 @@ enum ShellPage {
   salesQuotations,
   salesOrders,
   salesTasks,
-  salesMeetings,
 
   // Professional Service Workflow
   serviceRequests,
@@ -133,8 +132,6 @@ extension ShellPageX on ShellPage {
         return 'Sales Orders';
       case ShellPage.salesTasks:
         return 'Tasks';
-      case ShellPage.salesMeetings:
-        return 'Meetings';
       case ShellPage.serviceRequests:
         return 'Service Requests';
       case ShellPage.serviceQuotations:
@@ -226,8 +223,6 @@ extension ShellPageX on ShellPage {
         return Icons.shopping_bag_outlined;
       case ShellPage.salesTasks:
         return Icons.task_alt_outlined;
-      case ShellPage.salesMeetings:
-        return Icons.groups_outlined;
       case ShellPage.serviceRequests:
         return Icons.support_agent_outlined;
       case ShellPage.serviceQuotations:
@@ -584,8 +579,6 @@ class _ZohoShellState extends State<ZohoShell> {
         return _hasPermission('sales', 'salesOrders');
       case ShellPage.salesTasks:
         return _hasPermission('sales', 'tasks');
-      case ShellPage.salesMeetings:
-        return _hasPermission('sales', 'meetings');
       case ShellPage.serviceRequests:
         return _hasPermission('service', 'serviceRequests');
       case ShellPage.serviceQuotations:
@@ -672,7 +665,6 @@ class _ZohoShellState extends State<ZohoShell> {
           ShellPage.salesQuotations,
           ShellPage.salesOrders,
           ShellPage.salesTasks,
-          ShellPage.salesMeetings,
         ],
       ),
       SidebarGroup(
@@ -2522,13 +2514,6 @@ class _ZohoShellState extends State<ZohoShell> {
                     ),
                   ),
                   SizedBox(width: ShellLayout.sectionSpacing),
-                  Expanded(
-                    child: _Panel(
-                      title: 'My Meetings',
-                      emptyText: 'No meetings scheduled',
-                      emptyIcon: Icons.event_available,
-                    ),
-                  ),
                 ],
               ),
             ),

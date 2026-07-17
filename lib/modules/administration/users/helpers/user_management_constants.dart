@@ -235,7 +235,6 @@ class SalesSubmodules {
   static const String quotations = 'quotations';
   static const String salesOrders = 'salesOrders';
   static const String tasks = 'tasks';
-  static const String meetings = 'meetings';
 }
 
 class ServiceSubmodules {
@@ -303,7 +302,6 @@ const Map<String, List<String>> permissionSubmoduleMap = {
     SalesSubmodules.quotations,
     SalesSubmodules.salesOrders,
     SalesSubmodules.tasks,
-    SalesSubmodules.meetings,
   ],
   PermissionModules.service: <String>[
     ServiceSubmodules.serviceRequests,
@@ -362,7 +360,6 @@ const Map<String, String> permissionSubmoduleLabels = {
   SalesSubmodules.quotations: 'Quotations',
   SalesSubmodules.salesOrders: 'Sales Orders',
   SalesSubmodules.tasks: 'Tasks',
-  SalesSubmodules.meetings: 'Meetings',
 
   ServiceSubmodules.serviceRequests: 'Service Requests',
   ServiceSubmodules.serviceQuotations: 'Service Quotations',
@@ -441,7 +438,6 @@ const Map<String, List<String>> permissionActionsBySubmodule = {
   SalesSubmodules.quotations: standardCrudActions,
   SalesSubmodules.salesOrders: standardCrudActions,
   SalesSubmodules.tasks: standardCrudActions,
-  SalesSubmodules.meetings: standardCrudActions,
 
   ServiceSubmodules.serviceRequests: serviceOperationalActions,
   ServiceSubmodules.serviceQuotations: serviceOperationalActions,
@@ -763,10 +759,6 @@ Map<String, dynamic> getDefaultPermissions(String role) {
             permissionActionsBySubmodule[SalesSubmodules.tasks]!,
             enabled: true,
           ),
-          SalesSubmodules.meetings: buildActionMap(
-            permissionActionsBySubmodule[SalesSubmodules.meetings]!,
-            enabled: true,
-          ),
         },
         PermissionModules.service: {
           for (final submodule
@@ -868,12 +860,6 @@ Map<String, dynamic> getDefaultPermissions(String role) {
             PermissionActions.delete: false,
           },
           SalesSubmodules.tasks: {
-            PermissionActions.view: true,
-            PermissionActions.create: true,
-            PermissionActions.edit: true,
-            PermissionActions.delete: false,
-          },
-          SalesSubmodules.meetings: {
             PermissionActions.view: true,
             PermissionActions.create: true,
             PermissionActions.edit: true,

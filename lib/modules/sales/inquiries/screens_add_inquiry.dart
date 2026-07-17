@@ -14,8 +14,12 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:QUIK/models/inquiry_activity.dart';
 import 'package:QUIK/models/inquiry_model.dart';
 import 'package:QUIK/modules/crm/customers/screens_add_customer.dart';
+import 'package:QUIK/modules/finance/proforma_invoice/proforma_screen.dart';
+import 'package:QUIK/modules/sales/inquiries/inquiry_activity_service.dart';
+import 'package:QUIK/modules/sales/inquiries/widgets/inquiry_activity_timeline.dart';
 import 'package:QUIK/modules/sales/quotations/quotation_screen_local.dart';
 
 class ScreensAddInquiry extends StatefulWidget {
@@ -107,6 +111,10 @@ class _ScreensAddInquiryState extends State<ScreensAddInquiry> {
   Map<String, dynamic>? _selectedContactData;
   Map<String, dynamic>? _assignedUserData;
   Map<String, dynamic>? _existingRawData;
+  DocumentReference<Map<String, dynamic>>? _pendingCreateInquiryRef;
+  String? _pendingMutationId;
+  String? _savedInquiryId;
+  String? _savedInquiryNumber;
 
   // LRU Cache for Search
   Timer? _debounceTimer;
@@ -929,7 +937,7 @@ class _ScreensAddInquiryState extends State<ScreensAddInquiry> {
       'totalQuantity': totalQuantity,
       'expectedValue': 0.0,
       'priority': _selectedPriority.trim(),
-      'status': 'Open',
+      'status': _isEditing ? (_existingRawData?['status'] ?? 'Open').toString() : 'Open',
       'followUpType': _followUpType,
       'nextFollowUpDate': _nextFollowUpDate == null ? null : Timestamp.fromDate(_nextFollowUpDate!),
       'isOverdue': isOverdue,
@@ -989,7 +997,17 @@ class _ScreensAddInquiryState extends State<ScreensAddInquiry> {
   Future<void> _executeSave(Map<String, dynamic> payload) async {
     int attempts = 0;
     bool success = false;
-    final requestId = DateTime.now().toUtc().millisecondsSinceEpoch.toString();
+    _pendingMutationId ??= _companyInquiriesRef.doc().id;
+    final requestId = _pendingMutationId!;
+    String actorName = 'Unknown user';
+    try {
+      final actorData = (await _companyUsersRef.doc(widget.currentUserUid).get()).data();
+      actorName = (actorData?['name'] ?? actorData?['fullName'] ?? actorName).toString().trim();
+      if (actorName.isEmpty) actorName = 'Unknown user';
+    } on FirebaseException {
+      // Actor profile enrichment must never block the business save.
+    }
+    _pendingCreateInquiryRef ??= _isEditing ? null : _companyInquiriesRef.doc();
 
     while (attempts < 2 && !success) {
       attempts++;
@@ -1025,9 +1043,11 @@ class _ScreensAddInquiryState extends State<ScreensAddInquiry> {
           }
 
           payload['inquiryNumber'] = finalInquiryNumber;
+          _savedInquiryNumber = finalInquiryNumber;
 
           if (_isEditing) {
             final docRef = widget.existingDoc!;
+            _savedInquiryId = docRef.id;
             final snapshot = await transaction.get(docRef);
 
             if (!snapshot.exists) throw Exception("Inquiry document no longer exists.");
@@ -1082,8 +1102,32 @@ class _ScreensAddInquiryState extends State<ScreensAddInquiry> {
             payload['lastActivityType'] = 'Updated';
 
             transaction.update(docRef, payload);
+            final previousAssignedUid = (data['assignedToUid'] ?? '').toString().trim();
+            final newAssignedUid = (payload['assignedToUid'] ?? '').toString().trim();
+            if (previousAssignedUid != newAssignedUid) {
+              transaction.set(
+                docRef.collection('activities').doc('inquiry_assigned_${docRef.id}_$requestId'),
+                InquiryActivityService.buildActivityData(
+                  companyId: widget.companyId,
+                  inquiryId: docRef.id,
+                  inquiryNumber: finalInquiryNumber,
+                  type: InquiryActivityType.inquiryAssigned,
+                  title: 'Inquiry Assigned',
+                  createdByUid: widget.currentUserUid,
+                  createdByName: actorName,
+                  metadata: <String, dynamic>{
+                    'mutationId': requestId,
+                    'previousAssignedUid': previousAssignedUid,
+                    'previousAssignedName': (data['assignedToName'] ?? '').toString(),
+                    'newAssignedUid': newAssignedUid,
+                    'newAssignedName': (payload['assignedToName'] ?? '').toString(),
+                  },
+                ),
+              );
+            }
           } else {
-            final docRef = _companyInquiriesRef.doc();
+            final docRef = _pendingCreateInquiryRef!;
+            _savedInquiryId = docRef.id;
 
             payload['lastActivityType'] = 'Created';
             payload['activityLog'] = <Map<String, dynamic>>[
@@ -1115,6 +1159,25 @@ class _ScreensAddInquiryState extends State<ScreensAddInquiry> {
             });
 
             transaction.set(docRef, payload);
+            transaction.set(
+              docRef.collection('activities').doc('inquiry_created_${docRef.id}'),
+              InquiryActivityService.buildActivityData(
+                companyId: widget.companyId,
+                inquiryId: docRef.id,
+                inquiryNumber: finalInquiryNumber,
+                type: InquiryActivityType.inquiryCreated,
+                title: 'Inquiry Created',
+                createdByUid: widget.currentUserUid,
+                createdByName: actorName,
+                status: (payload['status'] ?? '').toString(),
+                metadata: <String, dynamic>{
+                  'customerId': payload['customerId'],
+                  'customerName': payload['customerName'],
+                  'creatorUid': widget.currentUserUid,
+                  'creatorName': actorName,
+                },
+              ),
+            );
           }
         });
         success = true;
@@ -1181,6 +1244,9 @@ class _ScreensAddInquiryState extends State<ScreensAddInquiry> {
       _setFormMessage(null);
 
       if (createQuote) {
+        payload['id'] = _savedInquiryId;
+        payload['inquiryId'] = _savedInquiryId;
+        payload['inquiryNumber'] = _savedInquiryNumber;
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -1199,6 +1265,32 @@ class _ScreensAddInquiryState extends State<ScreensAddInquiry> {
       _showValidationMessage(e.toString().replaceAll('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _viewRelatedActivity(InquiryActivity activity) async {
+    final id = activity.relatedDocumentId?.trim() ?? '';
+    if (id.isEmpty || !_isAdminOrManager) {
+      if (mounted && !_isAdminOrManager) _showValidationMessage('You do not have permission to view this document.');
+      return;
+    }
+    if (activity.relatedDocumentType == 'quotation') {
+      final doc = await FirebaseFirestore.instance.collection('companies').doc(widget.companyId).collection('quotations').doc(id).get();
+      if (!doc.exists || !mounted) {
+        if (mounted) _showValidationMessage('Quotation is unavailable.');
+        return;
+      }
+      await Navigator.push(context, MaterialPageRoute(builder: (_) => QuotationScreenLocal(
+        companyId: widget.companyId,
+        currentUserUid: widget.currentUserUid,
+        quotationId: id,
+        existingQuotation: doc.data(),
+      )));
+    } else if (activity.relatedDocumentType == 'proforma' && mounted) {
+      await Navigator.push(context, MaterialPageRoute(builder: (_) => ProformaScreen(
+        companyId: widget.companyId,
+        proformaId: id,
+      )));
     }
   }
 
@@ -2208,6 +2300,17 @@ class _ScreensAddInquiryState extends State<ScreensAddInquiry> {
                   _buildSection(title: 'Inquiry Basics', icon: Icons.info_outline, child: _buildInquiryBasicsSection()),
                   _buildSection(title: 'Products & Scope', icon: Icons.inventory_2_outlined, child: _buildProductsSection()),
                   _buildSection(title: 'Follow-up & Activity', icon: Icons.event_available, child: _buildFollowUpSection()),
+                  if (_isEditing)
+                    _buildSection(
+                      title: 'Activity Timeline',
+                      icon: Icons.timeline,
+                      child: InquiryActivityTimeline(
+                        companyId: widget.companyId,
+                        inquiryId: widget.existingDoc!.id,
+                        legacyStatus: (_existingRawData?['status'] ?? 'Open').toString(),
+                        onViewRelatedDocument: _viewRelatedActivity,
+                      ),
+                    ),
                   const SizedBox(height: 96),
                 ],
               ),

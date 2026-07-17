@@ -13,6 +13,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:intl/intl.dart';
 
+import 'package:QUIK/models/inquiry_activity.dart';
+import 'package:QUIK/modules/sales/inquiries/inquiry_activity_service.dart';
 import 'quotation_pdf_generator.dart';
 
 const Color primaryColor = Color(0xFF1E3A8A);
@@ -2565,6 +2567,41 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
             'updatedAt': FieldValue.serverTimestamp(),
             'updatedBy': _currentUserUid,
           }, SetOptions(merge: true));
+          if (!isUpdate || isRevision) {
+            final revision = (payloadWithNumber['version'] as num?)?.toInt() ?? 1;
+            final type = isRevision
+                ? InquiryActivityType.quotationRevised
+                : InquiryActivityType.quotationCreated;
+            final activityId = isRevision
+                ? 'quotation_revised_${quoteRef.id}_$revision'
+                : 'quotation_created_${quoteRef.id}';
+            tx.set(
+              inqRef.collection('activities').doc(activityId),
+              InquiryActivityService.buildActivityData(
+                companyId: _companyId!,
+                inquiryId: _linkedInquiryId!,
+                inquiryNumber: _linkedInquiryNumber ?? '',
+                type: type,
+                title: isRevision ? 'Quotation Revised' : 'Quotation Created',
+                createdByUid: _currentUserUid!,
+                createdByName: _currentUserName,
+                relatedDocumentType: 'quotation',
+                relatedDocumentId: quoteRef.id,
+                relatedDocumentNumber: safeQuoteNumber,
+                metadata: <String, dynamic>{
+                  'quotationId': quoteRef.id,
+                  'quotationNumber': safeQuoteNumber,
+                  'quotationRevision': revision,
+                  'quotationDate': Timestamp.fromDate(_quoteDate),
+                  'customerId': _selectedCustomerId,
+                  'customerName': _clientNameController.text.trim(),
+                  if (isRevision) 'previousRevision': revision - 1,
+                  if (isRevision) 'newRevision': revision,
+                  if (isRevision) 'parentQuotationId': widget.quotationId,
+                },
+              ),
+            );
+          }
         }
       })
           .timeout(
@@ -2647,6 +2684,15 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
           .doc(_companyId)
           .collection('quotations')
           .doc(widget.quotationId);
+      DocumentSnapshot<Map<String, dynamic>>? inquirySnapshot;
+      if (_linkedInquiryId != null && _linkedInquiryId!.trim().isNotEmpty) {
+        inquirySnapshot = await FirebaseFirestore.instance
+            .collection('companies')
+            .doc(_companyId)
+            .collection('inquiries')
+            .doc(_linkedInquiryId)
+            .get();
+      }
 
       String currentNo = (widget.existingQuotation?['quoteNumber'] ??
           widget.existingQuotation?['quotationNumber'] ??
@@ -2834,6 +2880,62 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       };
 
       batch.set(soRef, salesOrderData, SetOptions(merge: true));
+      if (inquirySnapshot != null && inquirySnapshot.exists) {
+        final inquiryRef = inquirySnapshot.reference;
+        final previousInquiryStatus = (inquirySnapshot.data()?['status'] ?? '').toString();
+        final salesOrderNumber = (salesOrderData['salesOrderNumber'] ?? '').toString();
+        batch.set(
+          inquiryRef.collection('activities').doc('sales_order_created_${soRef.id}'),
+          InquiryActivityService.buildActivityData(
+            companyId: _companyId!,
+            inquiryId: inquiryRef.id,
+            inquiryNumber: _linkedInquiryNumber ?? '',
+            type: InquiryActivityType.salesOrderCreated,
+            title: 'Sales Order Created',
+            createdByUid: _currentUserUid!,
+            createdByName: _currentUserName,
+            relatedDocumentType: 'sales_order',
+            relatedDocumentId: soRef.id,
+            relatedDocumentNumber: salesOrderNumber,
+            metadata: <String, dynamic>{
+              'salesOrderId': soRef.id,
+              'salesOrderNumber': salesOrderNumber,
+              'quotationId': widget.quotationId,
+              'quotationNumber': currentNo,
+              'customerId': _selectedCustomerId,
+              'customerName': _clientNameController.text.trim(),
+            },
+          ),
+        );
+        batch.set(
+          inquiryRef.collection('activities').doc('inquiry_converted_${soRef.id}'),
+          InquiryActivityService.buildActivityData(
+            companyId: _companyId!,
+            inquiryId: inquiryRef.id,
+            inquiryNumber: _linkedInquiryNumber ?? '',
+            type: InquiryActivityType.inquiryConverted,
+            title: 'Inquiry Converted',
+            createdByUid: _currentUserUid!,
+            createdByName: _currentUserName,
+            previousStatus: previousInquiryStatus,
+            newStatus: 'Converted',
+            relatedDocumentType: 'sales_order',
+            relatedDocumentId: soRef.id,
+            relatedDocumentNumber: salesOrderNumber,
+            metadata: <String, dynamic>{
+              'convertedToDocumentType': 'sales_order',
+              'convertedToDocumentId': soRef.id,
+              'convertedToDocumentNumber': salesOrderNumber,
+            },
+          ),
+        );
+        batch.set(inquiryRef, <String, dynamic>{
+          'status': 'Converted',
+          'salesOrderId': soRef.id,
+          'updatedAt': FieldValue.serverTimestamp(),
+          'updatedBy': _currentUserUid,
+        }, SetOptions(merge: true));
+      }
 
       batch.set(
         quoteRef,

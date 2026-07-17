@@ -38,14 +38,10 @@ class DashboardCrmData {
 class DashboardProductivityData {
   final int openTasks;
   final int criticalTasks;
-  final int upcomingMeetings;
-  final int todayMeetings;
 
   DashboardProductivityData({
     required this.openTasks,
     required this.criticalTasks,
-    required this.upcomingMeetings,
-    required this.todayMeetings,
   });
 }
 
@@ -327,19 +323,8 @@ class DashboardService {
             .collection('tasks')
             .get();
 
-        final meetingsSnap = await _db
-            .collection('companies')
-            .doc(companyId)
-            .collection('meetings')
-            .get();
-
         int openTasks = 0;
         int criticalTasks = 0;
-        int upcomingMeetings = 0;
-        int todayMeetings = 0;
-
-        final now = DateTime.now();
-        final today = DateTime(now.year, now.month, now.day);
 
         for (final doc in tasksSnap.docs) {
           final data = doc.data();
@@ -352,32 +337,14 @@ class DashboardService {
           if (priority == 'critical' && status != 'completed') criticalTasks++;
         }
 
-        for (final doc in meetingsSnap.docs) {
-          final data = doc.data();
-          if (data['isDeleted'] == true) continue;
-
-          final status = (data['status'] ?? '').toString().toLowerCase();
-          if (status == 'cancelled') continue;
-
-          final startAt = _parseDate(data['startAt']);
-          final meetingDay = DateTime(startAt.year, startAt.month, startAt.day);
-
-          if (startAt.isAfter(now)) upcomingMeetings++;
-          if (meetingDay.isAtSameMomentAs(today)) todayMeetings++;
-        }
-
         return DashboardProductivityData(
           openTasks: openTasks,
           criticalTasks: criticalTasks,
-          upcomingMeetings: upcomingMeetings,
-          todayMeetings: todayMeetings,
         );
       } catch (e) {
         return DashboardProductivityData(
           openTasks: 0,
           criticalTasks: 0,
-          upcomingMeetings: 0,
-          todayMeetings: 0,
         );
       }
     });

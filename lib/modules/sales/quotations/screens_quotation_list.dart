@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import 'package:QUIK/models/inquiry_activity.dart';
+import 'package:QUIK/modules/sales/inquiries/inquiry_activity_service.dart';
 import 'package:QUIK/modules/sales/quotations/quotation_screen_local.dart';
 import 'quotation_pdf_generator.dart';
 
@@ -487,7 +489,7 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
   }
 
   Future<void> _createRevision(String docId, Map<String, dynamic> data) async {
-    final inquiryId = data['inquiryId'] ?? data['inquiryRefNo'];
+    final inquiryId = data['inquiryId'];
     if (inquiryId == null || inquiryId.toString().trim().isEmpty) {
       _showSnack(
         'Warning: Cannot revise a quotation that is not linked to an Inquiry.',
@@ -514,7 +516,7 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
       });
 
       final newRef = _quotationCollection!.doc();
-      final currentVersion = (data['version'] as int?) ?? 1;
+      final currentVersion = (data['version'] as num?)?.toInt() ?? 1;
 
       final newData = Map<String, dynamic>.from(data)
         ..['id'] = newRef.id
@@ -549,6 +551,30 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
         ];
 
       batch.set(newRef, newData);
+      final inquiryRef = FirebaseFirestore.instance.collection('companies').doc(_companyId).collection('inquiries').doc(inquiryId.toString());
+      batch.set(
+        inquiryRef.collection('activities').doc('quotation_revised_${newRef.id}_${currentVersion + 1}'),
+        InquiryActivityService.buildActivityData(
+          companyId: _companyId!,
+          inquiryId: inquiryId.toString(),
+          inquiryNumber: (data['inquiryNumber'] ?? data['inquiryRefNo'] ?? '').toString(),
+          type: InquiryActivityType.quotationRevised,
+          title: 'Quotation Revised',
+          createdByUid: _currentUserUid ?? '',
+          createdByName: _currentUserName,
+          relatedDocumentType: 'quotation',
+          relatedDocumentId: newRef.id,
+          relatedDocumentNumber: (newData['quoteNumber'] ?? '').toString(),
+          metadata: <String, dynamic>{
+            'quotationId': newRef.id,
+            'quotationNumber': newData['quoteNumber'],
+            'previousRevision': currentVersion,
+            'newRevision': currentVersion + 1,
+            'quotationRevision': currentVersion + 1,
+            'parentQuotationId': docId,
+          },
+        ),
+      );
       await batch.commit();
 
       _showSnack('Revision ${currentVersion + 1} created successfully.');
@@ -560,13 +586,23 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
 
   Future<void> _updateApproval(String docId, String status) async {
     try {
-      await _quotationCollection!.doc(docId).update({
-        'approvalStatus': status,
-        if (status == 'Approved') 'status': 'Approved',
-        'approvedBy': status == 'Approved' ? _currentUserUid : null,
-        'lastEditedAt': FieldValue.serverTimestamp(),
-        'lastEditedBy': _currentUserUid,
-        'activities': FieldValue.arrayUnion([
+      if (status != 'Approved' && status != 'Rejected') return;
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final quoteRef = _quotationCollection!.doc(docId);
+        final quoteSnapshot = await transaction.get(quoteRef);
+        if (!quoteSnapshot.exists) throw Exception('Quotation no longer exists.');
+        final data = quoteSnapshot.data() ?? <String, dynamic>{};
+        final previousStatus = (data['approvalStatus'] ?? '').toString();
+        if (previousStatus == status) return;
+        final mutationVersion = ((data['approvalMutationVersion'] as num?)?.toInt() ?? 0) + 1;
+        transaction.update(quoteRef, {
+          'approvalStatus': status,
+          if (status == 'Approved') 'status': 'Approved',
+          'approvedBy': status == 'Approved' ? _currentUserUid : null,
+          'approvalMutationVersion': mutationVersion,
+          'lastEditedAt': FieldValue.serverTimestamp(),
+          'lastEditedBy': _currentUserUid,
+          'activities': FieldValue.arrayUnion([
           {
             'type': 'Approval Update',
             'quotationId': docId,
@@ -583,7 +619,37 @@ class _ScreensQuotationListState extends State<ScreensQuotationList> {
             },
             'note': 'Approval set to $status',
           },
-        ]),
+          ]),
+        });
+        final inquiryId = (data['inquiryId'] ?? '').toString().trim();
+        if (inquiryId.isNotEmpty) {
+          final approved = status == 'Approved';
+          final inquiryRef = FirebaseFirestore.instance.collection('companies').doc(_companyId).collection('inquiries').doc(inquiryId);
+          transaction.set(
+            inquiryRef.collection('activities').doc('${approved ? 'quotation_approved' : 'quotation_rejected'}_${docId}_$mutationVersion'),
+            InquiryActivityService.buildActivityData(
+              companyId: _companyId!,
+              inquiryId: inquiryId,
+              inquiryNumber: (data['inquiryNumber'] ?? data['inquiryRefNo'] ?? '').toString(),
+              type: approved ? InquiryActivityType.quotationApproved : InquiryActivityType.quotationRejected,
+              title: approved ? 'Quotation Approved' : 'Quotation Rejected',
+              createdByUid: _currentUserUid ?? '',
+              createdByName: _currentUserName,
+              previousStatus: previousStatus,
+              newStatus: status,
+              relatedDocumentType: 'quotation',
+              relatedDocumentId: docId,
+              relatedDocumentNumber: (data['quoteNumber'] ?? data['quotationNumber'] ?? '').toString(),
+              metadata: <String, dynamic>{
+                'quotationId': docId,
+                'quotationNumber': data['quoteNumber'] ?? data['quotationNumber'],
+                'previousStatus': previousStatus,
+                'newStatus': status,
+                'approvalMutationVersion': mutationVersion,
+              },
+            ),
+          );
+        }
       });
       _showSnack('Quotation $status');
       if (mounted) setState(() {});

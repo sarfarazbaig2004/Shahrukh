@@ -470,9 +470,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget? _buildTasksActivitiesSection() {
     final showTasks = hasPermission('sales', 'tasks');
-    final showMeetings = hasPermission('sales', 'meetings');
 
-    if (!showTasks && !showMeetings) return null;
+    if (!showTasks) return null;
 
     const kpiStyle = TextStyle(
       fontSize: 22,
@@ -510,24 +509,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 DashboardCard(
                   title: 'Critical Tasks',
                   child: Text(data.criticalTasks.toString(), style: kpiStyle),
-                ),
-              );
-            }
-
-            if (showMeetings) {
-              cards.add(
-                DashboardCard(
-                  title: 'Upcoming Meetings',
-                  child: Text(
-                    data.upcomingMeetings.toString(),
-                    style: kpiStyle,
-                  ),
-                ),
-              );
-              cards.add(
-                DashboardCard(
-                  title: 'Today Meetings',
-                  child: Text(data.todayMeetings.toString(), style: kpiStyle),
                 ),
               );
             }
