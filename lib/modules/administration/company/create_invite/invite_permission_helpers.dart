@@ -52,9 +52,9 @@ extension _CreateInvitePermissionHelpers on _ScreenCreateInviteState {
   }
 
   Map<String, dynamic> _readModulePermissions(
-      Map<String, dynamic> permissionsMap,
-      String moduleKey,
-      ) {
+    Map<String, dynamic> permissionsMap,
+    String moduleKey,
+  ) {
     final moduleValue = permissionsMap[moduleKey];
 
     if (moduleKey == PermissionModules.dashboard) {
@@ -113,8 +113,8 @@ extension _CreateInvitePermissionHelpers on _ScreenCreateInviteState {
   }
 
   Map<String, dynamic> _normalizePermissionsForPayload(
-      Map<String, dynamic> rawPerms,
-      ) {
+    Map<String, dynamic> rawPerms,
+  ) {
     final payload = _deepCopyPermissions(rawPerms);
 
     if (payload['sales'] is Map) {
@@ -180,6 +180,14 @@ extension _CreateInvitePermissionHelpers on _ScreenCreateInviteState {
         purchase['purchaseBills'] = purchase['purchaseBill'];
       }
 
+      if (purchase.containsKey('purchaseRfq') &&
+          !purchase.containsKey('purchaseRfqs')) {
+        purchase['purchaseRfqs'] = purchase['purchaseRfq'];
+      } else if (purchase.containsKey('purchaseRfqs') &&
+          !purchase.containsKey('purchaseRfq')) {
+        purchase['purchaseRfq'] = purchase['purchaseRfqs'];
+      }
+
       payload['purchase'] = purchase;
     }
 
@@ -199,9 +207,9 @@ extension _CreateInvitePermissionHelpers on _ScreenCreateInviteState {
   }
 
   int _selectedPermissionCount(
-      Map<String, dynamic> permissionsMap,
-      List<String> activeMods,
-      ) {
+    Map<String, dynamic> permissionsMap,
+    List<String> activeMods,
+  ) {
     int count = 0;
 
     for (final moduleKey in activeMods) {
@@ -251,7 +259,7 @@ extension _CreateInvitePermissionHelpers on _ScreenCreateInviteState {
       final submoduleValue = modulePermissions[submodule];
       if (submoduleValue is Map) {
         for (final action
-        in permissionActionsBySubmodule[submodule] ?? standardCrudActions) {
+            in permissionActionsBySubmodule[submodule] ?? standardCrudActions) {
           if (submoduleValue[action] == true) count++;
         }
       }
@@ -294,26 +302,26 @@ extension _CreateInvitePermissionHelpers on _ScreenCreateInviteState {
 
     return submodules
         .where((submoduleKey) {
-      if (moduleKey == PermissionModules.crm) {
-        return submoduleKey == CrmSubmodules.customers;
-      }
-      if (moduleKey == PermissionModules.finance) {
-        return [
-          FinanceSubmodules.taxInvoice,
-          FinanceSubmodules.paymentReceived,
-          FinanceSubmodules.outstanding,
-          FinanceSubmodules.expenseEntries,
-        ].contains(submoduleKey);
-      }
-      if (moduleKey == PermissionModules.reports) {
-        return [
-          ReportsSubmodules.salesReport,
-          ReportsSubmodules.customerReport,
-          ReportsSubmodules.paymentReport,
-        ].contains(submoduleKey);
-      }
-      return false;
-    })
+          if (moduleKey == PermissionModules.crm) {
+            return submoduleKey == CrmSubmodules.customers;
+          }
+          if (moduleKey == PermissionModules.finance) {
+            return [
+              FinanceSubmodules.taxInvoice,
+              FinanceSubmodules.paymentReceived,
+              FinanceSubmodules.outstanding,
+              FinanceSubmodules.expenseEntries,
+            ].contains(submoduleKey);
+          }
+          if (moduleKey == PermissionModules.reports) {
+            return [
+              ReportsSubmodules.salesReport,
+              ReportsSubmodules.customerReport,
+              ReportsSubmodules.paymentReport,
+            ].contains(submoduleKey);
+          }
+          return false;
+        })
         .toList(growable: false);
   }
 }

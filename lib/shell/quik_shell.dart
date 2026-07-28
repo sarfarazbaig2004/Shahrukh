@@ -45,6 +45,7 @@ import 'package:QUIK/modules/service/service_technicians/service_technician_list
 
 // Purchase Sub-Modules
 import 'package:QUIK/modules/purchase/purchase_bills/purchase_bill_screens.dart';
+import 'package:QUIK/modules/purchase/rfq/screens/rfq_list_screen.dart';
 import 'package:QUIK/modules/purchase/vendors/screens_vendor_list.dart';
 
 /// ---- ENTERPRISE DESIGN SYSTEM CONSTANTS ----
@@ -85,6 +86,7 @@ enum ShellPage {
   purchaseQuotations,
   purchaseOrders,
   purchaseBills,
+  purchaseRfq,
 
   inventoryProducts,
   inventoryStockSummary,
@@ -156,6 +158,8 @@ extension ShellPageX on ShellPage {
         return 'Purchase Orders';
       case ShellPage.purchaseBills:
         return 'Purchase Bills';
+      case ShellPage.purchaseRfq:
+        return 'RFQ';
       case ShellPage.inventoryProducts:
         return 'Products';
       case ShellPage.inventoryStockSummary:
@@ -247,6 +251,8 @@ extension ShellPageX on ShellPage {
         return Icons.shopping_cart_checkout_outlined;
       case ShellPage.purchaseBills:
         return Icons.receipt_long_outlined;
+      case ShellPage.purchaseRfq:
+        return Icons.request_quote_outlined;
       case ShellPage.inventoryProducts:
         return Icons.inventory_2_outlined;
       case ShellPage.inventoryStockSummary:
@@ -533,6 +539,8 @@ class _ZohoShellState extends State<ZohoShell> {
         return const ['purchaseQuotations', 'purchaseQuotation'];
       if (submodule == 'purchaseBills')
         return const ['purchaseBills', 'purchaseBill'];
+      if (submodule == 'purchaseRfq')
+        return const ['purchaseRfq', 'purchaseRfqs'];
     } else if (module == 'crm') {
       if (submodule == 'customers') return const ['customers', 'customer'];
     }
@@ -603,6 +611,8 @@ class _ZohoShellState extends State<ZohoShell> {
         return _hasPermission('purchase', 'purchaseOrders');
       case ShellPage.purchaseBills:
         return _hasPermission('purchase', 'purchaseBills');
+      case ShellPage.purchaseRfq:
+        return _hasPermission('purchase', 'purchaseRfq');
       case ShellPage.inventoryProducts:
         return _hasPermission('inventory', 'products');
       case ShellPage.inventoryStockSummary:
@@ -711,6 +721,7 @@ class _ZohoShellState extends State<ZohoShell> {
           ShellPage.purchaseQuotations,
           ShellPage.purchaseOrders,
           ShellPage.purchaseBills,
+          ShellPage.purchaseRfq,
         ],
       ),
       SidebarGroup(
@@ -825,6 +836,8 @@ class _ZohoShellState extends State<ZohoShell> {
       case ShellPage.serviceVisits:
       case ShellPage.serviceTechnicians:
       case ShellPage.adminComplianceLegal:
+        return true;
+      case ShellPage.purchaseRfq:
         return true;
       default:
         return false;
@@ -1860,6 +1873,15 @@ class _ZohoShellState extends State<ZohoShell> {
           ),
         );
 
+      case ShellPage.purchaseRfq:
+        return Padding(
+          padding: const EdgeInsets.all(ShellLayout.pagePadding),
+          child: RfqListScreen(
+            companyId: widget.companyId,
+            userUid: widget.userUid,
+          ),
+        );
+
       default:
         return Padding(
           padding: const EdgeInsets.all(ShellLayout.pagePadding),
@@ -2091,6 +2113,8 @@ class _ZohoShellState extends State<ZohoShell> {
         return 'Schedule and monitor field visits for service engineers, including site check-ins, travel logs, and utilized spares.';
       case ShellPage.serviceTechnicians:
         return 'Monitor service team workload, manage engineer skill mapping, track real-time availability, and optimize field assignments.';
+      case ShellPage.purchaseRfq:
+        return 'Create and manage request-for-quotation records, invite vendors, track responses, and convert approved quotes into purchase orders.';
       default:
         return 'This module is part of the professional ERP architecture. You can keep your current app working while gradually connecting this module to its own database, screens, and workflows.';
     }
@@ -2140,6 +2164,14 @@ class _ZohoShellState extends State<ZohoShell> {
           'Users and permissions',
           'Security and access',
           'Audit and integrations',
+        ];
+      case ShellPage.purchaseRfq:
+        return [
+          'RFQ number',
+          'Vendor invitations',
+          'Item requirements',
+          'Submission deadline',
+          'Status tracking',
         ];
       case ShellPage.serviceRequests:
         return [
