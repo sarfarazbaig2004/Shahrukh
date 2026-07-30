@@ -1209,12 +1209,32 @@ class ServiceQuotationPdfGenerator {
     );
   }
 
+  static String _normalizeSignatoryDesignation(
+    String name,
+    String designation,
+  ) {
+    final normalizedName = name.toLowerCase().trim();
+    if (!normalizedName.contains('sarfaraz') &&
+        !normalizedName.contains('baig')) {
+      return designation;
+    }
+    final normalizedDesignation = designation.toLowerCase().trim();
+    if (normalizedDesignation == 'director' ||
+        normalizedDesignation == 'director.') {
+      return 'C.E.O';
+    }
+    return designation;
+  }
+
   static pw.Widget _buildSignatures(Map<String, dynamic> quotation) {
     final signName = quotation['signatureName']?.toString() ?? '';
-    final signDesignation =
-        quotation['signatureDesignation']?.toString() ??
-        quotation['createdByRole']?.toString() ??
-        '';
+    final signDesignation = _normalizeSignatoryDesignation(
+      signName,
+      (quotation['signatureDesignation']?.toString() ??
+              quotation['createdByRole']?.toString() ??
+              '')
+          .toString(),
+    );
     final signMobile =
         quotation['signaturePhone']?.toString() ??
         quotation['signatureMobile']?.toString() ??

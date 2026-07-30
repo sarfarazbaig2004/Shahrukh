@@ -76,6 +76,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   bool _isUserChangingAddress = false;
   String? _errorMessage;
   bool _isInterState = false;
+  String _gstType = 'intra'; // 'intra' = CGST + SGST, 'inter' = IGST
+  bool _gstTypeManuallySet = false;
   bool _isReadOnly = false;
   int _currentVersion = 1;
 
@@ -90,11 +92,25 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
   bool get _hasLinkedInquiry =>
       (_linkedInquiryId?.trim().isNotEmpty ?? false) ||
-          (_linkedInquiryNumber?.trim().isNotEmpty ?? false);
+      (_linkedInquiryNumber?.trim().isNotEmpty ?? false);
 
   String? _cleanOptionalString(dynamic value) {
     final text = value?.toString().trim() ?? '';
     return text.isEmpty ? null : text;
+  }
+
+  String _normalizeSignatoryDesignation(String name, String designation) {
+    final normalizedName = name.toLowerCase().trim();
+    if (!normalizedName.contains('sarfaraz') &&
+        !normalizedName.contains('baig')) {
+      return designation;
+    }
+    final normalizedDesignation = designation.toLowerCase().trim();
+    if (normalizedDesignation == 'director' ||
+        normalizedDesignation == 'director.') {
+      return 'C.E.O';
+    }
+    return designation;
   }
 
   String _approvalStatus = 'Pending';
@@ -108,11 +124,11 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _mobileController = TextEditingController();
   final TextEditingController _contactPersonController =
-  TextEditingController();
+      TextEditingController();
   final TextEditingController _contactDepartmentController =
-  TextEditingController();
+      TextEditingController();
   final TextEditingController _contactDesignationController =
-  TextEditingController();
+      TextEditingController();
   final TextEditingController _gstController = TextEditingController();
   String _customerState = '';
   Map<String, dynamic>? _customerInsights;
@@ -134,18 +150,18 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   String _contactDesignationSnapshot = '';
 
   final TextEditingController _quotationSequenceController =
-  TextEditingController();
+      TextEditingController();
   final TextEditingController _subjectController = TextEditingController();
   String? _linkedInquiryId;
   String? _linkedInquiryNumber;
   final TextEditingController _inquiryRefNoteController =
-  TextEditingController();
+      TextEditingController();
 
   DateTime _inquiryDate = DateTime.now().toUtc();
   DateTime _quoteDate = DateTime.now().toUtc();
   DateTime? _nextFollowUpDate;
   final TextEditingController _followUpNotesController =
-  TextEditingController();
+      TextEditingController();
 
   final TextEditingController _poNumberController = TextEditingController();
   DateTime? _poDate;
@@ -157,7 +173,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   ];
   String _selectedPoReferenceSource = 'Mail';
   final TextEditingController _poReferenceOtherController =
-  TextEditingController();
+      TextEditingController();
 
   final List<String> _inquirySources = const [
     'Verbal',
@@ -194,12 +210,12 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
   final TextEditingController _signNameController = TextEditingController();
   final TextEditingController _signDesignationController =
-  TextEditingController();
+      TextEditingController();
   final TextEditingController _signPhoneController = TextEditingController();
 
   CollectionReference<Map<String, dynamic>> _companyContactsRef(
-      String customerId,
-      ) {
+    String customerId,
+  ) {
     return FirebaseFirestore.instance
         .collection('companies')
         .doc(_companyId)
@@ -233,52 +249,52 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   }
 
   Map<String, dynamic> _normalizeQuotationContact(
-      Map<dynamic, dynamic> raw, {
-        required String id,
-        required String source,
-      }) {
+    Map<dynamic, dynamic> raw, {
+    required String id,
+    required String source,
+  }) {
     final name =
-    (raw['name'] ??
-        raw['contactName'] ??
-        raw['contactPerson'] ??
-        raw['personName'] ??
-        raw['fullName'] ??
-        '')
-        .toString()
-        .trim();
+        (raw['name'] ??
+                raw['contactName'] ??
+                raw['contactPerson'] ??
+                raw['personName'] ??
+                raw['fullName'] ??
+                '')
+            .toString()
+            .trim();
 
     final mobile =
-    (raw['mobile'] ??
-        raw['phone'] ??
-        raw['contactPhone'] ??
-        raw['contactMobile'] ??
-        raw['phoneNumber'] ??
-        '')
-        .toString()
-        .trim();
+        (raw['mobile'] ??
+                raw['phone'] ??
+                raw['contactPhone'] ??
+                raw['contactMobile'] ??
+                raw['phoneNumber'] ??
+                '')
+            .toString()
+            .trim();
 
     final email =
-    (raw['email'] ??
-        raw['contactEmail'] ??
-        raw['emailId'] ??
-        raw['mail'] ??
-        '')
-        .toString()
-        .trim();
+        (raw['email'] ??
+                raw['contactEmail'] ??
+                raw['emailId'] ??
+                raw['mail'] ??
+                '')
+            .toString()
+            .trim();
 
     final designation =
-    (raw['designation'] ??
-        raw['jobTitle'] ??
-        raw['title'] ??
-        raw['position'] ??
-        '')
-        .toString()
-        .trim();
+        (raw['designation'] ??
+                raw['jobTitle'] ??
+                raw['title'] ??
+                raw['position'] ??
+                '')
+            .toString()
+            .trim();
 
     final department =
-    (raw['department'] ?? raw['dept'] ?? raw['division'] ?? '')
-        .toString()
-        .trim();
+        (raw['department'] ?? raw['dept'] ?? raw['division'] ?? '')
+            .toString()
+            .trim();
 
     return {
       'id': id,
@@ -298,8 +314,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   }
 
   List<Map<String, dynamic>> _extractQuotationContactsFromCustomer(
-      Map<String, dynamic> customer,
-      ) {
+    Map<String, dynamic> customer,
+  ) {
     final contacts = <Map<String, dynamic>>[];
 
     void addContact(Map<dynamic, dynamic> raw, String id, String source) {
@@ -307,8 +323,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
       final hasData =
           (contact['name'] ?? '').toString().trim().isNotEmpty ||
-              (contact['mobile'] ?? '').toString().trim().isNotEmpty ||
-              (contact['email'] ?? '').toString().trim().isNotEmpty;
+          (contact['mobile'] ?? '').toString().trim().isNotEmpty ||
+          (contact['email'] ?? '').toString().trim().isNotEmpty;
 
       if (hasData) contacts.add(contact);
     }
@@ -364,8 +380,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
       final hasData =
           (contact['name'] ?? '').toString().trim().isNotEmpty ||
-              (contact['mobile'] ?? '').toString().trim().isNotEmpty ||
-              (contact['email'] ?? '').toString().trim().isNotEmpty;
+          (contact['mobile'] ?? '').toString().trim().isNotEmpty ||
+          (contact['email'] ?? '').toString().trim().isNotEmpty;
 
       if (!hasData) return;
 
@@ -454,11 +470,11 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
   String _quotationContactSubtitle(Map<String, dynamic> contact) {
     return [
-      contact['mobile'] ?? contact['phone'],
-      contact['email'],
-      contact['designation'],
-      contact['department'],
-    ]
+          contact['mobile'] ?? contact['phone'],
+          contact['email'],
+          contact['designation'],
+          contact['department'],
+        ]
         .where((e) => e != null && e.toString().trim().isNotEmpty)
         .map((e) => e.toString().trim())
         .join(' • ');
@@ -483,7 +499,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         }
 
         final validContactId =
-        contacts.any((d) => d['id']?.toString() == _selectedContactId)
+            contacts.any((d) => d['id']?.toString() == _selectedContactId)
             ? _selectedContactId
             : null;
 
@@ -541,31 +557,31 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                 },
                 fieldViewBuilder:
                     (context, textController, focusNode, onFieldSubmitted) {
-                  return TextFormField(
-                    controller: textController,
-                    focusNode: focusNode,
-                    readOnly: _isReadOnly,
-                    decoration: InputDecoration(
-                      labelText: 'Search Contact Person',
-                      hintText: 'Type name, mobile, email, designation',
-                      prefixIcon: const Icon(Icons.person_search),
-                      suffixIcon: IconButton(
-                        tooltip: 'Show all contacts',
-                        icon: const Icon(Icons.search),
-                        onPressed: () {
-                          textController.clear();
-                          focusNode.requestFocus();
-                        },
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      filled: true,
-                      fillColor: Colors.grey.shade50,
-                      isDense: true,
-                    ),
-                  );
-                },
+                      return TextFormField(
+                        controller: textController,
+                        focusNode: focusNode,
+                        readOnly: _isReadOnly,
+                        decoration: InputDecoration(
+                          labelText: 'Search Contact Person',
+                          hintText: 'Type name, mobile, email, designation',
+                          prefixIcon: const Icon(Icons.person_search),
+                          suffixIcon: IconButton(
+                            tooltip: 'Show all contacts',
+                            icon: const Icon(Icons.search),
+                            onPressed: () {
+                              textController.clear();
+                              focusNode.requestFocus();
+                            },
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          filled: true,
+                          fillColor: Colors.grey.shade50,
+                          isDense: true,
+                        ),
+                      );
+                    },
                 optionsViewBuilder: (context, onSelected, options) {
                   final optionList = options.toList(growable: false);
 
@@ -599,10 +615,10 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                               subtitle: subtitle.isEmpty
                                   ? null
                                   : Text(
-                                subtitle,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                                      subtitle,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                               onTap: () => onSelected(contact),
                             );
                           },
@@ -672,9 +688,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   }
 
   Future<List<Map<String, dynamic>>> _getCompatibleProducts(
-      QuotationLineItem machine,
-      Map<String, dynamic> extras,
-      ) async {
+    QuotationLineItem machine,
+    Map<String, dynamic> extras,
+  ) async {
     if (_companyId == null || _companyId!.isEmpty) return [];
     List<Map<String, dynamic>> results = [];
     final ref = FirebaseFirestore.instance
@@ -863,7 +879,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       TermRow(
         title: 'Delivery Time',
         value:
-        '4 to 6 weeks from the date of receipt of technically and commercially clear PO along with advance.',
+            '4 to 6 weeks from the date of receipt of technically and commercially clear PO along with advance.',
       ),
       TermRow(
         title: 'Validity',
@@ -872,7 +888,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       TermRow(
         title: 'Warranty',
         value:
-        '12 months from the date of dispatch or 18 months from the date of commissioning, whichever is earlier.',
+            '12 months from the date of dispatch or 18 months from the date of commissioning, whichever is earlier.',
       ),
       TermRow(title: 'Price Basis', value: 'Ex-Works.'),
       TermRow(
@@ -882,7 +898,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       TermRow(
         title: 'Installation',
         value:
-        'Extra as applicable. Boarding, lodging and local transport of engineer to be arranged by the buyer.',
+            'Extra as applicable. Boarding, lodging and local transport of engineer to be arranged by the buyer.',
       ),
     ];
   }
@@ -901,7 +917,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
     _quoteDate =
         (data['quoteDate'] as Timestamp?)?.toDate().toUtc() ??
-            DateTime.now().toUtc();
+        DateTime.now().toUtc();
 
     String rawNo = data['quoteNumber']?.toString() ?? '';
     if (rawNo.isNotEmpty) {
@@ -929,8 +945,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     } else {
       _customerPrimaryAddressSnapshot =
           data['addressLine']?.toString() ??
-              data['clientAddress']?.toString() ??
-              '';
+          data['clientAddress']?.toString() ??
+          '';
       _customerPrimaryCitySnapshot = data['city']?.toString() ?? '';
       _customerPrimaryStateSnapshot =
           data['state']?.toString() ?? data['customerState']?.toString() ?? '';
@@ -949,12 +965,12 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       _contactPersonSnapshot = data['contactPerson']?.toString() ?? '';
       _contactEmailSnapshot =
           data['contactEmail']?.toString() ??
-              data['clientEmail']?.toString() ??
-              '';
+          data['clientEmail']?.toString() ??
+          '';
       _contactMobileSnapshot =
           data['contactMobile']?.toString() ??
-              data['clientMobile']?.toString() ??
-              '';
+          data['clientMobile']?.toString() ??
+          '';
       _contactDepartmentSnapshot =
           (data['contactDepartment'] ?? data['department'] ?? '').toString();
       _contactDesignationSnapshot =
@@ -964,27 +980,27 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       _contactDesignationController.text = _contactDesignationSnapshot;
 
       final existingCustomerGstin =
-      (data['customerGstin'] ??
-          data['customerGSTIN'] ??
-          data['customerGstNo'] ??
-          data['partyGstin'] ??
-          data['billingGstin'] ??
-          '')
-          .toString()
-          .trim();
+          (data['customerGstin'] ??
+                  data['customerGSTIN'] ??
+                  data['customerGstNo'] ??
+                  data['partyGstin'] ??
+                  data['billingGstin'] ??
+                  '')
+              .toString()
+              .trim();
 
       if (existingCustomerGstin.isNotEmpty) {
         _gstController.text = existingCustomerGstin;
       }
       _gstController.text =
           (data['customerGstin'] ??
-              data['customerGSTIN'] ??
-              data['customerGstNo'] ??
-              data['billingGstin'] ??
-              data['partyGstin'] ??
-              data['gstin'] ??
-              data['gstNo'] ??
-              '')
+                  data['customerGSTIN'] ??
+                  data['customerGstNo'] ??
+                  data['billingGstin'] ??
+                  data['partyGstin'] ??
+                  data['gstin'] ??
+                  data['gstNo'] ??
+                  '')
               .toString();
       _emailController.text = _contactEmailSnapshot;
       _mobileController.text = _contactMobileSnapshot;
@@ -993,7 +1009,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     _clientNameController.text = data['clientName']?.toString() ?? '';
     _selectedCustomerLabel = _clientNameController.text.trim();
     _gstController.text = data['gstNo']?.toString() ?? '';
-    _isInterState = data['isInterState'] as bool? ?? false;
+    _gstType = _resolveGstType(data);
+    _isInterState = _gstType == 'inter';
 
     _linkedInquiryId = _cleanOptionalString(data['inquiryId']);
     _linkedInquiryNumber = _cleanOptionalString(
@@ -1021,8 +1038,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     if (restoredPoDate is Timestamp) {
       _poDate = restoredPoDate.toDate().toUtc();
     }
-    final restoredPoRef =
-    (data['poReferenceSource'] ?? data['poRef'] ?? 'Mail').toString();
+    final restoredPoRef = (data['poReferenceSource'] ?? data['poRef'] ?? 'Mail')
+        .toString();
     if (_poReferenceSources.contains(restoredPoRef)) {
       _selectedPoReferenceSource = restoredPoRef;
     }
@@ -1045,15 +1062,19 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
     _globalDiscountPercent =
         double.tryParse(data['globalDiscountPercent']?.toString() ?? '0') ??
-            0.0;
+        0.0;
     _packingChargesExtra = data['packingChargesExtra'] as bool? ?? true;
 
     final existingName = data['signatureName']?.toString().trim() ?? '';
     if (existingName.isNotEmpty) _signNameController.text = existingName;
 
     final existingDesig = data['signatureDesignation']?.toString().trim() ?? '';
-    if (existingDesig.isNotEmpty)
-      _signDesignationController.text = existingDesig;
+    if (existingDesig.isNotEmpty) {
+      _signDesignationController.text = _normalizeSignatoryDesignation(
+        existingName,
+        existingDesig,
+      );
+    }
 
     final existingPhone = data['signaturePhone']?.toString().trim() ?? '';
     if (existingPhone.isNotEmpty) _signPhoneController.text = existingPhone;
@@ -1067,10 +1088,10 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       _dynamicTerms = (data['dynamicTerms'] as List)
           .map(
             (e) => TermRow(
-          title: e['title']?.toString() ?? '',
-          value: e['value']?.toString() ?? '',
-        ),
-      )
+              title: e['title']?.toString() ?? '',
+              value: e['value']?.toString() ?? '',
+            ),
+          )
           .toList();
     } else {
       void addIfValid(String title, String? val) {
@@ -1151,8 +1172,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       _companyId = widget.companyId?.trim().isNotEmpty == true
           ? widget.companyId!.trim()
           : (rootData['activeCompanyId'] ?? rootData['companyId'] ?? '')
-          .toString()
-          .trim();
+                .toString()
+                .trim();
 
       _currentUserRole = (rootData['role'] ?? 'sales').toString().trim();
 
@@ -1161,7 +1182,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
           _companyId!.isNotEmpty &&
           rootData['memberships'] != null) {
         membershipData =
-        rootData['memberships'][_companyId] as Map<String, dynamic>?;
+            rootData['memberships'][_companyId] as Map<String, dynamic>?;
         if (membershipData != null && membershipData['role'] != null) {
           _currentUserRole = membershipData['role'].toString().trim();
         }
@@ -1182,54 +1203,56 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
       _currentUserName =
           (compData['name'] ??
-              compData['fullName'] ??
-              membershipData?['name'] ??
-              rootData['name'] ??
-              rootData['fullName'] ??
-              '')
+                  compData['fullName'] ??
+                  membershipData?['name'] ??
+                  rootData['name'] ??
+                  rootData['fullName'] ??
+                  '')
               .toString()
               .trim();
 
       String userDesignation =
-      (compData['designation'] ??
-          membershipData?['designation'] ??
-          rootData['designation'] ??
-          '')
-          .toString()
-          .trim();
+          (compData['designation'] ??
+                  membershipData?['designation'] ??
+                  rootData['designation'] ??
+                  '')
+              .toString()
+              .trim();
 
       String userDepartment =
-      (compData['department'] ??
-          membershipData?['department'] ??
-          rootData['department'] ??
-          '')
-          .toString()
-          .trim();
+          (compData['department'] ??
+                  membershipData?['department'] ??
+                  rootData['department'] ??
+                  '')
+              .toString()
+              .trim();
 
       String userPhone =
-      (compData['phone'] ??
-          compData['mobile'] ??
-          membershipData?['phone'] ??
-          membershipData?['mobile'] ??
-          rootData['phone'] ??
-          rootData['mobile'] ??
-          user.phoneNumber ??
-          '')
-          .toString()
-          .trim();
+          (compData['phone'] ??
+                  compData['mobile'] ??
+                  membershipData?['phone'] ??
+                  membershipData?['mobile'] ??
+                  rootData['phone'] ??
+                  rootData['mobile'] ??
+                  user.phoneNumber ??
+                  '')
+              .toString()
+              .trim();
 
       if (widget.existingQuotation == null) {
         if (_currentUserName.isNotEmpty)
           _signNameController.text = _currentUserName;
         if (userPhone.isNotEmpty) _signPhoneController.text = userPhone;
 
-        if (userDesignation.isNotEmpty) {
-          _signDesignationController.text = userDesignation;
-        } else if (userDepartment.isNotEmpty) {
-          _signDesignationController.text = userDepartment;
-        } else {
-          _signDesignationController.text = '';
-        }
+        final resolvedDesignation = _normalizeSignatoryDesignation(
+          _currentUserName,
+          userDesignation.isNotEmpty
+              ? userDesignation
+              : userDepartment.isNotEmpty
+              ? userDepartment
+              : '',
+        );
+        _signDesignationController.text = resolvedDesignation;
       }
     } catch (e) {
       _setError('Failed to load user context.');
@@ -1287,11 +1310,12 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       _companyBankDetails = (data['bankDetails'] ?? '').toString();
       _companyLogoUrl = (data['logoUrl'] ?? '').toString();
       _companyState = (data['state'] ?? '').toString().trim().toLowerCase();
+      _suggestGstTypeFromStates();
 
       final configuredPrefix =
-      (data['quotationPrefix'] ?? data['quotePrefix'] ?? '')
-          .toString()
-          .trim();
+          (data['quotationPrefix'] ?? data['quotePrefix'] ?? '')
+              .toString()
+              .trim();
       if (configuredPrefix.isNotEmpty) {
         _quotationPrefix = configuredPrefix.toUpperCase();
       }
@@ -1299,9 +1323,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   }
 
   void _updateAddressSnapshots(
-      Map<String, dynamic>? address, {
-        bool restoreMode = false,
-      }) {
+    Map<String, dynamic>? address, {
+    bool restoreMode = false,
+  }) {
     if (address == null) return;
     final addr = (address['combinedAddress'] ?? address['address'] ?? '')
         .toString()
@@ -1334,13 +1358,14 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         _customerPrimaryPincodeSnapshot = pincode;
       }
     }
+    _suggestGstTypeFromStates();
     _checkInterState();
   }
 
   void _updateContactSnapshots(
-      Map<String, dynamic>? contactData, {
-        bool restoreMode = false,
-      }) {
+    Map<String, dynamic>? contactData, {
+    bool restoreMode = false,
+  }) {
     if (contactData == null) {
       if (!restoreMode) {
         _contactEmailSnapshot = '';
@@ -1361,27 +1386,27 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         .toString()
         .trim();
     final cEmail =
-    (contactData['emailNormalized'] ?? contactData['email'] ?? '')
-        .toString()
-        .trim();
+        (contactData['emailNormalized'] ?? contactData['email'] ?? '')
+            .toString()
+            .trim();
     final cPhone =
-    (contactData['phoneNormalized'] ??
-        contactData['phone'] ??
-        contactData['mobile'] ??
-        '')
-        .toString()
-        .trim();
+        (contactData['phoneNormalized'] ??
+                contactData['phone'] ??
+                contactData['mobile'] ??
+                '')
+            .toString()
+            .trim();
     final cDepartment = (contactData['department'] ?? contactData['dept'] ?? '')
         .toString()
         .trim();
     final cDesignation =
-    (contactData['designation'] ??
-        contactData['jobTitle'] ??
-        contactData['title'] ??
-        contactData['position'] ??
-        '')
-        .toString()
-        .trim();
+        (contactData['designation'] ??
+                contactData['jobTitle'] ??
+                contactData['title'] ??
+                contactData['position'] ??
+                '')
+            .toString()
+            .trim();
 
     if (!restoreMode) {
       _contactPersonController.text = cName;
@@ -1421,10 +1446,10 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   }
 
   Future<void> _loadContactData(
-      String customerId,
-      String contactId, {
-        bool restoreMode = false,
-      }) async {
+    String customerId,
+    String contactId, {
+    bool restoreMode = false,
+  }) async {
     try {
       final doc = await _companyContactsRef(customerId).doc(contactId).get();
       if (mounted) {
@@ -1448,9 +1473,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   }
 
   Future<void> _loadCustomerFromFirestore(
-      String customerId, {
-        bool restoreMode = false,
-      }) async {
+    String customerId, {
+    bool restoreMode = false,
+  }) async {
     if (_companyId == null || _companyId!.isEmpty) return;
     try {
       final doc = await FirebaseFirestore.instance
@@ -1464,15 +1489,15 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         final data = doc.data()!;
 
         final loadedCustomerGstin =
-        (data['customerGstin'] ??
-            data['customerGSTIN'] ??
-            data['customerGstNo'] ??
-            data['gstin'] ??
-            data['gstNo'] ??
-            data['gst'] ??
-            '')
-            .toString()
-            .trim();
+            (data['customerGstin'] ??
+                    data['customerGSTIN'] ??
+                    data['customerGstNo'] ??
+                    data['gstin'] ??
+                    data['gstNo'] ??
+                    data['gst'] ??
+                    '')
+                .toString()
+                .trim();
         if (loadedCustomerGstin.isNotEmpty) {
           _gstController.text = loadedCustomerGstin;
         }
@@ -1487,12 +1512,12 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         if (!restoreMode || _gstController.text.trim().isEmpty) {
           _gstController.text =
               (data['customerGstin'] ??
-                  data['customerGSTIN'] ??
-                  data['customerGstNo'] ??
-                  data['gstin'] ??
-                  data['gstNo'] ??
-                  data['gst'] ??
-                  '')
+                      data['customerGSTIN'] ??
+                      data['customerGstNo'] ??
+                      data['gstin'] ??
+                      data['gstNo'] ??
+                      data['gst'] ??
+                      '')
                   .toString();
         }
 
@@ -1505,7 +1530,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
         if (_selectedAddressId != null && _selectedAddressId!.isNotEmpty) {
           final matches = _customerAddresses.where(
-                (a) => a['id'] == _selectedAddressId,
+            (a) => a['id'] == _selectedAddressId,
           );
           if (matches.isNotEmpty) {
             _selectedAddressData = matches.first;
@@ -1517,19 +1542,19 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
           }
         } else if (!restoreMode) {
           final primaryBillingMatches = _customerAddresses.where(
-                (a) => a['isBillingAddress'] == true && a['isPrimary'] == true,
+            (a) => a['isBillingAddress'] == true && a['isPrimary'] == true,
           );
           final primaryMatches = _customerAddresses.where(
-                (a) => a['isPrimary'] == true,
+            (a) => a['isPrimary'] == true,
           );
 
           _selectedAddressData = primaryBillingMatches.isNotEmpty
               ? primaryBillingMatches.first
               : (primaryMatches.isNotEmpty
-              ? primaryMatches.first
-              : (_customerAddresses.isNotEmpty
-              ? _customerAddresses.first
-              : null));
+                    ? primaryMatches.first
+                    : (_customerAddresses.isNotEmpty
+                          ? _customerAddresses.first
+                          : null));
 
           _selectedAddressId = _selectedAddressData?['id'];
           _updateAddressSnapshots(
@@ -1579,16 +1604,16 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   }
 
   Future<QuotationLineItem?> _hydrateProductItem(
-      Map<String, dynamic> rawItem,
-      ) async {
+    Map<String, dynamic> rawItem,
+  ) async {
     final Map<String, dynamic> i = Map<String, dynamic>.from(rawItem);
     String productId = (i['productId'] ?? i['itemId'] ?? '').toString();
     String name = (i['name'] ?? i['productName'] ?? i['itemName'] ?? '')
         .toString();
     String desc = (i['description'] ?? i['details'] ?? '').toString();
     String scopeOfSupply =
-    (i['scopeOfSupply'] ?? i['scope_of_supply'] ?? i['supplyScope'] ?? '')
-        .toString();
+        (i['scopeOfSupply'] ?? i['scope_of_supply'] ?? i['supplyScope'] ?? '')
+            .toString();
     String hsn = (i['hsnCode'] ?? '').toString();
     double qty = double.tryParse(i['quantity']?.toString() ?? '1') ?? 1.0;
     String uom = (i['uom'] ?? i['unit'] ?? 'Nos').toString();
@@ -1599,23 +1624,23 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
               i['rate']?.toString() ??
               '0',
         ) ??
-            0.0;
+        0.0;
     double disc =
         double.tryParse(
           i['discountPercent']?.toString() ?? i['discount']?.toString() ?? '0',
         ) ??
-            0.0;
+        0.0;
 
     double totalGst =
         double.tryParse(
           i['gstPercentage']?.toString() ?? i['tax']?.toString() ?? '0',
         ) ??
-            0.0;
+        0.0;
     if (totalGst == 0) {
       totalGst =
           (double.tryParse(i['cgstPercent']?.toString() ?? '0') ?? 0.0) +
-              (double.tryParse(i['sgstPercent']?.toString() ?? '0') ?? 0.0) +
-              (double.tryParse(i['igstPercent']?.toString() ?? '0') ?? 0.0);
+          (double.tryParse(i['sgstPercent']?.toString() ?? '0') ?? 0.0) +
+          (double.tryParse(i['igstPercent']?.toString() ?? '0') ?? 0.0);
     }
 
     double stock =
@@ -1626,7 +1651,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
               i['stock']?.toString() ??
               '0',
         ) ??
-            0.0;
+        0.0;
 
     String sku = (i['sku'] ?? '').toString();
     String brand = (i['brand'] ?? i['make'] ?? '').toString();
@@ -1642,21 +1667,21 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     List compatibleProductNames = i['compatibleProductNames'] as List? ?? [];
     List compatibleSubcategories = i['compatibleSubcategories'] as List? ?? [];
     String itemCode =
-    (i['itemCode'] ??
-        i['productCode'] ??
-        i['item_code'] ??
-        i['code'] ??
-        i['materialCode'] ??
-        i['partNo'] ??
-        i['partNumber'] ??
-        i['catalogNo'] ??
-        '')
-        .toString()
-        .trim();
+        (i['itemCode'] ??
+                i['productCode'] ??
+                i['item_code'] ??
+                i['code'] ??
+                i['materialCode'] ??
+                i['partNo'] ??
+                i['partNumber'] ??
+                i['catalogNo'] ??
+                '')
+            .toString()
+            .trim();
     String sellingPrice = (i['sellingPrice'] ?? '').toString();
     double baseGst =
         double.tryParse(i['baseGst']?.toString() ?? totalGst.toString()) ??
-            totalGst;
+        totalGst;
 
     bool isScopeItem = (i['isScopeItem'] == true) || (i['parentId'] != null);
     String? parentId = i['parentId']?.toString();
@@ -1682,7 +1707,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                       pData['tax']?.toString() ??
                       '18',
                 ) ??
-                    18.0;
+                18.0;
           if (price == 0 && pricingMode != 'Included')
             price =
                 double.tryParse(
@@ -1691,7 +1716,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                       pData['unitPrice']?.toString() ??
                       '0',
                 ) ??
-                    0.0;
+                0.0;
           if (uom == 'Nos' || uom.isEmpty)
             uom = (pData['uom'] ?? 'Nos').toString();
           stock =
@@ -1702,7 +1727,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                     pData['qty']?.toString() ??
                     stock.toString(),
               ) ??
-                  0.0;
+              0.0;
 
           if (sku.isEmpty)
             sku = (pData['sku'] ?? pData['itemCode'] ?? '').toString();
@@ -1724,20 +1749,20 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
               pData['compatibleProductIds'] as List? ?? compatibleProductIds;
           compatibleProductNames =
               pData['compatibleProductNames'] as List? ??
-                  compatibleProductNames;
+              compatibleProductNames;
           compatibleSubcategories =
               pData['compatibleSubcategories'] as List? ??
-                  compatibleSubcategories;
+              compatibleSubcategories;
           itemCode =
               (pData['itemCode'] ??
-                  pData['productCode'] ??
-                  pData['item_code'] ??
-                  pData['code'] ??
-                  pData['materialCode'] ??
-                  pData['partNo'] ??
-                  pData['partNumber'] ??
-                  pData['catalogNo'] ??
-                  itemCode)
+                      pData['productCode'] ??
+                      pData['item_code'] ??
+                      pData['code'] ??
+                      pData['materialCode'] ??
+                      pData['partNo'] ??
+                      pData['partNumber'] ??
+                      pData['catalogNo'] ??
+                      itemCode)
                   .toString()
                   .trim();
           sellingPrice =
@@ -1813,63 +1838,63 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     }
 
     final incomingName =
-    (seed['customerName'] ??
-        seed['companyName'] ??
-        seed['clientName'] ??
-        '')
-        .toString()
-        .trim();
+        (seed['customerName'] ??
+                seed['companyName'] ??
+                seed['clientName'] ??
+                '')
+            .toString()
+            .trim();
     final incomingPerson = (seed['contactPerson'] ?? seed['contactName'] ?? '')
         .toString()
         .trim();
     final incomingGstin =
-    (seed['customerGstin'] ??
-        seed['customerGSTIN'] ??
-        seed['customerGstNo'] ??
-        seed['gstin'] ??
-        seed['gstNo'] ??
-        seed['gst'] ??
-        '')
-        .toString()
-        .trim();
+        (seed['customerGstin'] ??
+                seed['customerGSTIN'] ??
+                seed['customerGstNo'] ??
+                seed['gstin'] ??
+                seed['gstNo'] ??
+                seed['gst'] ??
+                '')
+            .toString()
+            .trim();
     final incomingEmail =
-    (seed['email'] ?? seed['contactEmail'] ?? seed['clientEmail'] ?? '')
-        .toString()
-        .trim();
+        (seed['email'] ?? seed['contactEmail'] ?? seed['clientEmail'] ?? '')
+            .toString()
+            .trim();
     final incomingMobile =
-    (seed['mobile'] ??
-        seed['contactPhone'] ??
-        seed['contactMobile'] ??
-        seed['clientMobile'] ??
-        '')
-        .toString()
-        .trim();
+        (seed['mobile'] ??
+                seed['contactPhone'] ??
+                seed['contactMobile'] ??
+                seed['clientMobile'] ??
+                '')
+            .toString()
+            .trim();
     final incomingAddress =
-    (seed['address'] ??
-        seed['location'] ??
-        seed['customerPrimaryAddress'] ??
-        seed['clientAddress'] ??
-        '')
-        .toString()
-        .trim();
+        (seed['address'] ??
+                seed['location'] ??
+                seed['customerPrimaryAddress'] ??
+                seed['clientAddress'] ??
+                '')
+            .toString()
+            .trim();
     final incomingCity = (seed['city'] ?? seed['customerPrimaryCity'] ?? '')
         .toString()
         .trim();
     final incomingStateRaw =
-    (seed['state'] ??
-        seed['customerPrimaryState'] ??
-        seed['customerState'] ??
-        '')
-        .toString()
-        .trim();
+        (seed['state'] ??
+                seed['customerPrimaryState'] ??
+                seed['customerState'] ??
+                '')
+            .toString()
+            .trim();
     final incomingPincode =
-    (seed['pincode'] ?? seed['customerPrimaryPincode'] ?? '')
-        .toString()
-        .trim();
+        (seed['pincode'] ?? seed['customerPrimaryPincode'] ?? '')
+            .toString()
+            .trim();
     final incomingGst =
-    (seed['gstNo'] ?? seed['gst'] ?? seed['customerGST'] ?? '')
-        .toString()
-        .trim();
+        (seed['gstNo'] ?? seed['gst'] ?? seed['customerGST'] ?? '')
+            .toString()
+            .trim();
 
     if (incomingName.isNotEmpty) _clientNameController.text = incomingName;
     if (incomingPerson.isNotEmpty)
@@ -1882,6 +1907,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
     if (incomingStateRaw.isNotEmpty)
       _customerState = incomingStateRaw.toLowerCase();
+    _suggestGstTypeFromStates();
 
     if (incomingPerson.isNotEmpty) _contactPersonSnapshot = incomingPerson;
     if (incomingEmail.isNotEmpty) _contactEmailSnapshot = incomingEmail;
@@ -1896,16 +1922,16 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       _customerPrimaryPincodeSnapshot = incomingPincode;
 
     final seededAddressId =
-    (seed['addressId'] ?? seed['customerAddressId'] ?? '')
-        .toString()
-        .trim();
+        (seed['addressId'] ?? seed['customerAddressId'] ?? '')
+            .toString()
+            .trim();
     if (seededAddressId.isNotEmpty) {
       _selectedAddressId = seededAddressId;
     }
     final seededContactId =
-    (seed['contactId'] ?? seed['customerContactId'] ?? '')
-        .toString()
-        .trim();
+        (seed['contactId'] ?? seed['customerContactId'] ?? '')
+            .toString()
+            .trim();
     if (seededContactId.isNotEmpty) {
       _selectedContactId = seededContactId;
     }
@@ -1935,9 +1961,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     if (subject.isNotEmpty) _subjectController.text = subject;
 
     final notes =
-    (seed['notes'] ?? seed['description'] ?? seed['inquiryReference'] ?? '')
-        .toString()
-        .trim();
+        (seed['notes'] ?? seed['description'] ?? seed['inquiryReference'] ?? '')
+            .toString()
+            .trim();
     final loc = (seed['location'] ?? seed['customerPrimaryCity'] ?? '')
         .toString()
         .trim();
@@ -1993,7 +2019,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                   snaps.docs.first.data()['grandTotal']?.toString() ??
                   '0',
             ) ??
-                0.0;
+            0.0;
         for (var d in snaps.docs) {
           totalVal +=
               double.tryParse(
@@ -2001,7 +2027,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                     d.data()['grandTotal']?.toString() ??
                     '0',
               ) ??
-                  0.0;
+              0.0;
         }
       }
 
@@ -2046,10 +2072,10 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
             _dynamicTerms = (data['dynamicTerms'] as List)
                 .map(
                   (e) => TermRow(
-                title: e['title']?.toString() ?? '',
-                value: e['value']?.toString() ?? '',
-              ),
-            )
+                    title: e['title']?.toString() ?? '',
+                    value: e['value']?.toString() ?? '',
+                  ),
+                )
                 .toList();
           }
         }
@@ -2057,15 +2083,39 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     } catch (e) {}
   }
 
-  void _checkInterState() {
-    if (_companyState.isEmpty || _customerState.isEmpty) {
-      _isInterState = false;
-    } else {
-      _isInterState =
-          _companyState.toLowerCase().trim() !=
-              _customerState.toLowerCase().trim();
+  String _resolveGstType(Map<String, dynamic> data) {
+    final persisted = _cleanOptionalString(data['gstType']) ?? '';
+    if (persisted == 'intra' || persisted == 'inter') return persisted;
+
+    final legacyInter = data['isInterState'] as bool?;
+    if (legacyInter == true) return 'inter';
+    if (legacyInter == false) return 'intra';
+
+    if (_companyState.isNotEmpty && _customerState.isNotEmpty) {
+      return _companyState.toLowerCase().trim() !=
+              _customerState.toLowerCase().trim()
+          ? 'inter'
+          : 'intra';
     }
+
+    return 'intra';
+  }
+
+  void _checkInterState() {
+    _isInterState = _gstType == 'inter';
     _recalculateTaxes();
+  }
+
+  void _suggestGstTypeFromStates() {
+    if (_gstTypeManuallySet) return;
+    if (_companyState.isEmpty || _customerState.isEmpty) {
+      return;
+    }
+    final isInter =
+        _companyState.toLowerCase().trim() !=
+        _customerState.toLowerCase().trim();
+    _gstType = isInter ? 'inter' : 'intra';
+    _checkInterState();
   }
 
   void _recalculateTaxes() {
@@ -2110,14 +2160,17 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
       _cachedSubtotal += item.subtotal;
       _cachedItemDiscount += item.discountAmount;
-      _cachedCgst += item.cgstAmount;
-      _cachedSgst += item.sgstAmount;
-      _cachedIgst += item.igstAmount;
+      if (_gstType == 'inter') {
+        _cachedIgst += item.igstAmount;
+      } else {
+        _cachedCgst += item.cgstAmount;
+        _cachedSgst += item.sgstAmount;
+      }
     }
 
     _cachedGlobalDiscountAmount =
         (_cachedSubtotal - _cachedItemDiscount) *
-            (_globalDiscountPercent / 100);
+        (_globalDiscountPercent / 100);
     _cachedTaxableAmount =
         _cachedSubtotal - _cachedItemDiscount - _cachedGlobalDiscountAmount;
     _cachedGrandTotal =
@@ -2199,7 +2252,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         .get();
 
     final duplicateExists = snap.docs.any(
-          (doc) => doc.id != widget.quotationId,
+      (doc) => doc.id != widget.quotationId,
     );
     if (duplicateExists) {
       throw Exception(
@@ -2256,15 +2309,15 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
       final quoteRef = (isUpdate && !isRevision)
           ? FirebaseFirestore.instance
-          .collection('companies')
-          .doc(_companyId)
-          .collection('quotations')
-          .doc(widget.quotationId)
+                .collection('companies')
+                .doc(_companyId)
+                .collection('quotations')
+                .doc(widget.quotationId)
           : FirebaseFirestore.instance
-          .collection('companies')
-          .doc(_companyId)
-          .collection('quotations')
-          .doc();
+                .collection('companies')
+                .doc(_companyId)
+                .collection('quotations')
+                .doc();
 
       final financialYear = _getFinancialYearFromDate(_quoteDate);
 
@@ -2302,10 +2355,10 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       final mappedTerms = _dynamicTerms
           .map(
             (e) => {
-          'title': e.titleCtrl.text.trim(),
-          'value': e.valueCtrl.text.trim(),
-        },
-      )
+              'title': e.titleCtrl.text.trim(),
+              'value': e.valueCtrl.text.trim(),
+            },
+          )
           .toList();
 
       final mappedItems = _items.map((e) {
@@ -2331,34 +2384,34 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
       final effectiveAddressSnapshot =
           _selectedAddressData ??
-              {
-                'address': _addressController.text.trim().isNotEmpty
-                    ? _addressController.text.trim()
-                    : _customerPrimaryAddressSnapshot,
-                'city': _customerPrimaryCitySnapshot,
-                'state': _customerPrimaryStateSnapshot,
-                'pincode': _customerPrimaryPincodeSnapshot,
-              };
+          {
+            'address': _addressController.text.trim().isNotEmpty
+                ? _addressController.text.trim()
+                : _customerPrimaryAddressSnapshot,
+            'city': _customerPrimaryCitySnapshot,
+            'state': _customerPrimaryStateSnapshot,
+            'pincode': _customerPrimaryPincodeSnapshot,
+          };
 
       final effectiveContactSnapshot =
           _selectedContactData ??
-              {
-                'name': _contactPersonController.text.trim().isNotEmpty
-                    ? _contactPersonController.text.trim()
-                    : _contactPersonSnapshot,
-                'email': _emailController.text.trim().isNotEmpty
-                    ? _emailController.text.trim()
-                    : _contactEmailSnapshot,
-                'mobile': _mobileController.text.trim().isNotEmpty
-                    ? _mobileController.text.trim()
-                    : _contactMobileSnapshot,
-                'designation': _contactDesignationController.text.trim().isNotEmpty
-                    ? _contactDesignationController.text.trim()
-                    : _contactDesignationSnapshot,
-                'department': _contactDepartmentController.text.trim().isNotEmpty
-                    ? _contactDepartmentController.text.trim()
-                    : _contactDepartmentSnapshot,
-              };
+          {
+            'name': _contactPersonController.text.trim().isNotEmpty
+                ? _contactPersonController.text.trim()
+                : _contactPersonSnapshot,
+            'email': _emailController.text.trim().isNotEmpty
+                ? _emailController.text.trim()
+                : _contactEmailSnapshot,
+            'mobile': _mobileController.text.trim().isNotEmpty
+                ? _mobileController.text.trim()
+                : _contactMobileSnapshot,
+            'designation': _contactDesignationController.text.trim().isNotEmpty
+                ? _contactDesignationController.text.trim()
+                : _contactDesignationSnapshot,
+            'department': _contactDepartmentController.text.trim().isNotEmpty
+                ? _contactDepartmentController.text.trim()
+                : _contactDepartmentSnapshot,
+          };
 
       final payload = {
         'id': quoteRef.id,
@@ -2387,7 +2440,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         'contactPerson': _contactPersonController.text.trim().isNotEmpty
             ? _contactPersonController.text.trim()
             : _contactPersonSnapshot,
-        'contactDesignation': _contactDesignationController.text.trim().isNotEmpty
+        'contactDesignation':
+            _contactDesignationController.text.trim().isNotEmpty
             ? _contactDesignationController.text.trim()
             : _contactDesignationSnapshot,
         'contactDepartment': _contactDepartmentController.text.trim().isNotEmpty
@@ -2403,6 +2457,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
             ? _mobileController.text.trim()
             : _contactMobileSnapshot,
         'gstNo': _gstController.text.trim(),
+        'gstType': _gstType,
         'isInterState': _isInterState,
         'customerState': _customerState,
         'inquiryId': _hasLinkedInquiry ? (_linkedInquiryId ?? '') : '',
@@ -2460,165 +2515,168 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
       await FirebaseFirestore.instance
           .runTransaction((tx) async {
-        int? sequenceToSync;
-        final counterRef = FirebaseFirestore.instance
-            .collection('companies')
-            .doc(_companyId)
-            .collection('counters')
-            .doc('quotation_counter_$financialYear');
+            int? sequenceToSync;
+            final counterRef = FirebaseFirestore.instance
+                .collection('companies')
+                .doc(_companyId)
+                .collection('counters')
+                .doc('quotation_counter_$financialYear');
 
-        final counterDoc = await tx.get(counterRef);
-        final currentSequence =
-        ((counterDoc.data()?['sequence'] as num?)?.toInt() ?? 0);
+            final counterDoc = await tx.get(counterRef);
+            final currentSequence =
+                ((counterDoc.data()?['sequence'] as num?)?.toInt() ?? 0);
 
-        String safeQuoteNumber = '';
+            String safeQuoteNumber = '';
 
-        if (manualSequence == null) {
-          final nextSequence = currentSequence + 1;
-          String formattedSequence = nextSequence.toString().padLeft(
-            3,
-            '0',
-          );
-          safeQuoteNumber =
-          '$_quotationPrefix/$formattedSequence/$financialYear';
-          sequenceToSync = nextSequence;
-        } else {
-          String paddedManual = manualSequence.toString().padLeft(3, '0');
-          safeQuoteNumber =
-          '$_quotationPrefix/$paddedManual/$financialYear';
-          if (manualSequence > currentSequence) {
-            sequenceToSync = manualSequence;
-          }
-        }
+            if (manualSequence == null) {
+              final nextSequence = currentSequence + 1;
+              String formattedSequence = nextSequence.toString().padLeft(
+                3,
+                '0',
+              );
+              safeQuoteNumber =
+                  '$_quotationPrefix/$formattedSequence/$financialYear';
+              sequenceToSync = nextSequence;
+            } else {
+              String paddedManual = manualSequence.toString().padLeft(3, '0');
+              safeQuoteNumber =
+                  '$_quotationPrefix/$paddedManual/$financialYear';
+              if (manualSequence > currentSequence) {
+                sequenceToSync = manualSequence;
+              }
+            }
 
-        final numberRef = FirebaseFirestore.instance
-            .collection('companies')
-            .doc(_companyId)
-            .collection('quotation_numbers')
-            .doc(_quoteNumberRegistryId(safeQuoteNumber));
+            final numberRef = FirebaseFirestore.instance
+                .collection('companies')
+                .doc(_companyId)
+                .collection('quotation_numbers')
+                .doc(_quoteNumberRegistryId(safeQuoteNumber));
 
-        final numberDoc = await tx.get(numberRef);
-        final reservedFor = numberDoc.data()?['quotationId']?.toString();
-        final allowedExistingReservations = {
-          quoteRef.id,
-          if (widget.quotationId != null) widget.quotationId!,
-        };
+            final numberDoc = await tx.get(numberRef);
+            final reservedFor = numberDoc.data()?['quotationId']?.toString();
+            final allowedExistingReservations = {
+              quoteRef.id,
+              if (widget.quotationId != null) widget.quotationId!,
+            };
 
-        if (numberDoc.exists &&
-            reservedFor != null &&
-            reservedFor.isNotEmpty &&
-            !allowedExistingReservations.contains(reservedFor)) {
-          throw Exception(
-            'Quotation number $safeQuoteNumber is already reserved.',
-          );
-        }
+            if (numberDoc.exists &&
+                reservedFor != null &&
+                reservedFor.isNotEmpty &&
+                !allowedExistingReservations.contains(reservedFor)) {
+              throw Exception(
+                'Quotation number $safeQuoteNumber is already reserved.',
+              );
+            }
 
-        final payloadWithNumber = {
-          ...payload,
-          'quoteNumber': safeQuoteNumber,
-          'financialYear': safeQuoteNumber.split('/').last,
-        };
+            final payloadWithNumber = {
+              ...payload,
+              'quoteNumber': safeQuoteNumber,
+              'financialYear': safeQuoteNumber.split('/').last,
+            };
 
-        tx.set(numberRef, {
-          'quoteNumber': safeQuoteNumber,
-          'quotationId': quoteRef.id,
-          'companyId': _companyId,
-          'sequence': _extractQuoteSequence(safeQuoteNumber),
-          'financialYear': safeQuoteNumber.split('/').last,
-          'prefix': safeQuoteNumber.split('/').first,
-          'updatedAt': FieldValue.serverTimestamp(),
-          if (!numberDoc.exists) 'createdAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+            tx.set(numberRef, {
+              'quoteNumber': safeQuoteNumber,
+              'quotationId': quoteRef.id,
+              'companyId': _companyId,
+              'sequence': _extractQuoteSequence(safeQuoteNumber),
+              'financialYear': safeQuoteNumber.split('/').last,
+              'prefix': safeQuoteNumber.split('/').first,
+              'updatedAt': FieldValue.serverTimestamp(),
+              if (!numberDoc.exists) 'createdAt': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true));
 
-        if (sequenceToSync != null) {
-          tx.set(counterRef, {
-            'sequence': sequenceToSync,
-            'prefix': _quotationPrefix,
-            'financialYear': financialYear,
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-        }
+            if (sequenceToSync != null) {
+              tx.set(counterRef, {
+                'sequence': sequenceToSync,
+                'prefix': _quotationPrefix,
+                'financialYear': financialYear,
+                'updatedAt': FieldValue.serverTimestamp(),
+              }, SetOptions(merge: true));
+            }
 
-        if (isRevision) {
-          final oldRef = FirebaseFirestore.instance
-              .collection('companies')
-              .doc(_companyId)
-              .collection('quotations')
-              .doc(widget.quotationId);
-          tx.set(oldRef, {
-            'isLatest': false,
-            'updatedAt': FieldValue.serverTimestamp(),
-            'updatedBy': _currentUserUid,
-          }, SetOptions(merge: true));
-        }
+            if (isRevision) {
+              final oldRef = FirebaseFirestore.instance
+                  .collection('companies')
+                  .doc(_companyId)
+                  .collection('quotations')
+                  .doc(widget.quotationId);
+              tx.set(oldRef, {
+                'isLatest': false,
+                'updatedAt': FieldValue.serverTimestamp(),
+                'updatedBy': _currentUserUid,
+              }, SetOptions(merge: true));
+            }
 
-        tx.set(quoteRef, payloadWithNumber, SetOptions(merge: true));
+            tx.set(quoteRef, payloadWithNumber, SetOptions(merge: true));
 
-        if (_linkedInquiryId != null &&
-            _linkedInquiryId!.trim().isNotEmpty) {
-          final inqRef = FirebaseFirestore.instance
-              .collection('companies')
-              .doc(_companyId)
-              .collection('inquiries')
-              .doc(_linkedInquiryId);
-          tx.set(inqRef, {
-            'status': 'Quoted',
-            'quotationId': quoteRef.id,
-            'updatedAt': FieldValue.serverTimestamp(),
-            'updatedBy': _currentUserUid,
-          }, SetOptions(merge: true));
-          if (!isUpdate || isRevision) {
-            final revision = (payloadWithNumber['version'] as num?)?.toInt() ?? 1;
-            final type = isRevision
-                ? InquiryActivityType.quotationRevised
-                : InquiryActivityType.quotationCreated;
-            final activityId = isRevision
-                ? 'quotation_revised_${quoteRef.id}_$revision'
-                : 'quotation_created_${quoteRef.id}';
-            tx.set(
-              inqRef.collection('activities').doc(activityId),
-              InquiryActivityService.buildActivityData(
-                companyId: _companyId!,
-                inquiryId: _linkedInquiryId!,
-                inquiryNumber: _linkedInquiryNumber ?? '',
-                type: type,
-                title: isRevision ? 'Quotation Revised' : 'Quotation Created',
-                createdByUid: _currentUserUid!,
-                createdByName: _currentUserName,
-                relatedDocumentType: 'quotation',
-                relatedDocumentId: quoteRef.id,
-                relatedDocumentNumber: safeQuoteNumber,
-                metadata: <String, dynamic>{
-                  'quotationId': quoteRef.id,
-                  'quotationNumber': safeQuoteNumber,
-                  'quotationRevision': revision,
-                  'quotationDate': Timestamp.fromDate(_quoteDate),
-                  'customerId': _selectedCustomerId,
-                  'customerName': _clientNameController.text.trim(),
-                  if (isRevision) 'previousRevision': revision - 1,
-                  if (isRevision) 'newRevision': revision,
-                  if (isRevision) 'parentQuotationId': widget.quotationId,
-                },
-              ),
-            );
-          }
-        }
-      })
+            if (_linkedInquiryId != null &&
+                _linkedInquiryId!.trim().isNotEmpty) {
+              final inqRef = FirebaseFirestore.instance
+                  .collection('companies')
+                  .doc(_companyId)
+                  .collection('inquiries')
+                  .doc(_linkedInquiryId);
+              tx.set(inqRef, {
+                'status': 'Quoted',
+                'quotationId': quoteRef.id,
+                'updatedAt': FieldValue.serverTimestamp(),
+                'updatedBy': _currentUserUid,
+              }, SetOptions(merge: true));
+              if (!isUpdate || isRevision) {
+                final revision =
+                    (payloadWithNumber['version'] as num?)?.toInt() ?? 1;
+                final type = isRevision
+                    ? InquiryActivityType.quotationRevised
+                    : InquiryActivityType.quotationCreated;
+                final activityId = isRevision
+                    ? 'quotation_revised_${quoteRef.id}_$revision'
+                    : 'quotation_created_${quoteRef.id}';
+                tx.set(
+                  inqRef.collection('activities').doc(activityId),
+                  InquiryActivityService.buildActivityData(
+                    companyId: _companyId!,
+                    inquiryId: _linkedInquiryId!,
+                    inquiryNumber: _linkedInquiryNumber ?? '',
+                    type: type,
+                    title: isRevision
+                        ? 'Quotation Revised'
+                        : 'Quotation Created',
+                    createdByUid: _currentUserUid!,
+                    createdByName: _currentUserName,
+                    relatedDocumentType: 'quotation',
+                    relatedDocumentId: quoteRef.id,
+                    relatedDocumentNumber: safeQuoteNumber,
+                    metadata: <String, dynamic>{
+                      'quotationId': quoteRef.id,
+                      'quotationNumber': safeQuoteNumber,
+                      'quotationRevision': revision,
+                      'quotationDate': Timestamp.fromDate(_quoteDate),
+                      'customerId': _selectedCustomerId,
+                      'customerName': _clientNameController.text.trim(),
+                      if (isRevision) 'previousRevision': revision - 1,
+                      if (isRevision) 'newRevision': revision,
+                      if (isRevision) 'parentQuotationId': widget.quotationId,
+                    },
+                  ),
+                );
+              }
+            }
+          })
           .timeout(
-        const Duration(seconds: 15),
-        onTimeout: () => throw Exception(
-          'Network timeout: Failed to save quotation safely.',
-        ),
-      );
+            const Duration(seconds: 15),
+            onTimeout: () => throw Exception(
+              'Network timeout: Failed to save quotation safely.',
+            ),
+          );
 
       if (!_isReadOnly) {
         await FirebaseFirestore.instance
             .collection('quotationSettings')
             .doc(_currentUserUid)
             .set({
-          'dynamicTerms': mappedTerms,
-          'packingChargesExtra': _packingChargesExtra,
-        }, SetOptions(merge: true));
+              'dynamicTerms': mappedTerms,
+              'packingChargesExtra': _packingChargesExtra,
+            }, SetOptions(merge: true));
       }
 
       developer.log('Quotation Save Success', name: 'QuotationScreen');
@@ -2643,7 +2701,10 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
   Future<void> _convertToInvoice() async {
     if (!_isAdminOrManager) {
-      _showSnack('Only managers or admins can convert to Sales Order.', isError: true);
+      _showSnack(
+        'Only managers or admins can convert to Sales Order.',
+        isError: true,
+      );
       return;
     }
 
@@ -2694,12 +2755,13 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
             .get();
       }
 
-      String currentNo = (widget.existingQuotation?['quoteNumber'] ??
-          widget.existingQuotation?['quotationNumber'] ??
-          widget.existingQuotation?['referenceQuotationNumber'] ??
-          '')
-          .toString()
-          .trim();
+      String currentNo =
+          (widget.existingQuotation?['quoteNumber'] ??
+                  widget.existingQuotation?['quotationNumber'] ??
+                  widget.existingQuotation?['referenceQuotationNumber'] ??
+                  '')
+              .toString()
+              .trim();
 
       if (currentNo.isEmpty) {
         currentNo = _quotationSequenceController.text.trim();
@@ -2707,7 +2769,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
           currentNo = 'Auto';
         } else {
           currentNo =
-          '$_quotationPrefix/$currentNo/${_getFinancialYearFromDate(_quoteDate)}';
+              '$_quotationPrefix/$currentNo/${_getFinancialYearFromDate(_quoteDate)}';
         }
       }
 
@@ -2734,34 +2796,34 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
       final effectiveAddressSnapshot =
           _selectedAddressData ??
-              {
-                'address': _addressController.text.trim().isNotEmpty
-                    ? _addressController.text.trim()
-                    : _customerPrimaryAddressSnapshot,
-                'city': _customerPrimaryCitySnapshot,
-                'state': _customerPrimaryStateSnapshot,
-                'pincode': _customerPrimaryPincodeSnapshot,
-              };
+          {
+            'address': _addressController.text.trim().isNotEmpty
+                ? _addressController.text.trim()
+                : _customerPrimaryAddressSnapshot,
+            'city': _customerPrimaryCitySnapshot,
+            'state': _customerPrimaryStateSnapshot,
+            'pincode': _customerPrimaryPincodeSnapshot,
+          };
 
       final effectiveContactSnapshot =
           _selectedContactData ??
-              {
-                'name': _contactPersonController.text.trim().isNotEmpty
-                    ? _contactPersonController.text.trim()
-                    : _contactPersonSnapshot,
-                'email': _emailController.text.trim().isNotEmpty
-                    ? _emailController.text.trim()
-                    : _contactEmailSnapshot,
-                'mobile': _mobileController.text.trim().isNotEmpty
-                    ? _mobileController.text.trim()
-                    : _contactMobileSnapshot,
-                'designation': _contactDesignationController.text.trim().isNotEmpty
-                    ? _contactDesignationController.text.trim()
-                    : _contactDesignationSnapshot,
-                'department': _contactDepartmentController.text.trim().isNotEmpty
-                    ? _contactDepartmentController.text.trim()
-                    : _contactDepartmentSnapshot,
-              };
+          {
+            'name': _contactPersonController.text.trim().isNotEmpty
+                ? _contactPersonController.text.trim()
+                : _contactPersonSnapshot,
+            'email': _emailController.text.trim().isNotEmpty
+                ? _emailController.text.trim()
+                : _contactEmailSnapshot,
+            'mobile': _mobileController.text.trim().isNotEmpty
+                ? _mobileController.text.trim()
+                : _contactMobileSnapshot,
+            'designation': _contactDesignationController.text.trim().isNotEmpty
+                ? _contactDesignationController.text.trim()
+                : _contactDesignationSnapshot,
+            'department': _contactDepartmentController.text.trim().isNotEmpty
+                ? _contactDepartmentController.text.trim()
+                : _contactDepartmentSnapshot,
+          };
 
       final salesOrderData = {
         ...(widget.existingQuotation ?? {}),
@@ -2799,7 +2861,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         'contactMobile': _mobileController.text.trim().isNotEmpty
             ? _mobileController.text.trim()
             : _contactMobileSnapshot,
-        'contactDesignation': _contactDesignationController.text.trim().isNotEmpty
+        'contactDesignation':
+            _contactDesignationController.text.trim().isNotEmpty
             ? _contactDesignationController.text.trim()
             : _contactDesignationSnapshot,
         'contactDepartment': _contactDepartmentController.text.trim().isNotEmpty
@@ -2809,6 +2872,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         'customerGstin': _gstController.text.trim(),
         'customerGSTIN': _gstController.text.trim(),
         'customerGstNo': _gstController.text.trim(),
+        'gstType': _gstType,
         'isInterState': _isInterState,
         'customerState': _customerState,
         'inquiryId': _hasLinkedInquiry ? (_linkedInquiryId ?? '') : '',
@@ -2847,10 +2911,12 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         'freight': _extractLegacyTerm('freight'),
         'installation': _extractLegacyTerm('installation'),
         'dynamicTerms': _dynamicTerms
-            .map((term) => {
-          'title': term.titleCtrl.text.trim(),
-          'value': term.valueCtrl.text.trim(),
-        })
+            .map(
+              (term) => {
+                'title': term.titleCtrl.text.trim(),
+                'value': term.valueCtrl.text.trim(),
+              },
+            )
             .toList(),
         'packingChargesExtra': _packingChargesExtra,
         'signatureName': _signNameController.text.trim(),
@@ -2860,7 +2926,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         'approvalStatus': 'pending',
         'dispatchStatus': 'pending',
         'salesOrderNumber':
-        'SO-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}',
+            'SO-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}',
         'createdAt': FieldValue.serverTimestamp(),
         'createdBy': _currentUserUid,
         'createdByName': _currentUserName,
@@ -2875,17 +2941,21 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
             'timestamp': Timestamp.now(),
             'byUid': _currentUserUid ?? 'system',
             'byName': _currentUserName,
-          }
+          },
         ],
       };
 
       batch.set(soRef, salesOrderData, SetOptions(merge: true));
       if (inquirySnapshot != null && inquirySnapshot.exists) {
         final inquiryRef = inquirySnapshot.reference;
-        final previousInquiryStatus = (inquirySnapshot.data()?['status'] ?? '').toString();
-        final salesOrderNumber = (salesOrderData['salesOrderNumber'] ?? '').toString();
+        final previousInquiryStatus = (inquirySnapshot.data()?['status'] ?? '')
+            .toString();
+        final salesOrderNumber = (salesOrderData['salesOrderNumber'] ?? '')
+            .toString();
         batch.set(
-          inquiryRef.collection('activities').doc('sales_order_created_${soRef.id}'),
+          inquiryRef
+              .collection('activities')
+              .doc('sales_order_created_${soRef.id}'),
           InquiryActivityService.buildActivityData(
             companyId: _companyId!,
             inquiryId: inquiryRef.id,
@@ -2908,7 +2978,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
           ),
         );
         batch.set(
-          inquiryRef.collection('activities').doc('inquiry_converted_${soRef.id}'),
+          inquiryRef
+              .collection('activities')
+              .doc('inquiry_converted_${soRef.id}'),
           InquiryActivityService.buildActivityData(
             companyId: _companyId!,
             inquiryId: inquiryRef.id,
@@ -2937,33 +3009,29 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         }, SetOptions(merge: true));
       }
 
-      batch.set(
-        quoteRef,
-        {
-          'status': 'Converted',
-          'convertedToSalesOrder': true,
-          'convertedToSalesOrderId': soRef.id,
-          'convertedAt': FieldValue.serverTimestamp(),
-          'convertedBy': _currentUserUid,
-          'lastEditedAt': FieldValue.serverTimestamp(),
-          'lastEditedBy': _currentUserUid,
-          'updatedAt': FieldValue.serverTimestamp(),
-          'updatedBy': _currentUserUid,
-          'activities': FieldValue.arrayUnion([
-            {
-              'type': 'Converted',
-              'status': 'Converted',
-              'quotationId': widget.quotationId,
-              'salesOrderId': soRef.id,
-              'timestamp': Timestamp.now(),
-              'byUid': _currentUserUid,
-              'byName': _currentUserName,
-              'note': 'Converted to Sales Order',
-            },
-          ]),
-        },
-        SetOptions(merge: true),
-      );
+      batch.set(quoteRef, {
+        'status': 'Converted',
+        'convertedToSalesOrder': true,
+        'convertedToSalesOrderId': soRef.id,
+        'convertedAt': FieldValue.serverTimestamp(),
+        'convertedBy': _currentUserUid,
+        'lastEditedAt': FieldValue.serverTimestamp(),
+        'lastEditedBy': _currentUserUid,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'updatedBy': _currentUserUid,
+        'activities': FieldValue.arrayUnion([
+          {
+            'type': 'Converted',
+            'status': 'Converted',
+            'quotationId': widget.quotationId,
+            'salesOrderId': soRef.id,
+            'timestamp': Timestamp.now(),
+            'byUid': _currentUserUid,
+            'byName': _currentUserName,
+            'note': 'Converted to Sales Order',
+          },
+        ]),
+      }, SetOptions(merge: true));
 
       await batch.commit().timeout(
         const Duration(seconds: 15),
@@ -2974,8 +3042,11 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       _showSnack('Successfully converted to Sales Order!');
       Navigator.pop(context, true);
     } catch (e) {
-      developer.log('Sales Order conversion failed: $e',
-          name: 'QuotationScreen', error: e);
+      developer.log(
+        'Sales Order conversion failed: $e',
+        name: 'QuotationScreen',
+        error: e,
+      );
       if (mounted) _showSnack('Error converting: $e', isError: true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -3000,15 +3071,15 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     final termsForPreview = _dynamicTerms
         .map(
           (term) => {
-        'title': term.titleCtrl.text.trim(),
-        'value': term.valueCtrl.text.trim(),
-      },
-    )
+            'title': term.titleCtrl.text.trim(),
+            'value': term.valueCtrl.text.trim(),
+          },
+        )
         .where(
           (term) =>
-      (term['title'] ?? '').toString().trim().isNotEmpty ||
-          (term['value'] ?? '').toString().trim().isNotEmpty,
-    )
+              (term['title'] ?? '').toString().trim().isNotEmpty ||
+              (term['value'] ?? '').toString().trim().isNotEmpty,
+        )
         .toList();
 
     return {
@@ -3016,7 +3087,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       'companyId': _companyId,
       'quotationType': _quotationType,
       'quoteDateStr':
-      '${_quoteDate.day.toString().padLeft(2, '0')}/${_quoteDate.month.toString().padLeft(2, '0')}/${_quoteDate.year}',
+          '${_quoteDate.day.toString().padLeft(2, '0')}/${_quoteDate.month.toString().padLeft(2, '0')}/${_quoteDate.year}',
       'revisionNo': _currentVersion.toString(),
       'inquiryRefNo': _linkedInquiryNumber ?? '',
       'inquiryNumber': _linkedInquiryNumber ?? '',
@@ -3046,6 +3117,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       'customerState': _customerPrimaryStateSnapshot.isNotEmpty
           ? _customerPrimaryStateSnapshot
           : _customerState,
+      'gstType': _gstType,
       'isInterState': _isInterState,
       'totalSubtotal': _cachedSubtotal,
       'totalItemDiscount': _cachedItemDiscount,
@@ -3092,19 +3164,19 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
     final List<QuotationLineItem> safeItems = _items
         .where((e) {
-      final extras = _itemExtras[e.id] ?? {};
-      final isScopeItem = extras['isScopeItem'] == true;
-      final isIncluded = extras['isIncluded'] != false;
-      if (isScopeItem && !isIncluded) return false;
-      return true;
-    })
+          final extras = _itemExtras[e.id] ?? {};
+          final isScopeItem = extras['isScopeItem'] == true;
+          final isIncluded = extras['isIncluded'] != false;
+          if (isScopeItem && !isIncluded) return false;
+          return true;
+        })
         .map(
           (e) => QuotationLineItem.fromMap(
-        Map<String, dynamic>.from(
-          e.toMap()..addAll(_itemExtras[e.id] ?? {}),
-        ),
-      ),
-    )
+            Map<String, dynamic>.from(
+              e.toMap()..addAll(_itemExtras[e.id] ?? {}),
+            ),
+          ),
+        )
         .toList();
 
     Navigator.push(
@@ -3142,11 +3214,11 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   );
 
   InputDecoration _dec(
-      String label, {
-        String? hint,
-        Widget? prefixIcon,
-        Widget? suffixIcon,
-      }) {
+    String label, {
+    String? hint,
+    Widget? prefixIcon,
+    Widget? suffixIcon,
+  }) {
     return InputDecoration(
       labelText: label,
       hintText: hint,
@@ -3313,10 +3385,10 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
   String _customerDisplayName(Map<String, dynamic> customer) {
     return (customer['companyName'] ??
-        customer['customerName'] ??
-        customer['name'] ??
-        customer['clientName'] ??
-        '')
+            customer['customerName'] ??
+            customer['name'] ??
+            customer['clientName'] ??
+            '')
         .toString()
         .trim();
   }
@@ -3329,14 +3401,14 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         .toString()
         .trim();
     final gst =
-    (customer['customerGstin'] ??
-        customer['customerGSTIN'] ??
-        customer['customerGstNo'] ??
-        customer['gstin'] ??
-        customer['gstNo'] ??
-        '')
-        .toString()
-        .trim();
+        (customer['customerGstin'] ??
+                customer['customerGSTIN'] ??
+                customer['customerGstNo'] ??
+                customer['gstin'] ??
+                customer['gstNo'] ??
+                '')
+            .toString()
+            .trim();
 
     return [contact, mobile, gst].where((e) => e.isNotEmpty).join(' | ');
   }
@@ -3364,6 +3436,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       _addressController.clear();
       _updateContactSnapshots(null);
       _gstController.clear();
+      _gstType = 'intra';
+      _gstTypeManuallySet = false;
       _isInterState = false;
     });
   }
@@ -3384,7 +3458,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       builder: (context, snapshot) {
         final docs =
             snapshot.data?.docs ??
-                <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+            <QueryDocumentSnapshot<Map<String, dynamic>>>[];
 
         return RawAutocomplete<Map<String, dynamic>>(
           textEditingController: _clientNameController,
@@ -3436,19 +3510,19 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
           },
           fieldViewBuilder:
               (context, textController, focusNode, onFieldSubmitted) {
-            return TextFormField(
-              controller: textController,
-              focusNode: focusNode,
-              validator: validator,
-              readOnly: _isReadOnly || _hasLinkedInquiry,
-              onChanged: _clearSelectedCustomerIfTyping,
-              decoration: _dec(
-                'Customer Name *',
-                hint: 'Type customer or company name',
-                prefixIcon: const Icon(Icons.search),
-              ),
-            );
-          },
+                return TextFormField(
+                  controller: textController,
+                  focusNode: focusNode,
+                  validator: validator,
+                  readOnly: _isReadOnly || _hasLinkedInquiry,
+                  onChanged: _clearSelectedCustomerIfTyping,
+                  decoration: _dec(
+                    'Customer Name *',
+                    hint: 'Type customer or company name',
+                    prefixIcon: const Icon(Icons.search),
+                  ),
+                );
+              },
           optionsViewBuilder: (context, onSelected, options) {
             final optionList = options.toList();
 
@@ -3484,10 +3558,10 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                         subtitle: subtitle.isEmpty
                             ? null
                             : Text(
-                          subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                                subtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                         onTap: () => onSelected(customer),
                       );
                     },
@@ -3528,13 +3602,13 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
       if (entry is Map) {
         final name =
-        (entry['name'] ??
-            entry['productName'] ??
-            entry['itemName'] ??
-            entry['description'] ??
-            '')
-            .toString()
-            .trim();
+            (entry['name'] ??
+                    entry['productName'] ??
+                    entry['itemName'] ??
+                    entry['description'] ??
+                    '')
+                .toString()
+                .trim();
 
         final qty = (entry['quantity'] ?? entry['qty'] ?? '').toString().trim();
         final uom = (entry['uom'] ?? entry['unit'] ?? '').toString().trim();
@@ -3597,7 +3671,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                     fillColor: Colors.grey.shade50,
                   ),
                   onChanged: (value) => setDialogState(
-                        () => searchText = value.trim().toLowerCase(),
+                    () => searchText = value.trim().toLowerCase(),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -3622,8 +3696,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                           return false;
 
                         final searchStr =
-                        '${data['companyName']} ${data['contactPerson']} ${data['mobile']}'
-                            .toLowerCase();
+                            '${data['companyName']} ${data['contactPerson']} ${data['mobile']}'
+                                .toLowerCase();
                         return searchText.isEmpty ||
                             searchStr.contains(searchText);
                       }).toList();
@@ -3714,7 +3788,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                     fillColor: Colors.grey.shade50,
                   ),
                   onChanged: (value) => setDialogState(
-                        () => searchText = value.trim().toLowerCase(),
+                    () => searchText = value.trim().toLowerCase(),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -3722,28 +3796,28 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children:
-                    [
-                      'All',
-                      'Machines',
-                      'Accessories',
-                      'Spares',
-                      'Consumables',
-                      'Raw Materials',
-                    ]
-                        .map(
-                          (f) => Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ChoiceChip(
-                          label: Text(f),
-                          selected: _productFilter == f,
-                          onSelected: (val) {
-                            if (val)
-                              setDialogState(() => _productFilter = f);
-                          },
-                        ),
-                      ),
-                    )
-                        .toList(),
+                        [
+                              'All',
+                              'Machines',
+                              'Accessories',
+                              'Spares',
+                              'Consumables',
+                              'Raw Materials',
+                            ]
+                            .map(
+                              (f) => Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: ChoiceChip(
+                                  label: Text(f),
+                                  selected: _productFilter == f,
+                                  onSelected: (val) {
+                                    if (val)
+                                      setDialogState(() => _productFilter = f);
+                                  },
+                                ),
+                              ),
+                            )
+                            .toList(),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -3758,19 +3832,19 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                       final filtered = docs.where((doc) {
                         final data = doc.data();
                         final searchStr =
-                        '${data['name']} ${data['sku']} ${data['itemCode']} ${data['description']}'
-                            .toLowerCase();
+                            '${data['name']} ${data['sku']} ${data['itemCode']} ${data['description']}'
+                                .toLowerCase();
                         if (searchText.isNotEmpty &&
                             !searchStr.contains(searchText))
                           return false;
 
                         if (_productFilter != 'All') {
                           String pNature =
-                          (data['productNatureLower'] ??
-                              data['productNature'] ??
-                              '')
-                              .toString()
-                              .toLowerCase();
+                              (data['productNatureLower'] ??
+                                      data['productNature'] ??
+                                      '')
+                                  .toString()
+                                  .toLowerCase();
                           String filterLower = _productFilter.toLowerCase();
                           if (filterLower == 'machines')
                             filterLower = 'machine';
@@ -3808,7 +3882,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                     data['qty']?.toString() ??
                                     '0',
                               ) ??
-                                  0;
+                              0;
 
                           final nature = (data['productNature'] ?? 'General')
                               .toString();
@@ -3824,19 +3898,19 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                               double.tryParse(
                                 data['sellingPrice']?.toString() ?? '',
                               ) ??
-                                  double.tryParse(
-                                    data['price']?.toString() ?? '',
-                                  ) ??
-                                  double.tryParse(
-                                    data['unitPrice']?.toString() ?? '',
-                                  ) ??
-                                  double.tryParse(data['rate']?.toString() ?? '') ??
-                                  0.0;
+                              double.tryParse(
+                                data['price']?.toString() ?? '',
+                              ) ??
+                              double.tryParse(
+                                data['unitPrice']?.toString() ?? '',
+                              ) ??
+                              double.tryParse(data['rate']?.toString() ?? '') ??
+                              0.0;
 
                           final gst =
                               data['gstPercentage']?.toString() ??
-                                  data['tax']?.toString() ??
-                                  '18';
+                              data['tax']?.toString() ??
+                              '18';
                           final uom = (data['uom'] ?? 'Nos').toString();
                           final images = data['images'] as List? ?? [];
                           final imageUrl = images.isNotEmpty
@@ -3858,26 +3932,26 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                           return ListTile(
                             leading: imageUrl.isNotEmpty
                                 ? ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: Image.network(
-                                imageUrl,
-                                width: 40,
-                                height: 40,
-                                fit: BoxFit.cover,
-                              ),
-                            )
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: Image.network(
+                                      imageUrl,
+                                      width: 40,
+                                      height: 40,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  )
                                 : Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: natureColor.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Icon(
-                                Icons.inventory_2,
-                                color: natureColor,
-                                size: 20,
-                              ),
-                            ),
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: natureColor.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(
+                                      Icons.inventory_2,
+                                      color: natureColor,
+                                      size: 20,
+                                    ),
+                                  ),
                             title: Row(
                               children: [
                                 Expanded(
@@ -3939,13 +4013,13 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                             isThreeLine: true,
                             trailing: stock <= 0
                                 ? const Icon(
-                              Icons.warning,
-                              color: Colors.orange,
-                            )
+                                    Icons.warning,
+                                    color: Colors.orange,
+                                  )
                                 : const Icon(
-                              Icons.check_circle,
-                              color: Colors.green,
-                            ),
+                                    Icons.check_circle,
+                                    color: Colors.green,
+                                  ),
                             onTap: () {
                               developer.log(
                                 'Product Added: ${filtered[index].id}',
@@ -3982,9 +4056,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   }
 
   Future<bool?> _showScopeOfSupplyDialog(
-      QuotationLineItem machine,
-      List included,
-      ) {
+    QuotationLineItem machine,
+    List included,
+  ) {
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -4036,7 +4110,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
             double.tryParse(
               inc['quantity']?.toString() ?? inc['qty']?.toString() ?? '1',
             ) ??
-                1.0;
+            1.0;
         incName = (inc['name'] ?? inc['productName'] ?? '').toString();
         incUom = (inc['uom'] ?? 'Nos').toString();
         incDesc = (inc['description'] ?? inc['details'] ?? '').toString();
@@ -4076,14 +4150,14 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                 pData['unitPrice']?.toString() ??
                 '0',
           ) ??
-              0.0;
+          0.0;
       double finalGst =
           double.tryParse(
             pData['gstPercentage']?.toString() ??
                 pData['tax']?.toString() ??
                 '18',
           ) ??
-              18.0;
+          18.0;
 
       double cgst = 0, sgst = 0, igst = 0;
       if (finalGst > 0) {
@@ -4102,11 +4176,11 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                 pData['qty']?.toString() ??
                 '0',
           ) ??
-              0.0;
+          0.0;
 
       final newItem = QuotationLineItem(
         id:
-        DateTime.now().millisecondsSinceEpoch.toString() +
+            DateTime.now().millisecondsSinceEpoch.toString() +
             '_' +
             (pId.isNotEmpty ? pId : 'custom'),
         productId: pId,
@@ -4151,14 +4225,14 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
     double pPrice =
         double.tryParse(data['sellingPrice']?.toString() ?? '') ??
-            double.tryParse(data['price']?.toString() ?? '') ??
-            double.tryParse(data['unitPrice']?.toString() ?? '') ??
-            0.0;
+        double.tryParse(data['price']?.toString() ?? '') ??
+        double.tryParse(data['unitPrice']?.toString() ?? '') ??
+        0.0;
     double pGst =
         double.tryParse(
           data['gstPercentage']?.toString() ?? data['tax']?.toString() ?? '18',
         ) ??
-            18.0;
+        18.0;
     double cgst = 0, sgst = 0, igst = 0;
     if (_isInterState) {
       igst = pGst;
@@ -4171,7 +4245,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
         double.tryParse(
           data['stockOnHand']?.toString() ?? data['qty']?.toString() ?? '0',
         ) ??
-            0.0;
+        0.0;
 
     final newItem = QuotationLineItem(
       id: DateTime.now().millisecondsSinceEpoch.toString() + '_' + pId,
@@ -4211,9 +4285,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   }
 
   Future<void> _showRecommendedSparesDialog(
-      QuotationLineItem machine,
-      Map<String, dynamic> extras,
-      ) async {
+    QuotationLineItem machine,
+    Map<String, dynamic> extras,
+  ) async {
     final compatDocs = await _getCompatibleProducts(machine, extras);
     final filteredDocs = compatDocs
         .where((d) => !_items.any((i) => i.productId == d['id']))
@@ -4285,25 +4359,25 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   }
 
   Future<void> _triggerMachineAutomations(
-      QuotationLineItem machine,
-      Map<String, dynamic> extras,
-      ) async {
+    QuotationLineItem machine,
+    Map<String, dynamic> extras,
+  ) async {
     final existingMachines = machine.productId.isNotEmpty
         ? _items
-        .where(
-          (i) =>
-      i.productId == machine.productId &&
-          i.id != machine.id &&
-          _itemExtras[i.id]?['parentId'] == null,
-    )
-        .toList()
+              .where(
+                (i) =>
+                    i.productId == machine.productId &&
+                    i.id != machine.id &&
+                    _itemExtras[i.id]?['parentId'] == null,
+              )
+              .toList()
         : <QuotationLineItem>[];
 
     if (existingMachines.isNotEmpty) {
       final existingScope = _items
           .where(
             (i) => _itemExtras[i.id]?['parentId'] == existingMachines.first.id,
-      )
+          )
           .toList();
       if (existingScope.isNotEmpty) {
         bool? reuse = await showDialog<bool>(
@@ -4331,8 +4405,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
             final childExtras = _itemExtras[child.id] ?? {};
             final newId =
                 DateTime.now().millisecondsSinceEpoch.toString() +
-                    '_' +
-                    (child.productId.isNotEmpty ? child.productId : 'custom');
+                '_' +
+                (child.productId.isNotEmpty ? child.productId : 'custom');
             final newItem = QuotationLineItem(
               id: newId,
               productId: child.productId,
@@ -4387,15 +4461,49 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       text: itemToEdit?.discountPercent.toString() ?? '0',
     );
 
-    double totalGst =
-        (itemToEdit?.cgstPercent ?? 0) +
-            (itemToEdit?.sgstPercent ?? 0) +
-            (itemToEdit?.igstPercent ?? 0);
-    final gstCtrl = TextEditingController(
-      text: itemToEdit != null
-          ? (totalGst > 0 ? totalGst.toString() : '18')
+    final cgstCtrl = TextEditingController(
+      text: (itemToEdit?.cgstPercent ?? 0) > 0
+          ? itemToEdit!.cgstPercent.toString()
+          : '9',
+    );
+    final sgstCtrl = TextEditingController(
+      text: (itemToEdit?.sgstPercent ?? 0) > 0
+          ? itemToEdit!.sgstPercent.toString()
+          : '9',
+    );
+    final igstCtrl = TextEditingController(
+      text: (itemToEdit?.igstPercent ?? 0) > 0
+          ? itemToEdit!.igstPercent.toString()
           : '18',
     );
+
+    void _syncGstFieldsWithGstType() {
+      if (_gstType == 'inter') {
+        final totalGst =
+            (double.tryParse(cgstCtrl.text.trim()) ?? 0) +
+            (double.tryParse(sgstCtrl.text.trim()) ?? 0) +
+            (double.tryParse(igstCtrl.text.trim()) ?? 0);
+        if (totalGst > 0) {
+          igstCtrl.text = totalGst.toString();
+        }
+        cgstCtrl.text = '0';
+        sgstCtrl.text = '0';
+      } else {
+        final totalGst =
+            (double.tryParse(cgstCtrl.text.trim()) ?? 0) +
+            (double.tryParse(sgstCtrl.text.trim()) ?? 0) +
+            (double.tryParse(igstCtrl.text.trim()) ?? 0);
+        if (totalGst > 0) {
+          cgstCtrl.text = (totalGst / 2).toString();
+          sgstCtrl.text = (totalGst / 2).toString();
+        }
+        igstCtrl.text = '0';
+      }
+    }
+
+    if (itemToEdit == null) {
+      _syncGstFieldsWithGstType();
+    }
 
     String currentId =
         itemToEdit?.id ?? DateTime.now().millisecondsSinceEpoch.toString();
@@ -4484,9 +4592,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                         p['description'] ?? p['details'] ?? '';
 
                                   final productScope =
-                                  _productScopeOfSupplyText(
-                                    Map<String, dynamic>.from(p),
-                                  );
+                                      _productScopeOfSupplyText(
+                                        Map<String, dynamic>.from(p),
+                                      );
                                   if (productScope.isNotEmpty &&
                                       (scopeCtrl.text.trim().isEmpty ||
                                           itemToEdit == null)) {
@@ -4501,16 +4609,16 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                       double.tryParse(
                                         p['sellingPrice']?.toString() ?? '',
                                       ) ??
-                                          double.tryParse(
-                                            p['price']?.toString() ?? '',
-                                          ) ??
-                                          double.tryParse(
-                                            p['unitPrice']?.toString() ?? '',
-                                          ) ??
-                                          double.tryParse(
-                                            p['rate']?.toString() ?? '',
-                                          ) ??
-                                          0.0;
+                                      double.tryParse(
+                                        p['price']?.toString() ?? '',
+                                      ) ??
+                                      double.tryParse(
+                                        p['unitPrice']?.toString() ?? '',
+                                      ) ??
+                                      double.tryParse(
+                                        p['rate']?.toString() ?? '',
+                                      ) ??
+                                      0.0;
 
                                   if (priceCtrl.text.trim().isEmpty ||
                                       priceCtrl.text == '0' ||
@@ -4522,19 +4630,35 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
                                   uomCtrl.text = p['uom'] ?? 'Nos';
 
-                                  String currentGst = gstCtrl.text.trim();
-                                  if (currentGst.isEmpty ||
-                                      currentGst == '0' ||
-                                      currentGst == '18' ||
-                                      currentGst == '18.0') {
-                                    double pGst =
-                                        double.tryParse(
-                                          p['gstPercentage']?.toString() ??
-                                              p['tax']?.toString() ??
-                                              '18',
-                                        ) ??
-                                            18;
-                                    gstCtrl.text = pGst.toString();
+                                  double pGst =
+                                      double.tryParse(
+                                        p['gstPercentage']?.toString() ??
+                                            p['tax']?.toString() ??
+                                            '18',
+                                      ) ??
+                                      18;
+                                  if (_gstType == 'inter') {
+                                    final currentIgst = igstCtrl.text.trim();
+                                    if (currentIgst.isEmpty ||
+                                        currentIgst == '0' ||
+                                        currentIgst == '18' ||
+                                        currentIgst == '18.0') {
+                                      igstCtrl.text = pGst.toString();
+                                    }
+                                  } else {
+                                    final currentCgst = cgstCtrl.text.trim();
+                                    final currentSgst = sgstCtrl.text.trim();
+                                    if ((currentCgst.isEmpty ||
+                                            currentCgst == '0' ||
+                                            currentCgst == '9' ||
+                                            currentCgst == '9.0') &&
+                                        (currentSgst.isEmpty ||
+                                            currentSgst == '0' ||
+                                            currentSgst == '9' ||
+                                            currentSgst == '9.0')) {
+                                      cgstCtrl.text = (pGst / 2).toString();
+                                      sgstCtrl.text = (pGst / 2).toString();
+                                    }
                                   }
 
                                   currentStock =
@@ -4544,7 +4668,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                             p['stock']?.toString() ??
                                             '0',
                                       ) ??
-                                          0;
+                                      0;
 
                                   sku = (p['sku'] ?? p['itemCode'] ?? '')
                                       .toString();
@@ -4567,10 +4691,10 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                       p['compatibleProductIds'] as List? ?? [];
                                   compatibleProductNames =
                                       p['compatibleProductNames'] as List? ??
-                                          [];
+                                      [];
                                   compatibleSubcategories =
                                       p['compatibleSubcategories'] as List? ??
-                                          [];
+                                      [];
                                   itemCode = (p['itemCode'] ?? '').toString();
                                   sellingPrice =
                                       (p['sellingPrice'] ?? p['price'] ?? '')
@@ -4614,14 +4738,14 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                         'Specification / Description',
                         maxLines: null,
                         hint:
-                        'Enter features line by line for bullet points in PDF',
+                            'Enter features line by line for bullet points in PDF',
                       ),
                       _buildItemTextField(
                         scopeCtrl,
                         'Scope of Supply',
                         maxLines: null,
                         hint:
-                        'Auto-fetched from product master; edit if required',
+                            'Auto-fetched from product master; edit if required',
                       ),
                       Row(
                         children: [
@@ -4631,7 +4755,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                               'Quantity *',
                               keyboardType: TextInputType.number,
                               validator: (v) =>
-                              (double.tryParse(v ?? '') ?? 0) <= 0
+                                  (double.tryParse(v ?? '') ?? 0) <= 0
                                   ? '> 0 required'
                                   : null,
                               onChanged: (v) => setModalState(() {}),
@@ -4666,7 +4790,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                               'Unit Price *',
                               keyboardType: TextInputType.number,
                               validator: (v) =>
-                              (double.tryParse(v ?? '') ?? -1) < 0
+                                  (double.tryParse(v ?? '') ?? -1) < 0
                                   ? '>= 0 required'
                                   : null,
                             ),
@@ -4681,26 +4805,45 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                           ),
                         ],
                       ),
-                      _buildItemTextField(
-                        gstCtrl,
-                        'GST (%)',
-                        keyboardType: TextInputType.number,
-                        hint: 'Default is 18%',
-                      ),
+                      if (_gstType == 'inter')
+                        _buildItemTextField(
+                          igstCtrl,
+                          'IGST (%)',
+                          keyboardType: TextInputType.number,
+                          hint: 'Default is 18%',
+                        )
+                      else
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildItemTextField(
+                                cgstCtrl,
+                                'CGST (%)',
+                                keyboardType: TextInputType.number,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _buildItemTextField(
+                                sgstCtrl,
+                                'SGST (%)',
+                                keyboardType: TextInputType.number,
+                              ),
+                            ),
+                          ],
+                        ),
                       const SizedBox(height: 20),
                       ElevatedButton(
                         onPressed: () {
                           if (!formKey.currentState!.validate()) return;
 
-                          double gstVal =
-                              double.tryParse(gstCtrl.text.trim()) ?? 18.0;
-                          double cgst = 0, sgst = 0, igst = 0;
-                          if (_isInterState) {
-                            igst = gstVal;
-                          } else {
-                            cgst = gstVal / 2;
-                            sgst = gstVal / 2;
-                          }
+                          final cgst =
+                              double.tryParse(cgstCtrl.text.trim()) ?? 0.0;
+                          final sgst =
+                              double.tryParse(sgstCtrl.text.trim()) ?? 0.0;
+                          final igst =
+                              double.tryParse(igstCtrl.text.trim()) ?? 0.0;
+                          final gstVal = cgst + sgst + igst;
 
                           final newItem = QuotationLineItem(
                             id: currentId,
@@ -4714,9 +4857,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                 ? 'Nos'
                                 : uomCtrl.text.trim(),
                             unitPrice:
-                            double.tryParse(priceCtrl.text.trim()) ?? 0,
+                                double.tryParse(priceCtrl.text.trim()) ?? 0,
                             discountPercent:
-                            double.tryParse(discCtrl.text.trim()) ?? 0,
+                                double.tryParse(discCtrl.text.trim()) ?? 0,
                             cgstPercent: cgst,
                             sgstPercent: sgst,
                             igstPercent: igst,
@@ -4737,7 +4880,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                               'compatibleProductIds': compatibleProductIds,
                               'compatibleProductNames': compatibleProductNames,
                               'compatibleSubcategories':
-                              compatibleSubcategories,
+                                  compatibleSubcategories,
                               'itemCode': itemCode,
                               'sellingPrice': sellingPrice,
                               'baseGst': gstVal,
@@ -4763,8 +4906,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
                           if (index == null &&
                               (productNature.toLowerCase().contains(
-                                'machine',
-                              ) ||
+                                    'machine',
+                                  ) ||
                                   includedProducts.isNotEmpty)) {
                             _triggerMachineAutomations(
                               newItem,
@@ -4822,16 +4965,49 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
       text: itemToEdit?.discountPercent.toString() ?? '0',
     );
 
-    double totalGst =
-        (itemToEdit?.cgstPercent ?? 0) +
-            (itemToEdit?.sgstPercent ?? 0) +
-            (itemToEdit?.igstPercent ?? 0);
-    if (totalGst == 0 && childExtras['baseGst'] != null) {
-      totalGst = double.tryParse(childExtras['baseGst'].toString()) ?? 0.0;
-    }
-    final gstCtrl = TextEditingController(
-      text: totalGst > 0 ? totalGst.toString() : '18',
+    final cgstCtrl = TextEditingController(
+      text: (itemToEdit?.cgstPercent ?? 0) > 0
+          ? itemToEdit!.cgstPercent.toString()
+          : '9',
     );
+    final sgstCtrl = TextEditingController(
+      text: (itemToEdit?.sgstPercent ?? 0) > 0
+          ? itemToEdit!.sgstPercent.toString()
+          : '9',
+    );
+    final igstCtrl = TextEditingController(
+      text: (itemToEdit?.igstPercent ?? 0) > 0
+          ? itemToEdit!.igstPercent.toString()
+          : '18',
+    );
+
+    void _syncScopeGstFieldsWithGstType() {
+      if (_gstType == 'inter') {
+        final totalGst =
+            (double.tryParse(cgstCtrl.text.trim()) ?? 0) +
+            (double.tryParse(sgstCtrl.text.trim()) ?? 0) +
+            (double.tryParse(igstCtrl.text.trim()) ?? 0);
+        if (totalGst > 0) {
+          igstCtrl.text = totalGst.toString();
+        }
+        cgstCtrl.text = '0';
+        sgstCtrl.text = '0';
+      } else {
+        final totalGst =
+            (double.tryParse(cgstCtrl.text.trim()) ?? 0) +
+            (double.tryParse(sgstCtrl.text.trim()) ?? 0) +
+            (double.tryParse(igstCtrl.text.trim()) ?? 0);
+        if (totalGst > 0) {
+          cgstCtrl.text = (totalGst / 2).toString();
+          sgstCtrl.text = (totalGst / 2).toString();
+        }
+        igstCtrl.text = '0';
+      }
+    }
+
+    if (itemToEdit == null) {
+      _syncScopeGstFieldsWithGstType();
+    }
 
     showModalBottomSheet(
       context: context,
@@ -4896,7 +5072,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                               'Quantity *',
                               keyboardType: TextInputType.number,
                               validator: (v) =>
-                              (double.tryParse(v ?? '') ?? 0) <= 0
+                                  (double.tryParse(v ?? '') ?? 0) <= 0
                                   ? '> 0 required'
                                   : null,
                             ),
@@ -4938,7 +5114,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                 'Unit Price *',
                                 keyboardType: TextInputType.number,
                                 validator: (v) =>
-                                (double.tryParse(v ?? '') ?? -1) < 0
+                                    (double.tryParse(v ?? '') ?? -1) < 0
                                     ? '>= 0 required'
                                     : null,
                               ),
@@ -4953,36 +5129,55 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                             ),
                           ],
                         ),
-                        _buildItemTextField(
-                          gstCtrl,
-                          'GST (%)',
-                          keyboardType: TextInputType.number,
-                          hint: 'Default is 18%',
-                        ),
+                        if (_gstType == 'inter')
+                          _buildItemTextField(
+                            igstCtrl,
+                            'IGST (%)',
+                            keyboardType: TextInputType.number,
+                            hint: 'Default is 18%',
+                          )
+                        else
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildItemTextField(
+                                  cgstCtrl,
+                                  'CGST (%)',
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: _buildItemTextField(
+                                  sgstCtrl,
+                                  'SGST (%)',
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ),
+                            ],
+                          ),
                       ],
                       const SizedBox(height: 20),
                       ElevatedButton(
                         onPressed: () {
                           if (!formKey.currentState!.validate()) return;
 
-                          double gstVal = pricingMode == 'Separate'
-                              ? (double.tryParse(gstCtrl.text) ?? 18.0)
-                              : (double.tryParse(gstCtrl.text) ?? 18.0);
-                          double cgst = 0, sgst = 0, igst = 0;
-                          if (gstVal > 0) {
-                            if (_isInterState)
-                              igst = gstVal;
-                            else {
-                              cgst = gstVal / 2;
-                              sgst = gstVal / 2;
-                            }
-                          }
+                          final cgst = pricingMode == 'Separate'
+                              ? (double.tryParse(cgstCtrl.text.trim()) ?? 0.0)
+                              : 0.0;
+                          final sgst = pricingMode == 'Separate'
+                              ? (double.tryParse(sgstCtrl.text.trim()) ?? 0.0)
+                              : 0.0;
+                          final igst = pricingMode == 'Separate'
+                              ? (double.tryParse(igstCtrl.text.trim()) ?? 0.0)
+                              : 0.0;
+                          final gstVal = cgst + sgst + igst;
 
                           final newItem = QuotationLineItem(
                             id:
-                            itemToEdit?.id ??
+                                itemToEdit?.id ??
                                 DateTime.now().millisecondsSinceEpoch
-                                    .toString() +
+                                        .toString() +
                                     '_custom',
                             productId: itemToEdit?.productId ?? '',
                             name: nameCtrl.text.trim(),
@@ -5014,19 +5209,19 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
                             if (itemToEdit != null) {
                               int idx = _items.indexWhere(
-                                    (i) => i.id == itemToEdit.id,
+                                (i) => i.id == itemToEdit.id,
                               );
                               if (idx >= 0) _items[idx] = newItem;
                             } else {
                               int parentIdx = _items.indexWhere(
-                                    (i) => i.id == parentId,
+                                (i) => i.id == parentId,
                               );
                               if (parentIdx >= 0) {
                                 int lastChildIdx = parentIdx;
                                 for (
-                                int k = parentIdx + 1;
-                                k < _items.length;
-                                k++
+                                  int k = parentIdx + 1;
+                                  k < _items.length;
+                                  k++
                                 ) {
                                   if (_itemExtras[_items[k].id]?['parentId'] ==
                                       parentId) {
@@ -5159,15 +5354,15 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
   }
 
   Widget _buildItemTextField(
-      TextEditingController controller,
-      String label, {
-        TextInputType keyboardType = TextInputType.text,
-        String? Function(String?)? validator,
-        int? maxLines = 1,
-        String? hint,
-        Function(String)? onChanged,
-        bool readOnlyOverride = false,
-      }) {
+    TextEditingController controller,
+    String label, {
+    TextInputType keyboardType = TextInputType.text,
+    String? Function(String?)? validator,
+    int? maxLines = 1,
+    String? hint,
+    Function(String)? onChanged,
+    bool readOnlyOverride = false,
+  }) {
     final effectiveReadOnly = _isReadOnly || readOnlyOverride;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -5237,13 +5432,86 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
     );
   }
 
+  Widget _buildGstTypeSelector() {
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'GST Type',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey.shade700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: ChoiceChip(
+                  label: const Text('CGST + SGST'),
+                  selected: _gstType == 'intra',
+                  onSelected: _isReadOnly
+                      ? null
+                      : (selected) {
+                          if (selected) {
+                            setState(() {
+                              _gstType = 'intra';
+                              _gstTypeManuallySet = true;
+                              _checkInterState();
+                            });
+                          }
+                        },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ChoiceChip(
+                  label: const Text('IGST'),
+                  selected: _gstType == 'inter',
+                  onSelected: _isReadOnly
+                      ? null
+                      : (selected) {
+                          if (selected) {
+                            setState(() {
+                              _gstType = 'inter';
+                              _gstTypeManuallySet = true;
+                              _checkInterState();
+                            });
+                          }
+                        },
+                ),
+              ),
+            ],
+          ),
+          if (_companyState.isNotEmpty && _customerState.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                'Suggested: ${_gstType == 'inter' ? 'IGST (different state)' : 'CGST + SGST (same state)'}',
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _calcRow(
-      String label,
-      double amount, {
-        bool bold = false,
-        double size = 14,
-        Color? color,
-      }) {
+    String label,
+    double amount, {
+    bool bold = false,
+    double size = 14,
+    Color? color,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -5278,8 +5546,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
     final bool showAddressDropdown =
         _customerAddresses.isNotEmpty &&
-            _selectedAddressId != null &&
-            _selectedAddressId!.isNotEmpty;
+        _selectedAddressId != null &&
+        _selectedAddressId!.isNotEmpty;
 
     final bool showContactDropdown =
         _selectedCustomerId != null && _selectedCustomerId!.isNotEmpty;
@@ -5298,8 +5566,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
           widget.prepareSalesOrderMode
               ? 'Prepare Sales Order'
               : (widget.quotationId != null
-              ? 'Edit Quotation'
-              : 'Create Quotation'),
+                    ? 'Edit Quotation'
+                    : 'Create Quotation'),
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         actions: [
@@ -5395,7 +5663,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                 ),
                                 child: Row(
                                   mainAxisAlignment:
-                                  MainAxisAlignment.spaceAround,
+                                      MainAxisAlignment.spaceAround,
                                   children: [
                                     Column(
                                       children: [
@@ -5456,16 +5724,16 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                               ),
                             _buildCustomerNameAutocomplete(
                               validator: (v) =>
-                              v!.trim().isEmpty ? 'Required' : null,
+                                  v!.trim().isEmpty ? 'Required' : null,
                             ),
                             const SizedBox(height: 12),
                             if (showAddressDropdown) ...[
                               DropdownButtonFormField<String>(
                                 isExpanded: true,
                                 value:
-                                _customerAddresses.any(
+                                    _customerAddresses.any(
                                       (a) => a['id'] == _selectedAddressId,
-                                )
+                                    )
                                     ? _selectedAddressId
                                     : null,
                                 decoration: InputDecoration(
@@ -5482,31 +5750,31 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                 ),
                                 items: _customerAddresses
                                     .map<DropdownMenuItem<String>>((addr) {
-                                  final type = (addr['type'] ?? 'Address')
-                                      .toString();
-                                  final isPrimary =
-                                  addr['isPrimary'] == true
-                                      ? ' (Primary)'
-                                      : '';
-                                  final isBilling =
-                                  addr['isBillingAddress'] == true
-                                      ? ' (Billing)'
-                                      : '';
-                                  final shortAddr =
-                                  (addr['combinedAddress'] ??
-                                      addr['address'] ??
-                                      '')
-                                      .toString()
-                                      .replaceAll('\n', ', ');
-                                  return DropdownMenuItem<String>(
-                                    value: addr['id']?.toString(),
-                                    child: Text(
-                                      '$type$isPrimary$isBilling - $shortAddr',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  );
-                                })
+                                      final type = (addr['type'] ?? 'Address')
+                                          .toString();
+                                      final isPrimary =
+                                          addr['isPrimary'] == true
+                                          ? ' (Primary)'
+                                          : '';
+                                      final isBilling =
+                                          addr['isBillingAddress'] == true
+                                          ? ' (Billing)'
+                                          : '';
+                                      final shortAddr =
+                                          (addr['combinedAddress'] ??
+                                                  addr['address'] ??
+                                                  '')
+                                              .toString()
+                                              .replaceAll('\n', ', ');
+                                      return DropdownMenuItem<String>(
+                                        value: addr['id']?.toString(),
+                                        child: Text(
+                                          '$type$isPrimary$isBilling - $shortAddr',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      );
+                                    })
                                     .toList(),
                                 selectedItemBuilder: (BuildContext context) {
                                   return _customerAddresses.map<Widget>((addr) {
@@ -5516,15 +5784,15 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                         ? ' (Primary)'
                                         : '';
                                     final isBilling =
-                                    addr['isBillingAddress'] == true
+                                        addr['isBillingAddress'] == true
                                         ? ' (Billing)'
                                         : '';
                                     final shortAddr =
-                                    (addr['combinedAddress'] ??
-                                        addr['address'] ??
-                                        '')
-                                        .toString()
-                                        .replaceAll('\n', ', ');
+                                        (addr['combinedAddress'] ??
+                                                addr['address'] ??
+                                                '')
+                                            .toString()
+                                            .replaceAll('\n', ', ');
                                     return Text(
                                       '$type$isPrimary$isBilling - $shortAddr',
                                       maxLines: 1,
@@ -5535,33 +5803,33 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                 onChanged: _isReadOnly
                                     ? null
                                     : (v) {
-                                  if (v == _selectedAddressId) return;
-                                  setState(() {
-                                    _selectedAddressId = v;
-                                    _isUserChangingAddress = true;
-                                    if (!_isRestoring) {
-                                      _selectedContactId = null;
-                                      _selectedContactData = null;
-                                      _updateContactSnapshots(null);
-                                      developer.log(
-                                        'Address Changed By User',
-                                        name: 'QuotationScreen',
-                                      );
-                                    }
+                                        if (v == _selectedAddressId) return;
+                                        setState(() {
+                                          _selectedAddressId = v;
+                                          _isUserChangingAddress = true;
+                                          if (!_isRestoring) {
+                                            _selectedContactId = null;
+                                            _selectedContactData = null;
+                                            _updateContactSnapshots(null);
+                                            developer.log(
+                                              'Address Changed By User',
+                                              name: 'QuotationScreen',
+                                            );
+                                          }
 
-                                    if (v != null) {
-                                      final matches = _customerAddresses
-                                          .where((a) => a['id'] == v);
-                                      _selectedAddressData =
-                                      matches.isNotEmpty
-                                          ? matches.first
-                                          : null;
-                                      _updateAddressSnapshots(
-                                        _selectedAddressData,
-                                      );
-                                    }
-                                  });
-                                },
+                                          if (v != null) {
+                                            final matches = _customerAddresses
+                                                .where((a) => a['id'] == v);
+                                            _selectedAddressData =
+                                                matches.isNotEmpty
+                                                ? matches.first
+                                                : null;
+                                            _updateAddressSnapshots(
+                                              _selectedAddressData,
+                                            );
+                                          }
+                                        });
+                                      },
                               ),
                               const SizedBox(height: 12),
                             ] else ...[
@@ -5576,6 +5844,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                             ] else ...[
                               _buildLegacyContactFields(),
                             ],
+                            _buildGstTypeSelector(),
                           ],
                         ),
                       ),
@@ -5629,15 +5898,15 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                 onChanged: _isReadOnly
                                     ? null
                                     : (value) {
-                                  if (value == null) return;
-                                  setState(() {
-                                    _quotationType =
-                                        _normalizeQuotationType(value);
-                                    _applyQuotationSettingsDefaultTerms(
-                                      force: true,
-                                    );
-                                  });
-                                },
+                                        if (value == null) return;
+                                        setState(() {
+                                          _quotationType =
+                                              _normalizeQuotationType(value);
+                                          _applyQuotationSettingsDefaultTerms(
+                                            force: true,
+                                          );
+                                        });
+                                      },
                               ),
                             ),
                             _buildItemTextField(
@@ -5684,7 +5953,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                     const SizedBox(height: 12),
                                     Row(
                                       crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Expanded(
                                           child: _buildItemTextField(
@@ -5698,30 +5967,35 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                             onTap: _isReadOnly
                                                 ? null
                                                 : () async {
-                                              final selected =
-                                              await showDatePicker(
-                                                context: context,
-                                                initialDate:
-                                                _poDate ?? DateTime.now(),
-                                                firstDate: DateTime(2000),
-                                                lastDate: DateTime(2100),
-                                              );
-                                              if (selected != null) {
-                                                setState(() {
-                                                  _poDate = DateTime(
-                                                    selected.year,
-                                                    selected.month,
-                                                    selected.day,
-                                                  );
-                                                });
-                                              }
-                                            },
+                                                    final selected =
+                                                        await showDatePicker(
+                                                          context: context,
+                                                          initialDate:
+                                                              _poDate ??
+                                                              DateTime.now(),
+                                                          firstDate: DateTime(
+                                                            2000,
+                                                          ),
+                                                          lastDate: DateTime(
+                                                            2100,
+                                                          ),
+                                                        );
+                                                    if (selected != null) {
+                                                      setState(() {
+                                                        _poDate = DateTime(
+                                                          selected.year,
+                                                          selected.month,
+                                                          selected.day,
+                                                        );
+                                                      });
+                                                    }
+                                                  },
                                             child: InputDecorator(
                                               decoration: InputDecoration(
                                                 labelText: 'PO Date',
                                                 border: OutlineInputBorder(
                                                   borderRadius:
-                                                  BorderRadius.circular(8),
+                                                      BorderRadius.circular(8),
                                                 ),
                                                 isDense: true,
                                                 filled: true,
@@ -5729,8 +6003,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                               ),
                                               child: Text(
                                                 _poDate != null
-                                                    ? DateFormat('dd/MM/yyyy')
-                                                    .format(_poDate!)
+                                                    ? DateFormat(
+                                                        'dd/MM/yyyy',
+                                                      ).format(_poDate!)
                                                     : 'Select PO Date',
                                               ),
                                             ),
@@ -5744,8 +6019,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                       decoration: InputDecoration(
                                         labelText: 'PO Ref',
                                         border: OutlineInputBorder(
-                                          borderRadius:
-                                          BorderRadius.circular(8),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
                                         ),
                                         isDense: true,
                                         filled: true,
@@ -5754,23 +6030,25 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                       items: _poReferenceSources
                                           .map(
                                             (source) =>
-                                            DropdownMenuItem<String>(
-                                              value: source,
-                                              child: Text(source),
-                                            ),
-                                      )
+                                                DropdownMenuItem<String>(
+                                                  value: source,
+                                                  child: Text(source),
+                                                ),
+                                          )
                                           .toList(),
                                       onChanged: _isReadOnly
                                           ? null
                                           : (value) {
-                                        if (value == null) return;
-                                        setState(() {
-                                          _selectedPoReferenceSource = value;
-                                          if (value != 'Other') {
-                                            _poReferenceOtherController.clear();
-                                          }
-                                        });
-                                      },
+                                              if (value == null) return;
+                                              setState(() {
+                                                _selectedPoReferenceSource =
+                                                    value;
+                                                if (value != 'Other') {
+                                                  _poReferenceOtherController
+                                                      .clear();
+                                                }
+                                              });
+                                            },
                                     ),
                                     if (_selectedPoReferenceSource ==
                                         'Other') ...[
@@ -5797,46 +6075,46 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                     onTap: _isReadOnly
                                         ? null
                                         : () async {
-                                      final now = DateTime.now();
-                                      final fyStart = now.month >= 4
-                                          ? DateTime(now.year, 4, 1)
-                                          : DateTime(now.year - 1, 4, 1);
-                                      final fyEnd = now.month >= 4
-                                          ? DateTime(now.year + 1, 3, 31)
-                                          : DateTime(now.year, 3, 31);
+                                            final now = DateTime.now();
+                                            final fyStart = now.month >= 4
+                                                ? DateTime(now.year, 4, 1)
+                                                : DateTime(now.year - 1, 4, 1);
+                                            final fyEnd = now.month >= 4
+                                                ? DateTime(now.year + 1, 3, 31)
+                                                : DateTime(now.year, 3, 31);
 
-                                      DateTime initDate = DateTime(
-                                        _quoteDate.year,
-                                        _quoteDate.month,
-                                        _quoteDate.day,
-                                      );
+                                            DateTime initDate = DateTime(
+                                              _quoteDate.year,
+                                              _quoteDate.month,
+                                              _quoteDate.day,
+                                            );
 
-                                      if (initDate.isBefore(fyStart)) {
-                                        initDate = fyStart;
-                                      }
-                                      if (initDate.isAfter(fyEnd)) {
-                                        initDate = fyEnd;
-                                      }
+                                            if (initDate.isBefore(fyStart)) {
+                                              initDate = fyStart;
+                                            }
+                                            if (initDate.isAfter(fyEnd)) {
+                                              initDate = fyEnd;
+                                            }
 
-                                      final d = await showDatePicker(
-                                        context: context,
-                                        initialDate: initDate,
-                                        firstDate: fyStart,
-                                        lastDate: fyEnd,
-                                        helpText: 'Select Quote Date',
-                                        fieldLabelText: 'Enter Date',
-                                        fieldHintText: 'dd/mm/yyyy',
-                                      );
-                                      if (d != null) {
-                                        setState(() {
-                                          _quoteDate = DateTime(
-                                            d.year,
-                                            d.month,
-                                            d.day,
-                                          );
-                                        });
-                                      }
-                                    },
+                                            final d = await showDatePicker(
+                                              context: context,
+                                              initialDate: initDate,
+                                              firstDate: fyStart,
+                                              lastDate: fyEnd,
+                                              helpText: 'Select Quote Date',
+                                              fieldLabelText: 'Enter Date',
+                                              fieldHintText: 'dd/mm/yyyy',
+                                            );
+                                            if (d != null) {
+                                              setState(() {
+                                                _quoteDate = DateTime(
+                                                  d.year,
+                                                  d.month,
+                                                  d.day,
+                                                );
+                                              });
+                                            }
+                                          },
                                     child: InputDecorator(
                                       decoration: InputDecoration(
                                         labelText: 'Quote Date',
@@ -5870,10 +6148,10 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                             ? Colors.grey.shade100
                                             : const Color(0xFFF8FAFC),
                                         contentPadding:
-                                        const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 16,
-                                        ),
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 16,
+                                              vertical: 16,
+                                            ),
                                       ),
                                       child: Text(
                                         DateFormat(
@@ -5902,19 +6180,19 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                               trailing: _isReadOnly
                                   ? null
                                   : ElevatedButton.icon(
-                                onPressed: _showAddItemModal,
-                                icon: const Icon(Icons.add, size: 18),
-                                label: const Text('Add Item'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: accentColor,
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(
-                                      8,
+                                      onPressed: _showAddItemModal,
+                                      icon: const Icon(Icons.add, size: 18),
+                                      label: const Text('Add Item'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: accentColor,
+                                        foregroundColor: Colors.white,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                ),
-                              ),
                             ),
                             if (topLevelItems.isEmpty)
                               Padding(
@@ -5939,12 +6217,12 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                   final children = _items
                                       .where(
                                         (c) =>
-                                    _itemExtras[c.id]?['parentId'] ==
-                                        item.id,
-                                  )
+                                            _itemExtras[c.id]?['parentId'] ==
+                                            item.id,
+                                      )
                                       .toList();
                                   children.sort(
-                                        (a, b) => _items
+                                    (a, b) => _items
                                         .indexOf(a)
                                         .compareTo(_items.indexOf(b)),
                                   );
@@ -5952,12 +6230,12 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                   bool isOutOfStock = item.availableStock <= 0;
                                   bool isLowStock =
                                       item.availableStock < item.quantity &&
-                                          !isOutOfStock;
+                                      !isOutOfStock;
                                   Color stockColor = isOutOfStock
                                       ? Colors.red
                                       : (isLowStock
-                                      ? Colors.orange
-                                      : Colors.green);
+                                            ? Colors.orange
+                                            : Colors.green);
                                   String stockText = isOutOfStock
                                       ? 'Out of Stock'
                                       : (isLowStock ? 'Low Stock' : 'In Stock');
@@ -5970,10 +6248,10 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                   String itemCode = (extras['itemCode'] ?? '')
                                       .toString();
                                   String nature =
-                                  (extras['productNature'] ?? '')
-                                      .toString();
+                                      (extras['productNature'] ?? '')
+                                          .toString();
                                   String machineType =
-                                  (extras['machineType'] ?? '').toString();
+                                      (extras['machineType'] ?? '').toString();
                                   List catalogs =
                                       extras['catalogs'] as List? ?? [];
                                   List images = extras['images'] as List? ?? [];
@@ -5983,7 +6261,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
                                   bool showQtyWarning =
                                       item.quantity > item.availableStock &&
-                                          item.productId.isNotEmpty;
+                                      item.productId.isNotEmpty;
                                   bool isMachine =
                                       nature.toLowerCase() == 'machine';
 
@@ -6013,7 +6291,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
 
                                   return Column(
                                     crossAxisAlignment:
-                                    CrossAxisAlignment.stretch,
+                                        CrossAxisAlignment.stretch,
                                     children: [
                                       Container(
                                         padding: const EdgeInsets.all(12),
@@ -6040,11 +6318,11 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                         ),
                                         child: Column(
                                           crossAxisAlignment:
-                                          CrossAxisAlignment.start,
+                                              CrossAxisAlignment.start,
                                           children: [
                                             Row(
                                               crossAxisAlignment:
-                                              CrossAxisAlignment.start,
+                                                  CrossAxisAlignment.start,
                                               children: [
                                                 if (imgUrl.isNotEmpty)
                                                   InkWell(
@@ -6052,9 +6330,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                                         _openImage(imgUrl),
                                                     child: ClipRRect(
                                                       borderRadius:
-                                                      BorderRadius.circular(
-                                                        8,
-                                                      ),
+                                                          BorderRadius.circular(
+                                                            8,
+                                                          ),
                                                       child: Image.network(
                                                         imgUrl,
                                                         width: 60,
@@ -6068,21 +6346,21 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                                 Expanded(
                                                   child: Column(
                                                     crossAxisAlignment:
-                                                    CrossAxisAlignment
-                                                        .start,
+                                                        CrossAxisAlignment
+                                                            .start,
                                                     children: [
                                                       Row(
                                                         mainAxisAlignment:
-                                                        MainAxisAlignment
-                                                            .spaceBetween,
+                                                            MainAxisAlignment
+                                                                .spaceBetween,
                                                         children: [
                                                           Expanded(
                                                             child: Text(
                                                               item.name,
                                                               style: const TextStyle(
                                                                 fontWeight:
-                                                                FontWeight
-                                                                    .w600,
+                                                                    FontWeight
+                                                                        .w600,
                                                                 fontSize: 14,
                                                               ),
                                                             ),
@@ -6091,11 +6369,11 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                                             '₹${item.totalAmount.toStringAsFixed(2)}',
                                                             style: const TextStyle(
                                                               fontWeight:
-                                                              FontWeight
-                                                                  .bold,
+                                                                  FontWeight
+                                                                      .bold,
                                                               fontSize: 15,
                                                               color:
-                                                              primaryColor,
+                                                                  primaryColor,
                                                             ),
                                                           ),
                                                         ],
@@ -6106,30 +6384,30 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                                         runSpacing: 6,
                                                         children: [
                                                           if (nature
-                                                              .isNotEmpty &&
+                                                                  .isNotEmpty &&
                                                               nature !=
                                                                   'General')
                                                             Container(
                                                               padding:
-                                                              const EdgeInsets.symmetric(
-                                                                horizontal:
-                                                                6,
-                                                                vertical: 2,
-                                                              ),
+                                                                  const EdgeInsets.symmetric(
+                                                                    horizontal:
+                                                                        6,
+                                                                    vertical: 2,
+                                                                  ),
                                                               decoration: BoxDecoration(
                                                                 color: natureColor
                                                                     .withOpacity(
-                                                                  0.1,
-                                                                ),
+                                                                      0.1,
+                                                                    ),
                                                                 borderRadius:
-                                                                BorderRadius.circular(
-                                                                  4,
-                                                                ),
+                                                                    BorderRadius.circular(
+                                                                      4,
+                                                                    ),
                                                                 border: Border.all(
                                                                   color: natureColor
                                                                       .withOpacity(
-                                                                    0.3,
-                                                                  ),
+                                                                        0.3,
+                                                                      ),
                                                                 ),
                                                               ),
                                                               child: Text(
@@ -6137,10 +6415,10 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                                                 style: TextStyle(
                                                                   fontSize: 10,
                                                                   color:
-                                                                  natureColor,
+                                                                      natureColor,
                                                                   fontWeight:
-                                                                  FontWeight
-                                                                      .bold,
+                                                                      FontWeight
+                                                                          .bold,
                                                                 ),
                                                               ),
                                                             ),
@@ -6148,19 +6426,19 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                                               .isNotEmpty)
                                                             Container(
                                                               padding:
-                                                              const EdgeInsets.symmetric(
-                                                                horizontal:
-                                                                6,
-                                                                vertical: 2,
-                                                              ),
+                                                                  const EdgeInsets.symmetric(
+                                                                    horizontal:
+                                                                        6,
+                                                                    vertical: 2,
+                                                                  ),
                                                               decoration: BoxDecoration(
                                                                 color: Colors
                                                                     .purple
                                                                     .shade50,
                                                                 borderRadius:
-                                                                BorderRadius.circular(
-                                                                  4,
-                                                                ),
+                                                                    BorderRadius.circular(
+                                                                      4,
+                                                                    ),
                                                                 border: Border.all(
                                                                   color: Colors
                                                                       .purple
@@ -6175,8 +6453,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                                                       .purple
                                                                       .shade700,
                                                                   fontWeight:
-                                                                  FontWeight
-                                                                      .bold,
+                                                                      FontWeight
+                                                                          .bold,
                                                                 ),
                                                               ),
                                                             ),
@@ -6185,36 +6463,36 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                                               .isNotEmpty)
                                                             Container(
                                                               padding:
-                                                              const EdgeInsets.symmetric(
-                                                                horizontal:
-                                                                6,
-                                                                vertical: 2,
-                                                              ),
+                                                                  const EdgeInsets.symmetric(
+                                                                    horizontal:
+                                                                        6,
+                                                                    vertical: 2,
+                                                                  ),
                                                               decoration: BoxDecoration(
                                                                 color: stockColor
                                                                     .withOpacity(
-                                                                  0.1,
-                                                                ),
+                                                                      0.1,
+                                                                    ),
                                                                 borderRadius:
-                                                                BorderRadius.circular(
-                                                                  4,
-                                                                ),
+                                                                    BorderRadius.circular(
+                                                                      4,
+                                                                    ),
                                                                 border: Border.all(
                                                                   color: stockColor
                                                                       .withOpacity(
-                                                                    0.3,
-                                                                  ),
+                                                                        0.3,
+                                                                      ),
                                                                 ),
                                                               ),
                                                               child: Text(
                                                                 '$stockText (${item.availableStock})',
                                                                 style: TextStyle(
                                                                   color:
-                                                                  stockColor,
+                                                                      stockColor,
                                                                   fontSize: 10,
                                                                   fontWeight:
-                                                                  FontWeight
-                                                                      .bold,
+                                                                      FontWeight
+                                                                          .bold,
                                                                 ),
                                                               ),
                                                             ),
@@ -6244,11 +6522,11 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                                         Text(
                                                           'HSN/SAC: ${item.hsnCode}',
                                                           style:
-                                                          const TextStyle(
-                                                            fontSize: 11,
-                                                            color:
-                                                            Colors.grey,
-                                                          ),
+                                                              const TextStyle(
+                                                                fontSize: 11,
+                                                                color:
+                                                                    Colors.grey,
+                                                              ),
                                                         ),
                                                     ],
                                                   ),
@@ -6260,7 +6538,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                                         icon: const Icon(
                                                           Icons.edit,
                                                           color:
-                                                          Colors.blueGrey,
+                                                              Colors.blueGrey,
                                                           size: 18,
                                                         ),
                                                         onPressed: () =>
@@ -6269,9 +6547,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                                               actualIndex,
                                                             ),
                                                         padding:
-                                                        EdgeInsets.zero,
+                                                            EdgeInsets.zero,
                                                         constraints:
-                                                        const BoxConstraints(),
+                                                            const BoxConstraints(),
                                                       ),
                                                     const SizedBox(height: 12),
                                                     if (!_isReadOnly)
@@ -6286,9 +6564,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                                               item,
                                                             ),
                                                         padding:
-                                                        EdgeInsets.zero,
+                                                            EdgeInsets.zero,
                                                         constraints:
-                                                        const BoxConstraints(),
+                                                            const BoxConstraints(),
                                                       ),
                                                   ],
                                                 ),
@@ -6316,7 +6594,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                                             .shade800,
                                                         fontSize: 11,
                                                         fontWeight:
-                                                        FontWeight.w600,
+                                                            FontWeight.w600,
                                                       ),
                                                     ),
                                                   ],
@@ -6341,7 +6619,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                                         color: accentColor,
                                                         fontSize: 11,
                                                         fontWeight:
-                                                        FontWeight.w600,
+                                                            FontWeight.w600,
                                                       ),
                                                     ),
                                                   ],
@@ -6371,18 +6649,18 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                           ),
                                           child: Column(
                                             crossAxisAlignment:
-                                            CrossAxisAlignment.start,
+                                                CrossAxisAlignment.start,
                                             children: [
                                               Row(
                                                 mainAxisAlignment:
-                                                MainAxisAlignment
-                                                    .spaceBetween,
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
                                                 children: [
                                                   const Text(
                                                     'Scope of Supply',
                                                     style: TextStyle(
                                                       fontWeight:
-                                                      FontWeight.bold,
+                                                          FontWeight.bold,
                                                       color: primaryColor,
                                                     ),
                                                   ),
@@ -6391,18 +6669,18 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                                       .isNotEmpty)
                                                     Container(
                                                       padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 8,
-                                                        vertical: 4,
-                                                      ),
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 8,
+                                                            vertical: 4,
+                                                          ),
                                                       decoration: BoxDecoration(
                                                         color: Colors
                                                             .green
                                                             .shade50,
                                                         borderRadius:
-                                                        BorderRadius.circular(
-                                                          6,
-                                                        ),
+                                                            BorderRadius.circular(
+                                                              6,
+                                                            ),
                                                         border: Border.all(
                                                           color: Colors
                                                               .green
@@ -6417,7 +6695,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                                               .green
                                                               .shade700,
                                                           fontWeight:
-                                                          FontWeight.w600,
+                                                              FontWeight.w600,
                                                         ),
                                                       ),
                                                     ),
@@ -6430,9 +6708,9 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                                       .isNotEmpty)
                                                 Padding(
                                                   padding:
-                                                  const EdgeInsets.symmetric(
-                                                    vertical: 8,
-                                                  ),
+                                                      const EdgeInsets.symmetric(
+                                                        vertical: 8,
+                                                      ),
                                                   child: Text(
                                                     item.scopeOfSupply.trim(),
                                                     style: const TextStyle(
@@ -6445,14 +6723,14 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                               else if (children.isEmpty)
                                                 Padding(
                                                   padding:
-                                                  const EdgeInsets.symmetric(
-                                                    vertical: 8,
-                                                  ),
+                                                      const EdgeInsets.symmetric(
+                                                        vertical: 8,
+                                                      ),
                                                   child: Text(
                                                     'No scope available in product master.',
                                                     style: TextStyle(
                                                       color:
-                                                      Colors.grey.shade500,
+                                                          Colors.grey.shade500,
                                                       fontSize: 12,
                                                     ),
                                                   ),
@@ -6461,19 +6739,19 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                                 ...children.map((child) {
                                                   final childExtras =
                                                       _itemExtras[child.id] ??
-                                                          {};
+                                                      {};
                                                   final isIncluded =
                                                       childExtras['isIncluded'] !=
-                                                          false;
+                                                      false;
                                                   final pricingMode =
                                                       childExtras['pricingMode'] ??
-                                                          'Included';
+                                                      'Included';
 
                                                   return Padding(
                                                     padding:
-                                                    const EdgeInsets.only(
-                                                      bottom: 8,
-                                                    ),
+                                                        const EdgeInsets.only(
+                                                          bottom: 8,
+                                                        ),
                                                     child: Row(
                                                       children: [
                                                         if (!_isReadOnly)
@@ -6485,7 +6763,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                                               onChanged: (v) {
                                                                 setState(() {
                                                                   _itemExtras[child
-                                                                      .id]?['isIncluded'] =
+                                                                          .id]?['isIncluded'] =
                                                                       v;
                                                                   _calculateTotals();
                                                                 });
@@ -6499,26 +6777,26 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                                         Expanded(
                                                           child: Column(
                                                             crossAxisAlignment:
-                                                            CrossAxisAlignment
-                                                                .start,
+                                                                CrossAxisAlignment
+                                                                    .start,
                                                             children: [
                                                               Text(
                                                                 child.name,
                                                                 style: TextStyle(
                                                                   decoration:
-                                                                  isIncluded
+                                                                      isIncluded
                                                                       ? null
                                                                       : TextDecoration
-                                                                      .lineThrough,
+                                                                            .lineThrough,
                                                                   color:
-                                                                  isIncluded
+                                                                      isIncluded
                                                                       ? Colors
-                                                                      .black87
+                                                                            .black87
                                                                       : Colors
-                                                                      .grey,
+                                                                            .grey,
                                                                   fontWeight:
-                                                                  FontWeight
-                                                                      .w600,
+                                                                      FontWeight
+                                                                          .w600,
                                                                   fontSize: 13,
                                                                 ),
                                                               ),
@@ -6537,8 +6815,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                                         if (!_isReadOnly)
                                                           Row(
                                                             mainAxisSize:
-                                                            MainAxisSize
-                                                                .min,
+                                                                MainAxisSize
+                                                                    .min,
                                                             children: [
                                                               IconButton(
                                                                 icon: const Icon(
@@ -6552,12 +6830,12 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                                                       -1,
                                                                     ),
                                                                 constraints:
-                                                                const BoxConstraints(),
+                                                                    const BoxConstraints(),
                                                                 padding:
-                                                                const EdgeInsets.symmetric(
-                                                                  horizontal:
-                                                                  4,
-                                                                ),
+                                                                    const EdgeInsets.symmetric(
+                                                                      horizontal:
+                                                                          4,
+                                                                    ),
                                                               ),
                                                               IconButton(
                                                                 icon: const Icon(
@@ -6571,12 +6849,12 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                                                       1,
                                                                     ),
                                                                 constraints:
-                                                                const BoxConstraints(),
+                                                                    const BoxConstraints(),
                                                                 padding:
-                                                                const EdgeInsets.symmetric(
-                                                                  horizontal:
-                                                                  4,
-                                                                ),
+                                                                    const EdgeInsets.symmetric(
+                                                                      horizontal:
+                                                                          4,
+                                                                    ),
                                                               ),
                                                               IconButton(
                                                                 icon: const Icon(
@@ -6591,12 +6869,12 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                                                       child,
                                                                     ),
                                                                 constraints:
-                                                                const BoxConstraints(),
+                                                                    const BoxConstraints(),
                                                                 padding:
-                                                                const EdgeInsets.symmetric(
-                                                                  horizontal:
-                                                                  4,
-                                                                ),
+                                                                    const EdgeInsets.symmetric(
+                                                                      horizontal:
+                                                                          4,
+                                                                    ),
                                                               ),
                                                               IconButton(
                                                                 icon: const Icon(
@@ -6609,23 +6887,23 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                                                   setState(() {
                                                                     _itemExtras
                                                                         .remove(
-                                                                      child
-                                                                          .id,
-                                                                    );
+                                                                          child
+                                                                              .id,
+                                                                        );
                                                                     _items
                                                                         .remove(
-                                                                      child,
-                                                                    );
+                                                                          child,
+                                                                        );
                                                                     _calculateTotals();
                                                                   });
                                                                 },
                                                                 constraints:
-                                                                const BoxConstraints(),
+                                                                    const BoxConstraints(),
                                                                 padding:
-                                                                const EdgeInsets.symmetric(
-                                                                  horizontal:
-                                                                  4,
-                                                                ),
+                                                                    const EdgeInsets.symmetric(
+                                                                      horizontal:
+                                                                          4,
+                                                                    ),
                                                               ),
                                                             ],
                                                           ),
@@ -6706,28 +6984,28 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                               trailing: _isReadOnly
                                   ? null
                                   : OutlinedButton.icon(
-                                onPressed: () => setState(
-                                      () => _dynamicTerms.add(TermRow()),
-                                ),
-                                icon: const Icon(Icons.add, size: 18),
-                                label: const Text('Add Term'),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: accentColor,
-                                  side: const BorderSide(
-                                    color: accentColor,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(
-                                      8,
+                                      onPressed: () => setState(
+                                        () => _dynamicTerms.add(TermRow()),
+                                      ),
+                                      icon: const Icon(Icons.add, size: 18),
+                                      label: const Text('Add Term'),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: accentColor,
+                                        side: const BorderSide(
+                                          color: accentColor,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 8,
+                                        ),
+                                        minimumSize: Size.zero,
+                                      ),
                                     ),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 8,
-                                  ),
-                                  minimumSize: Size.zero,
-                                ),
-                              ),
                             ),
                             ListView.builder(
                               shrinkWrap: true,
@@ -6738,7 +7016,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                   padding: const EdgeInsets.only(bottom: 12),
                                   child: Row(
                                     crossAxisAlignment:
-                                    CrossAxisAlignment.start,
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Expanded(
                                         flex: 3,
@@ -6766,7 +7044,7 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                           onPressed: () {
                                             var term = _dynamicTerms[i];
                                             setState(
-                                                  () => _dynamicTerms.removeAt(i),
+                                              () => _dynamicTerms.removeAt(i),
                                             );
                                             term.dispose();
                                           },
@@ -6825,22 +7103,22 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                     onTap: _isReadOnly
                                         ? null
                                         : () async {
-                                      final d = await showDatePicker(
-                                        context: context,
-                                        initialDate:
-                                        _nextFollowUpDate ??
-                                            DateTime.now().add(
-                                              const Duration(days: 3),
-                                            ),
-                                        firstDate: DateTime.now(),
-                                        lastDate: DateTime(2100),
-                                      );
-                                      if (d != null) {
-                                        setState(
-                                              () => _nextFollowUpDate = d,
-                                        );
-                                      }
-                                    },
+                                            final d = await showDatePicker(
+                                              context: context,
+                                              initialDate:
+                                                  _nextFollowUpDate ??
+                                                  DateTime.now().add(
+                                                    const Duration(days: 3),
+                                                  ),
+                                              firstDate: DateTime.now(),
+                                              lastDate: DateTime(2100),
+                                            );
+                                            if (d != null) {
+                                              setState(
+                                                () => _nextFollowUpDate = d,
+                                              );
+                                            }
+                                          },
                                     child: InputDecorator(
                                       decoration: InputDecoration(
                                         labelText: 'Next Follow-up',
@@ -6858,8 +7136,8 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                       child: Text(
                                         _nextFollowUpDate != null
                                             ? DateFormat(
-                                          'dd/MM/yyyy',
-                                        ).format(_nextFollowUpDate!)
+                                                'dd/MM/yyyy',
+                                              ).format(_nextFollowUpDate!)
                                             : 'Select Date',
                                       ),
                                     ),
@@ -6945,13 +7223,13 @@ class _QuotationScreenLocalState extends State<QuotationScreenLocal> {
                                 : _saveQuotation,
                             icon: _isLoading
                                 ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
                                 : const Icon(Icons.save),
                             label: const Text('Save Quotation'),
                             style: ElevatedButton.styleFrom(

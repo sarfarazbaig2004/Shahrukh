@@ -1242,9 +1242,10 @@ class QuotationPdfGenerator {
     final sigName = _legacyFirstNonEmpty(quotation, [
       'signatureName',
     ], 'SARFARAZ BAIG').toUpperCase();
-    final sigDesignation = _legacyFirstNonEmpty(quotation, [
-      'signatureDesignation',
-    ], 'C.E.O.').toUpperCase();
+    final sigDesignation = _normalizeSignatoryDesignation(
+      sigName,
+      _legacyFirstNonEmpty(quotation, ['signatureDesignation'], 'C.E.O.'),
+    ).toUpperCase();
     final sigPhone = _legacyFirstNonEmpty(quotation, [
       'signaturePhone',
     ], '90829 07433');
@@ -1994,6 +1995,23 @@ class QuotationPdfGenerator {
     );
   }
 
+  static String _normalizeSignatoryDesignation(
+    String name,
+    String designation,
+  ) {
+    final normalizedName = name.toLowerCase().trim();
+    if (!normalizedName.contains('sarfaraz') &&
+        !normalizedName.contains('baig')) {
+      return designation;
+    }
+    final normalizedDesignation = designation.toLowerCase().trim();
+    if (normalizedDesignation == 'director' ||
+        normalizedDesignation == 'director.') {
+      return 'C.E.O';
+    }
+    return designation;
+  }
+
   static pw.Widget _buildBottomSection(
     Map<String, dynamic> quotation,
     bool isInterState,
@@ -2002,7 +2020,10 @@ class QuotationPdfGenerator {
     final terms = quotation['dynamicTerms'];
     final companyName = _safeString(quotation['companyName']);
     final sigName = _safeString(quotation['signatureName']);
-    final sigDesignation = _safeString(quotation['signatureDesignation']);
+    final sigDesignation = _normalizeSignatoryDesignation(
+      sigName,
+      _safeString(quotation['signatureDesignation']),
+    );
     final sigPhone = _safeString(quotation['signaturePhone']);
 
     final termsCard = _buildCard(
