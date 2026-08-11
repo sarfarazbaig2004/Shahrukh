@@ -47,3 +47,11 @@ app.*.map.json
 /android/app/release
 build/
 functions/.env
+
+# Local MEMCO development backups
+.local_backups/
+*.before-*
+*.backup
+*.bak
+*.orig
+lib/modules/memco_income_tax_calculator 2/

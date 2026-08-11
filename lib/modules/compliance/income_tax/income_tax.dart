@@ -1,0 +1,10 @@
+export 'controllers/income_tax_controller.dart';
+export 'integration/income_tax_module_entry.dart';
+export 'models/income_tax_models.dart';
+export 'presentation/income_tax_calculator_screen.dart';
+export 'repositories/firestore_income_tax_repository.dart';
+export 'repositories/income_tax_repository.dart';
+export 'rules/income_tax_rule_registry.dart';
+export 'rules/income_tax_rules.dart';
+export 'services/income_tax_engine.dart';
+export 'services/income_tax_export_service.dart';

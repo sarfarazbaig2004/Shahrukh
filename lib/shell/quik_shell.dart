@@ -32,6 +32,7 @@ import 'package:QUIK/modules/finance/proforma_invoice/proforma_list_screen.dart'
 // Payments & Outstanding Sub-Modules
 import 'package:QUIK/modules/finance/payments_received/screens/payments_list_screen.dart';
 import 'package:QUIK/modules/finance/outstanding/screens/outstanding_screen.dart';
+import 'package:QUIK/modules/finance/tds_tcs_master/screens/tds_tcs_section_master_screen.dart';
 
 // Reports
 import 'package:QUIK/modules/reports/sales_report/sales_report_screen.dart';
@@ -105,6 +106,7 @@ enum ShellPage {
   financePaymentsReceived,
   financeOutstanding,
   financeExpenses,
+  financeTdsTcsSectionMaster,
 
   reportsSales,
   reportsInquiry,
@@ -190,6 +192,8 @@ extension ShellPageX on ShellPage {
         return 'Outstanding';
       case ShellPage.financeExpenses:
         return 'Expense Entries';
+      case ShellPage.financeTdsTcsSectionMaster:
+        return 'TDS/TCS Section Codes';
       case ShellPage.reportsSales:
         return 'Sales Report';
       case ShellPage.reportsInquiry:
@@ -281,6 +285,8 @@ extension ShellPageX on ShellPage {
         return Icons.account_balance_wallet_outlined;
       case ShellPage.financeExpenses:
         return Icons.receipt_outlined;
+      case ShellPage.financeTdsTcsSectionMaster:
+        return Icons.account_tree_outlined;
       case ShellPage.reportsSales:
         return Icons.show_chart_outlined;
       case ShellPage.reportsInquiry:
@@ -635,6 +641,8 @@ class _ZohoShellState extends State<ZohoShell> {
         return _hasPermission('finance', 'outstanding');
       case ShellPage.financeExpenses:
         return _hasPermission('finance', 'expenseEntries');
+      case ShellPage.financeTdsTcsSectionMaster:
+        return _hasPermission('finance', 'taxInvoice');
       case ShellPage.reportsSales:
         return _hasPermission('reports', 'salesReport');
       case ShellPage.reportsInquiry:
@@ -734,6 +742,7 @@ class _ZohoShellState extends State<ZohoShell> {
           ShellPage.financePaymentsReceived,
           ShellPage.financeOutstanding,
           ShellPage.financeExpenses,
+          ShellPage.financeTdsTcsSectionMaster,
         ],
       ),
       SidebarGroup(
@@ -818,6 +827,7 @@ class _ZohoShellState extends State<ZohoShell> {
       case ShellPage.financeExportInvoiceCreate:
       case ShellPage.financePaymentsReceived:
       case ShellPage.financeOutstanding:
+      case ShellPage.financeTdsTcsSectionMaster:
       case ShellPage.reportsSales:
       case ShellPage.serviceRequests:
       case ShellPage.serviceQuotations:
@@ -1758,7 +1768,62 @@ class _ZohoShellState extends State<ZohoShell> {
       case ShellPage.adminComplianceLegal:
         return Padding(
           padding: const EdgeInsets.all(ShellLayout.pagePadding),
-          child: ScreensComplianceLegalList(companyId: widget.companyId),
+          child: ScreensComplianceLegalList(
+            companyId: widget.companyId,
+            companyName: widget.companyName,
+            currentUserUid: widget.userUid,
+            currentUserName: _resolvedEmployeeName(),
+            canCreate: _hasPermission(
+              'administration',
+              'complianceLegal',
+              action: 'create',
+            ),
+            canEdit: _hasPermission(
+              'administration',
+              'complianceLegal',
+              action: 'edit',
+            ),
+            canDelete: _hasPermission(
+              'administration',
+              'complianceLegal',
+              action: 'delete',
+            ),
+            canApprove: _hasPermission(
+              'administration',
+              'complianceLegal',
+              action: 'approve',
+            ),
+            canExport: _hasPermission(
+              'administration',
+              'complianceLegal',
+              action: 'export',
+            ),
+            canComplete: _hasPermission(
+              'administration',
+              'complianceLegal',
+              action: 'complete',
+            ),
+            canUpload: _hasPermission(
+              'administration',
+              'complianceLegal',
+              action: 'upload',
+            ),
+            canDownload: _hasPermission(
+              'administration',
+              'complianceLegal',
+              action: 'download',
+            ),
+            canArchive: _hasPermission(
+              'administration',
+              'complianceLegal',
+              action: 'archive',
+            ),
+            canRenew: _hasPermission(
+              'administration',
+              'complianceLegal',
+              action: 'renew',
+            ),
+          ),
         );
 
       case ShellPage.financeProforma:
@@ -1815,6 +1880,19 @@ class _ZohoShellState extends State<ZohoShell> {
           child: OutstandingScreen(
             companyId: widget.companyId,
             userUid: widget.userUid,
+          ),
+        );
+
+      case ShellPage.financeTdsTcsSectionMaster:
+        return Padding(
+          padding: const EdgeInsets.all(ShellLayout.pagePadding),
+          child: TdsTcsSectionMasterScreen(
+            companyId: widget.companyId,
+            canExport: _hasPermission(
+              'finance',
+              'taxInvoice',
+              action: 'export',
+            ),
           ),
         );
 
