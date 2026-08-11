@@ -435,38 +435,324 @@ class _ScreensComplianceLegalListState
     };
   }
 
+  Widget _premiumOverviewStrip(
+    ComplianceOverviewSnapshot overview, {
+    required bool loading,
+  }) {
+    final health = overview.complianceHealth;
+
+    final healthTone = health >= 90
+        ? ComplianceTone.success
+        : health >= 70
+        ? ComplianceTone.warning
+        : ComplianceTone.danger;
+
+    final cards = <Widget>[
+      ComplianceKpiCard(
+        title: 'Compliance Health',
+        value: loading ? '—' : '${health.toStringAsFixed(0)}%',
+        icon: Icons.verified_user_outlined,
+        tone: healthTone,
+        subtitle: 'Overall statutory posture',
+      ),
+      ComplianceKpiCard(
+        title: 'Pending',
+        value: loading ? '—' : '${overview.pending}',
+        icon: Icons.pending_actions_outlined,
+        tone: ComplianceTone.warning,
+        subtitle: 'Requires action',
+      ),
+      ComplianceKpiCard(
+        title: 'Due Soon',
+        value: loading ? '—' : '${overview.dueSoon}',
+        icon: Icons.schedule_outlined,
+        tone: ComplianceTone.info,
+        subtitle: 'Upcoming deadlines',
+      ),
+      ComplianceKpiCard(
+        title: 'Overdue',
+        value: loading ? '—' : '${overview.overdue}',
+        icon: Icons.event_busy_outlined,
+        tone: ComplianceTone.danger,
+        subtitle: 'Immediate attention',
+      ),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        const ComplianceSectionHeader(
+          title: 'Compliance Overview',
+          subtitle:
+              'A concise view of statutory readiness, deadlines and management attention.',
+          icon: Icons.dashboard_customize_outlined,
+        ),
+        const SizedBox(height: ComplianceSpacing.md),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final columns = constraints.maxWidth >= 1050
+                ? 4
+                : constraints.maxWidth >= 620
+                ? 2
+                : 1;
+
+            const gap = ComplianceSpacing.sm;
+            final width =
+                (constraints.maxWidth - gap * (columns - 1)) / columns;
+
+            return Wrap(
+              spacing: gap,
+              runSpacing: gap,
+              children: cards
+                  .map((card) => SizedBox(width: width, child: card))
+                  .toList(),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _premiumToolCard(_ComplianceToolDefinition tool) {
+    final palette = context.compliance;
+    final accent = context.complianceTone(tool.tone);
+    final soft = context.complianceToneSoft(tool.tone);
+
+    return ComplianceCard(
+      onTap: tool.onOpen,
+      hoverable: true,
+      tone: tool.tone,
+      semanticLabel: tool.title,
+      padding: const EdgeInsets.all(18),
+      child: SizedBox(
+        height: 154,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: soft,
+                    borderRadius: BorderRadius.circular(ComplianceRadius.md),
+                  ),
+                  child: Icon(tool.icon, size: 20, color: accent),
+                ),
+                const Spacer(),
+                if (tool.badge != null)
+                  ComplianceStatusBadge(
+                    label: tool.badge!,
+                    tone: tool.tone,
+                    compact: true,
+                  ),
+              ],
+            ),
+            const SizedBox(height: ComplianceSpacing.sm),
+            Text(
+              tool.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: palette.textPrimary,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -.15,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              tool.description,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: palette.textSecondary,
+                height: 1.4,
+              ),
+            ),
+            const Spacer(),
+            Row(
+              children: <Widget>[
+                Text(
+                  'Open module',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: accent,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const Spacer(),
+                Icon(Icons.arrow_forward_rounded, size: 17, color: accent),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _premiumToolGrid(List<_ComplianceToolDefinition> tools) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 1120
+            ? 3
+            : constraints.maxWidth >= 700
+            ? 2
+            : 1;
+
+        const gap = ComplianceSpacing.md;
+
+        final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
+
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: tools
+              .map(
+                (tool) => SizedBox(width: width, child: _premiumToolCard(tool)),
+              )
+              .toList(),
+        );
+      },
+    );
+  }
+
+  Widget _premiumToolSection(
+    String title,
+    String subtitle,
+    List<_ComplianceToolDefinition> tools, {
+    IconData? icon,
+  }) {
+    if (tools.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        ComplianceSectionHeader(title: title, subtitle: subtitle, icon: icon),
+        const SizedBox(height: ComplianceSpacing.md),
+        _premiumToolGrid(tools),
+      ],
+    );
+  }
+
   Widget _dashboard(
     ComplianceOverviewSnapshot overview, {
     required bool loading,
     required Object? error,
   }) {
+    final coreTools = _tools
+        .where(
+          (tool) => const <String>{
+            'calendar',
+            'command_center',
+            'reports_queries',
+          }.contains(tool.id),
+        )
+        .toList();
+
+    final taxTools = _tools
+        .where((tool) => tool.group == _ToolGroup.tax)
+        .toList();
+
+    final referenceTools = _tools
+        .where((tool) => tool.group == _ToolGroup.reference)
+        .toList();
+
     return ListView(
-      padding: const EdgeInsets.all(ComplianceSpacing.lg),
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
       children: <Widget>[
         if (error != null) ...<Widget>[
           ComplianceErrorState(
             message: error.toString(),
             onRetry: () => setState(() {}),
           ),
-          const SizedBox(height: ComplianceSpacing.md),
+          const SizedBox(height: ComplianceSpacing.lg),
         ],
-        _executiveSummary(overview, loading: loading),
-        const SizedBox(height: ComplianceSpacing.lg),
-        _groupedKpis(overview),
-        const SizedBox(height: ComplianceSpacing.lg),
+
+        _premiumOverviewStrip(overview, loading: loading),
+
+        const SizedBox(height: 28),
+
+        _premiumToolSection(
+          'Core Operations',
+          'Daily compliance control, governance, reporting and management oversight.',
+          coreTools,
+          icon: Icons.account_tree_outlined,
+        ),
+
+        const SizedBox(height: 28),
+
+        _premiumToolSection(
+          'Tax & Filing',
+          'Focused tax computation, challan processing and filing productivity tools.',
+          taxTools,
+          icon: Icons.receipt_long_outlined,
+        ),
+
+        const SizedBox(height: 28),
+
+        _premiumToolSection(
+          'Statutory Reference',
+          'Controlled references for sections, rates and regulatory decision support.',
+          referenceTools,
+          icon: Icons.library_books_outlined,
+        ),
+
+        const SizedBox(height: 28),
+
+        const ComplianceSectionHeader(
+          title: 'Upcoming Work & Activity',
+          subtitle: 'What requires attention next and what changed recently.',
+          icon: Icons.event_note_outlined,
+        ),
+
+        const SizedBox(height: ComplianceSpacing.md),
+
         LayoutBuilder(
           builder: (context, constraints) {
-            final wide = constraints.maxWidth >= 1050;
-            final charts = <Widget>[
-              Expanded(child: _complianceStatusChart(overview)),
-              const SizedBox(width: ComplianceSpacing.md),
-              Expanded(child: _riskDistributionChart(overview)),
-            ];
-
-            if (wide) {
+            if (constraints.maxWidth >= 1000) {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: charts,
+                children: <Widget>[
+                  Expanded(flex: 6, child: _nextDuePanel(overview)),
+                  const SizedBox(width: ComplianceSpacing.md),
+                  Expanded(flex: 4, child: _activityPanel(overview)),
+                ],
+              );
+            }
+
+            return Column(
+              children: <Widget>[
+                _nextDuePanel(overview),
+                const SizedBox(height: ComplianceSpacing.md),
+                _activityPanel(overview),
+              ],
+            );
+          },
+        ),
+
+        const SizedBox(height: 28),
+
+        const ComplianceSectionHeader(
+          title: 'Management Insights',
+          subtitle:
+              'Status and risk analytics kept separate from operational work.',
+          icon: Icons.insights_outlined,
+        ),
+
+        const SizedBox(height: ComplianceSpacing.md),
+
+        LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth >= 1000) {
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Expanded(child: _complianceStatusChart(overview)),
+                  const SizedBox(width: ComplianceSpacing.md),
+                  Expanded(child: _riskDistributionChart(overview)),
+                ],
               );
             }
 
@@ -479,32 +765,6 @@ class _ScreensComplianceLegalListState
             );
           },
         ),
-        const SizedBox(height: ComplianceSpacing.lg),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final wide = constraints.maxWidth >= 1120;
-            if (wide) {
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Expanded(flex: 6, child: _nextDuePanel(overview)),
-                  const SizedBox(width: ComplianceSpacing.md),
-                  Expanded(flex: 4, child: _activityPanel(overview)),
-                ],
-              );
-            }
-            return Column(
-              children: <Widget>[
-                _nextDuePanel(overview),
-                const SizedBox(height: ComplianceSpacing.md),
-                _activityPanel(overview),
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: ComplianceSpacing.lg),
-        _quickActions(),
-        const SizedBox(height: ComplianceSpacing.xxl),
       ],
     );
   }
@@ -1550,67 +1810,61 @@ class _ScreensComplianceLegalListState
     required String title,
     required String subtitle,
   }) {
-    final normalized = _query.trim().toLowerCase();
-    final filtered = tools.where((tool) {
-      return normalized.isEmpty ||
-          tool.title.toLowerCase().contains(normalized) ||
-          tool.description.toLowerCase().contains(normalized) ||
-          tool.features.any(
-            (feature) => feature.toLowerCase().contains(normalized),
-          );
-    }).toList();
+    final query = _query.trim().toLowerCase();
+
+    final filtered = query.isEmpty
+        ? tools
+        : tools.where((tool) {
+            final haystack = <String>[
+              tool.title,
+              tool.description,
+              tool.group.label,
+              ...tool.features,
+            ].join(' ').toLowerCase();
+
+            return haystack.contains(query);
+          }).toList();
 
     return ListView(
-      padding: const EdgeInsets.all(ComplianceSpacing.lg),
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
       children: <Widget>[
-        CompliancePageHeader(
+        ComplianceSectionHeader(
           title: title,
           subtitle: subtitle,
-          eyebrow: 'MEMCO Compliance Workspace',
           icon: Icons.apps_outlined,
-          breadcrumbs: const <String>[],
-          padding: EdgeInsets.zero,
-          actions: <Widget>[
-            ComplianceStatusBadge(
-              label: '${filtered.length} applications',
-              tone: ComplianceTone.primary,
-            ),
-          ],
         ),
-        const SizedBox(height: ComplianceSpacing.lg),
+        const SizedBox(height: ComplianceSpacing.md),
+
         if (filtered.isEmpty)
-          const ComplianceCard(
-            child: ComplianceEmptyState(
-              icon: Icons.search_off_outlined,
-              title: 'No matching applications',
-              message:
-                  'Change the global search term or browse another category.',
+          ComplianceCard(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              children: <Widget>[
+                Icon(
+                  Icons.search_off_rounded,
+                  size: 38,
+                  color: context.compliance.textTertiary,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'No matching applications',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: context.compliance.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  'Try another search term.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: context.compliance.textSecondary,
+                  ),
+                ),
+              ],
             ),
           )
         else
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final columns = constraints.maxWidth >= 1400
-                  ? 3
-                  : constraints.maxWidth >= 820
-                  ? 2
-                  : 1;
-              final width =
-                  (constraints.maxWidth -
-                      (columns - 1) * ComplianceSpacing.md) /
-                  columns;
-              return Wrap(
-                spacing: ComplianceSpacing.md,
-                runSpacing: ComplianceSpacing.md,
-                children: filtered
-                    .map(
-                      (tool) => SizedBox(width: width, child: _toolCard(tool)),
-                    )
-                    .toList(),
-              );
-            },
-          ),
-        const SizedBox(height: ComplianceSpacing.xxl),
+          _premiumToolGrid(filtered),
       ],
     );
   }

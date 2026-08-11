@@ -498,7 +498,7 @@ class _ComplianceWorkspaceShellState extends State<ComplianceWorkspaceShell> {
         borderRadius: BorderRadius.circular(ComplianceRadius.md),
         child: AnimatedContainer(
           duration: ComplianceMotion.fast,
-          height: 42,
+          height: 40,
           margin: const EdgeInsets.only(bottom: 3),
           padding: EdgeInsets.symmetric(
             horizontal: expanded ? 11 + depth * 12 : 0,
@@ -614,8 +614,8 @@ class _ComplianceWorkspaceShellState extends State<ComplianceWorkspaceShell> {
     final palette = context.compliance;
 
     return Container(
-      height: 72,
-      padding: const EdgeInsets.symmetric(horizontal: 18),
+      height: 68,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       decoration: BoxDecoration(
         color: palette.surface,
         border: Border(bottom: BorderSide(color: palette.border)),

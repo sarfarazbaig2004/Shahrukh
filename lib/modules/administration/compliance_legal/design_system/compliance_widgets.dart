@@ -42,7 +42,7 @@ class _ComplianceCardState extends State<ComplianceCard> {
       curve: ComplianceMotion.standard,
       transform: Matrix4.translationValues(
         0,
-        widget.hoverable && _hovered ? -2 : 0,
+        widget.hoverable && _hovered ? -1 : 0,
         0,
       ),
       decoration: BoxDecoration(
@@ -56,10 +56,10 @@ class _ComplianceCardState extends State<ComplianceCard> {
         boxShadow: <BoxShadow>[
           BoxShadow(
             color: palette.shadow.withValues(
-              alpha: widget.hoverable && _hovered ? .95 : .55,
+              alpha: widget.hoverable && _hovered ? .28 : .12,
             ),
-            blurRadius: widget.hoverable && _hovered ? 24 : 14,
-            offset: Offset(0, widget.hoverable && _hovered ? 10 : 5),
+            blurRadius: widget.hoverable && _hovered ? 14 : 8,
+            offset: Offset(0, widget.hoverable && _hovered ? 5 : 2),
           ),
         ],
       ),
